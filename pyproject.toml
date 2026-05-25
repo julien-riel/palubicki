@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "palubicki"
+version = "0.1.0"
+description = "Self-organizing 3D tree generator (Palubicki et al. 2009) exporting glTF"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pygltflib>=1.16",
+    "Pillow>=10.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+]
+
+[project.scripts]
+palubicki = "palubicki.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/palubicki"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "slow: integration and golden tests (deselect with -m 'not slow')",
+]
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["src/palubicki"]
+branch = true

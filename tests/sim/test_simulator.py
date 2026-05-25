@@ -1,0 +1,129 @@
+import numpy as np
+
+from palubicki.config import (
+    Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
+    SheddingConfig, SimConfig, TropismConfig,
+)
+from palubicki.sim.simulator import simulate
+
+
+def _tiny_config(tmp_path):
+    return Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=500),
+        sim=SimConfig(
+            r_perception=0.3, theta_perception_deg=80.0, r_kill=0.1,
+            internode_length=0.1, alpha_basipetal=2.0, lambda_apical=0.55,
+            max_iterations=10,
+        ),
+        tropism=TropismConfig(w_perception=1.0, w_gravity=0.2, w_direction_inertia=0.3),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        seed=42,
+        output=tmp_path / "out.glb",
+    )
+
+
+def test_simulate_produces_tree_with_internodes(tmp_path):
+    cfg = _tiny_config(tmp_path)
+    tree = simulate(cfg)
+    assert tree.root is not None
+    assert len(tree.all_internodes) > 0
+
+
+def test_simulate_is_deterministic(tmp_path):
+    cfg = _tiny_config(tmp_path)
+    tree_a = simulate(cfg)
+    tree_b = simulate(cfg)
+    assert len(tree_a.all_internodes) == len(tree_b.all_internodes)
+    pos_a = np.array([n.position for n in _all_nodes(tree_a)])
+    pos_b = np.array([n.position for n in _all_nodes(tree_b)])
+    np.testing.assert_array_equal(pos_a, pos_b)
+
+
+def test_simulate_stops_at_max_iterations(tmp_path):
+    cfg = _tiny_config(tmp_path)
+    # 0 iterations -> just root, no internodes
+    cfg_0 = Config(
+        envelope=cfg.envelope,
+        sim=SimConfig(max_iterations=0, internode_length=0.1),
+        tropism=cfg.tropism, phyllotaxy=cfg.phyllotaxy,
+        shedding=cfg.shedding, geom=cfg.geom,
+        seed=cfg.seed, output=cfg.output,
+    )
+    tree = simulate(cfg_0)
+    assert len(tree.all_internodes) == 0
+
+
+def test_lateral_axes_get_main_internodes(tmp_path):
+    """A lateral bud's terminal continuation should produce is_main_axis=True internodes."""
+    cfg = _tiny_config(tmp_path)
+    tree = simulate(cfg)
+    lateral_iods = [iod for iod in tree.all_internodes if not iod.is_main_axis]
+    assert len(lateral_iods) > 0, "BH allocation should produce at least some lateral internodes"
+    # At least one lateral subtree should have its own main-axis continuation
+    found_main_continuation = any(
+        any(child.is_main_axis for child in lat.child_node.children_internodes)
+        for lat in lateral_iods
+    )
+    assert found_main_continuation, "lateral sub-axes should produce is_main_axis=True continuations"
+
+
+def test_no_spikes_outside_envelope(tmp_path):
+    """During multi-substep growth, buds must re-perceive and stop growing once
+    they've cleared their local marker neighborhood — no straight spikes
+    blasting through the envelope."""
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=1000),
+        sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_iterations=15),
+        tropism=TropismConfig(w_perception=1.0, w_gravity=0.3, w_direction_inertia=0.4),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        seed=42,
+        output=tmp_path / "out.glb",
+    )
+    tree = simulate(cfg)
+    envelope_max = max(cfg.envelope.rx, cfg.envelope.ry, cfg.envelope.rz)
+    max_dist_allowed = envelope_max * 1.5  # allow modest overshoot near boundary
+    offending = []
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        d = float(np.linalg.norm(n.position))
+        if d > max_dist_allowed:
+            offending.append(d)
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+    assert not offending, (
+        f"Nodes too far from envelope: max={max(offending):.2f} "
+        f"> {max_dist_allowed:.2f}"
+    )
+
+
+def test_deep_tree_no_recursion_error(tmp_path):
+    """Regression: default-config tree depth used to exceed Python recursion limit."""
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=5000),
+        sim=SimConfig(max_iterations=20),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=True),
+        geom=GeomConfig(),
+        seed=42,
+        output=tmp_path / "out.glb",
+    )
+    # Should not raise RecursionError
+    tree = simulate(cfg)
+    assert len(tree.all_internodes) > 100, "sanity: deep tree was produced"
+
+
+def _all_nodes(tree):
+    out = []
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        out.append(n)
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+    return out
