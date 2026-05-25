@@ -26,13 +26,16 @@ def perceive_light(
     """Compute light_factor and gradient at each bud via hemispheric sampling."""
     result = LightPerception()
     light_dir = np.asarray(cfg.light_direction, dtype=np.float64)
-    for i, bud in enumerate(buds):
+    ss = np.random.SeedSequence(seed)
+    sub_seeds = ss.spawn(len(buds))
+    for bud, sub in zip(buds, sub_seeds):
+        per_bud_seed = int(sub.generate_state(1)[0])
         lf, grad = grid.sample_hemisphere(
             bud.position,
             n_rays=cfg.n_rays,
             light_direction=light_dir,
             k=cfg.k_absorption,
-            seed=seed + i,
+            seed=per_bud_seed,
         )
         result.light_factor[bud] = lf
         result.gradient[bud] = grad

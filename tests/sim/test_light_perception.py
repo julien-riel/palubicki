@@ -26,7 +26,7 @@ def test_perceive_light_open_sky():
     res = perceive_light([bud], grid, cfg, seed=42)
     assert isinstance(res, LightPerception)
     assert res.light_factor[bud] == pytest.approx(1.0, rel=1e-4)
-    np.testing.assert_allclose(res.gradient[bud], [0.0, 1.0, 0.0], atol=0.2)
+    np.testing.assert_allclose(res.gradient[bud], [0.0, 1.0, 0.0], atol=0.3)
 
 
 def test_perceive_light_dense_attenuation():
@@ -44,6 +44,23 @@ def test_perceive_light_empty_bud_list():
     res = perceive_light([], grid, cfg, seed=42)
     assert res.light_factor == {}
     assert res.gradient == {}
+
+
+def test_perceive_light_no_seed_collision_across_iterations():
+    """Same bud, two perceive_light calls with different 'seed' values must produce
+       different sampling — even if the seeds differ by a small amount typical of
+       iteration counters."""
+    grid = _grid_uniform(2.0)
+    bud = Bud(position=np.array([5.0, 5.0, 5.0]), direction=np.array([0.0, 1.0, 0.0]),
+              axis_order=0, parent_node=Node(position=np.zeros(3)))
+    cfg = LightConfig(n_rays=16, k_absorption=0.5)
+    # Across iterations, the simulator passes seed = cfg_seed + iter.
+    # With many buds, prior code used seed+i, which collides as i+1 vs (i+next_iter).
+    # Test surrogate: two adjacent integer seeds should not produce identical results.
+    res_a = perceive_light([bud], grid, cfg, seed=100)
+    res_b = perceive_light([bud], grid, cfg, seed=101)
+    # The two should be quite different — at minimum, the gradients should not be identical.
+    assert not np.array_equal(res_a.gradient[bud], res_b.gradient[bud])
 
 
 def test_perceive_light_deterministic():

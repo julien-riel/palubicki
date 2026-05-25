@@ -52,7 +52,10 @@ def simulate(cfg: Config) -> Tree:
                 tree, cfg.light,
                 r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
             )
-            light_info = perceive_light(tree.active_buds, light_grid, cfg.light, seed=cfg.seed + iteration)
+            light_info = perceive_light(
+                tree.active_buds, light_grid, cfg.light,
+                seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
+            )
         else:
             light_info = None
 
@@ -141,7 +144,7 @@ def simulate(cfg: Config) -> Tree:
                                 n_rays=cfg.light.n_rays,
                                 light_direction=np.asarray(cfg.light.light_direction, dtype=np.float64),
                                 k=cfg.light.k_absorption,
-                                seed=cfg.seed + iteration + step + 1,
+                                    seed=int(np.random.SeedSequence([cfg.seed, iteration, step + 1]).generate_state(1)[0]),
                             )
                             light_info.light_factor[terminal] = lf
                             light_info.gradient[terminal] = grad
