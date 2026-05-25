@@ -161,7 +161,11 @@ def _emit_root_cap(
     uvs: list,
     indices: list,
 ) -> None:
-    # Bottom of trunk: fan from center down
+    # Bottom of trunk: fan from center down.
+    # If the trunk chain has <2 nodes, _emit_chain_tube did not emit a ring,
+    # so referencing ring0 vertices here would produce OOB indices.
+    if len(chain.nodes) < 2:
+        return
     columns = ring_sides + 1
     center = chain.nodes[0].position.copy()
     center_index = len(positions)
