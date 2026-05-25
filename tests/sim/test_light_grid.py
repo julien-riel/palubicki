@@ -307,3 +307,78 @@ def test_sample_transmission_zero_direction():
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     T = grid.sample_transmission(np.array([5.0, 5.0, 5.0]), np.array([0.0, 0.0, 0.0]), k=0.5)
     assert T == pytest.approx(1.0)
+
+
+def test_sample_hemisphere_open_sky_returns_full_light():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    # Empty grid (LAI=0 everywhere) → all rays transmit fully → light_factor=1.0
+    lf, grad = grid.sample_hemisphere(
+        np.array([5.0, 5.0, 5.0]),
+        n_rays=16,
+        light_direction=np.array([0.0, 1.0, 0.0]),
+        k=0.5,
+        seed=42,
+    )
+    assert lf == pytest.approx(1.0, rel=1e-4)
+    # Gradient = normalize(Σ T_k · d_k) ; with all T_k=1 and cosine-weighted dirs,
+    # the sum is biased toward the light direction (y axis = up).
+    np.testing.assert_allclose(grad, [0.0, 1.0, 0.0], atol=0.2)
+
+
+def test_sample_hemisphere_dense_uniform_layer_attenuates():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    grid.lai.fill(1.0)
+    lf, _grad = grid.sample_hemisphere(
+        np.array([5.0, 0.1, 5.0]),
+        n_rays=16,
+        light_direction=np.array([0.0, 1.0, 0.0]),
+        k=0.5,
+        seed=42,
+    )
+    assert 0.0 < lf < 1.0   # attenuated but not zero (rays exit eventually)
+
+
+def test_sample_hemisphere_deterministic_with_seed():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    grid.lai.fill(0.3)
+    lf1, grad1 = grid.sample_hemisphere(np.array([5.0, 5.0, 5.0]), n_rays=16, light_direction=np.array([0.0, 1.0, 0.0]), k=0.5, seed=7)
+    lf2, grad2 = grid.sample_hemisphere(np.array([5.0, 5.0, 5.0]), n_rays=16, light_direction=np.array([0.0, 1.0, 0.0]), k=0.5, seed=7)
+    assert lf1 == lf2
+    np.testing.assert_array_equal(grad1, grad2)
+
+
+def test_sample_hemisphere_gradient_points_to_open_side():
+    """Place a dense block on the -x side of the bud; gradient should point +x (away from shadow)."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(20, 10, 10),   # finer x resolution
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    # Dense LAI in the -x half
+    grid.lai[:10, :, :] = 5.0
+    lf, grad = grid.sample_hemisphere(
+        np.array([5.0, 5.0, 5.0]),
+        n_rays=64,                              # more rays for stability
+        light_direction=np.array([0.0, 1.0, 0.0]),
+        k=0.5,
+        seed=42,
+    )
+    # The bud sits at x=5 which is at the boundary; rays toward +x see less LAI.
+    # Gradient.x should be positive (toward open side).
+    assert grad[0] > 0.0

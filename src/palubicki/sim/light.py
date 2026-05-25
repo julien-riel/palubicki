@@ -133,6 +133,55 @@ class LightGrid:
             pos = pos + d * step_len
         return float(np.exp(-optical_depth))
 
+    def sample_hemisphere(
+        self,
+        p: np.ndarray,
+        *,
+        n_rays: int,
+        light_direction: np.ndarray,
+        k: float,
+        seed: int,
+    ) -> tuple[float, np.ndarray]:
+        """Sample K cosine-weighted directions around light_direction.
+
+        Returns (light_factor, gradient):
+          light_factor = mean(T_k) ∈ [0, 1]
+          gradient = normalize(Σ T_k · d_k), or zero vector if Σ ≈ 0
+        """
+        rng = np.random.default_rng(seed)
+        # Build orthonormal basis (u, v, w) with w = light_direction (normalized).
+        w = np.asarray(light_direction, dtype=np.float64)
+        w_norm = float(np.linalg.norm(w))
+        if w_norm < 1e-12:
+            return 1.0, np.zeros(3)
+        w = w / w_norm
+        # Pick a canonical axis not parallel to w.
+        canonical = np.array([1.0, 0.0, 0.0]) if abs(w[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        u = canonical - np.dot(canonical, w) * w
+        u = u / np.linalg.norm(u)
+        v = np.cross(w, u)
+
+        # Cosine-weighted hemisphere sampling: concentric disk + projection.
+        u1 = rng.random(n_rays)
+        u2 = rng.random(n_rays)
+        r = np.sqrt(u1)
+        phi = 2 * np.pi * u2
+        x_d = r * np.cos(phi)
+        y_d = r * np.sin(phi)
+        z_d = np.sqrt(np.maximum(0.0, 1.0 - u1))
+        # Directions in world frame
+        dirs = x_d[:, None] * u + y_d[:, None] * v + z_d[:, None] * w   # (n_rays, 3)
+
+        transmissions = np.empty(n_rays)
+        for i in range(n_rays):
+            transmissions[i] = self.sample_transmission(p, dirs[i], k=k)
+
+        light_factor = float(np.mean(transmissions))
+        weighted = (transmissions[:, None] * dirs).sum(axis=0)
+        grad_norm = float(np.linalg.norm(weighted))
+        gradient = weighted / grad_norm if grad_norm > 1e-12 else np.zeros(3)
+        return light_factor, gradient
+
     def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""
         if iod.diameter <= 0 or scale <= 0 or iod.length <= 0:
