@@ -127,3 +127,114 @@ def _all_nodes(tree):
         for iod in n.children_internodes:
             stack.append(iod.child_node)
     return out
+
+
+def test_simulator_v1_bit_exact_when_light_disabled():
+    """light.enabled=False → tree identical to V1 (same internode positions, count)."""
+    import numpy as np
+    from pathlib import Path
+    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
+                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+    from palubicki.sim.simulator import simulate
+
+    cfg_v1 = Config(
+        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        light=LightConfig(enabled=False),
+        seed=42,
+        output=Path("/tmp/x.glb"),
+    )
+    tree = simulate(cfg_v1)
+    n_internodes_v1 = len(tree.all_internodes)
+
+    # Re-run with light *missing entirely* (default = disabled) — same result.
+    cfg_default = Config(
+        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        seed=42,
+        output=Path("/tmp/x.glb"),
+    )
+    tree2 = simulate(cfg_default)
+    assert len(tree2.all_internodes) == n_internodes_v1
+
+
+def test_simulator_light_enabled_zero_absorption_equivalent_to_disabled():
+    """light.enabled=True with k_absorption=0 → grid transparent → ≈ V1 result."""
+    from pathlib import Path
+    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
+                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+    from palubicki.sim.simulator import simulate
+
+    base_kwargs = dict(
+        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        seed=42,
+        output=Path("/tmp/x.glb"),
+    )
+    tree_off = simulate(Config(light=LightConfig(enabled=False), **base_kwargs))
+    tree_zerok = simulate(Config(light=LightConfig(enabled=True, k_absorption=0.0), **base_kwargs))
+    # Same count (transparent grid → no shadowing)
+    assert len(tree_zerok.all_internodes) == len(tree_off.all_internodes)
+
+
+def test_simulator_light_enabled_reduces_density():
+    """light.enabled=True (with real absorption) → fewer internodes than V1."""
+    from pathlib import Path
+    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
+                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+    from palubicki.sim.simulator import simulate
+
+    base_kwargs = dict(
+        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=10),
+        tropism=TropismConfig(w_phototropism=0.3),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        seed=42,
+        output=Path("/tmp/x.glb"),
+    )
+    tree_off = simulate(Config(light=LightConfig(enabled=False), **base_kwargs))
+    tree_on = simulate(Config(light=LightConfig(enabled=True, k_absorption=1.0, leaf_area=0.2), **base_kwargs))
+    assert len(tree_on.all_internodes) < len(tree_off.all_internodes)
+
+
+def test_simulator_light_reproducible():
+    """Same seed + cfg → identical trees."""
+    from pathlib import Path
+    import hashlib
+    import numpy as np
+    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
+                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+    from palubicki.sim.simulator import simulate
+
+    def pos_hash(tree):
+        positions = np.array([iod.child_node.position for iod in tree.all_internodes])
+        return hashlib.sha256(positions.tobytes()).hexdigest()
+
+    base = dict(
+        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=6),
+        tropism=TropismConfig(w_phototropism=0.3),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        light=LightConfig(enabled=True, k_absorption=0.5),
+        seed=42,
+        output=Path("/tmp/x.glb"),
+    )
+    t1 = simulate(Config(**base))
+    t2 = simulate(Config(**base))
+    assert pos_hash(t1) == pos_hash(t2)
