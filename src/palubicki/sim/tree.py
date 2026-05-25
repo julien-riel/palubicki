@@ -14,7 +14,7 @@ class BudState(Enum):
     DEAD = auto()
 
 
-@dataclass
+@dataclass(eq=False)
 class Bud:
     position: np.ndarray
     direction: np.ndarray
