@@ -5,7 +5,7 @@ import numpy as np
 
 from palubicki.config import TropismConfig
 
-_GRAVITY_UP = np.array([0.0, 1.0, 0.0])
+_UP = np.array([0.0, 1.0, 0.0])
 
 
 def growth_direction(
@@ -22,7 +22,7 @@ def growth_direction(
 
     blend = (
         cfg.w_perception * v_perception
-        + cfg.w_gravity * _GRAVITY_UP
+        + cfg.w_gravity * _UP
         + cfg.w_phototropism * photo
         + cfg.w_direction_inertia * current_direction
     )
@@ -32,5 +32,5 @@ def growth_direction(
         cd_n = np.linalg.norm(current_direction)
         if cd_n > 1e-12:
             return current_direction / cd_n
-        return _GRAVITY_UP.copy()
+        return _UP.copy()
     return blend / n
