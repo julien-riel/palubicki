@@ -79,12 +79,23 @@ def _distribute(
                 n_by_bud[b] = math.floor(v_lateral * share)
         return
 
-    # Otherwise: split between main axis child and lateral(s)
+    # Otherwise: split between main axis (child + maybe terminal_bud) and laterals
+    # (lateral_children internodes + node.lateral_buds at this node).
     main_child = next((iod for iod in children if iod.is_main_axis), None)
     lateral_children = [iod for iod in children if not iod.is_main_axis]
 
     q_main = v_subtree.get(id(main_child.child_node), 0.0) if main_child else 0.0
+    # Include terminal bud at this node if it hasn't grown yet (rare since
+    # the terminal bud typically becomes the main_child).
+    terminal_here = node.terminal_bud if main_child is None else None
+    if terminal_here is not None:
+        q_main += quality.get(terminal_here, 0)
+
     q_lat = sum(v_subtree.get(id(iod.child_node), 0.0) for iod in lateral_children)
+    # Include node.lateral_buds at this node: these are NEW laterals that have
+    # not yet grown into internodes. Without them, laterals starve forever.
+    laterals_here = list(node.lateral_buds)
+    q_lat += sum(quality.get(b, 0) for b in laterals_here)
 
     denom = lam * q_main + (1.0 - lam) * q_lat
     if denom <= 0:
@@ -94,10 +105,17 @@ def _distribute(
 
     if main_child:
         _distribute(main_child.child_node, v_main, quality, v_subtree, lam, n_by_bud)
-    if lateral_children and q_lat > 0:
+    elif terminal_here is not None and q_main > 0:
+        n_by_bud[terminal_here] = math.floor(v_main)
+
+    if q_lat > 0:
         for iod in lateral_children:
             share = v_subtree.get(id(iod.child_node), 0.0) / q_lat
             _distribute(iod.child_node, v_lat * share, quality, v_subtree, lam, n_by_bud)
+        for b in laterals_here:
+            qb = quality.get(b, 0)
+            share = qb / q_lat
+            n_by_bud[b] = math.floor(v_lat * share)
 
 
 def _node_buds(node: Node) -> list[Bud]:
