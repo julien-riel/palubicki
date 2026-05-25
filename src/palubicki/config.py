@@ -24,7 +24,7 @@ class EnvelopeConfig:
 class SimConfig:
     r_perception: float = 0.6
     theta_perception_deg: float = 90.0
-    r_kill: float = 0.25
+    r_kill: float = 0.15
     internode_length: float = 0.1
     alpha_basipetal: float = 2.0
     lambda_apical: float = 0.55
@@ -51,8 +51,8 @@ class PhyllotaxyConfig:
 
 @dataclass(frozen=True)
 class SheddingConfig:
-    quality_threshold: float = 0.5
-    window: int = 4
+    quality_threshold: float = 0.0
+    window: int = 5
     enabled: bool = True
 
 
