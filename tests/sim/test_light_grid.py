@@ -362,6 +362,24 @@ def test_sample_hemisphere_deterministic_with_seed():
     np.testing.assert_array_equal(grad1, grad2)
 
 
+def test_sample_transmission_half_step_offset():
+    """A bud sitting inside a dense voxel should not have its OWN voxel's LAI count
+       against it — the ray represents incoming light from outside."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(1.0, 1.0, 1.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    # Only ONE voxel is filled with LAI, and the bud sits inside it.
+    grid.lai[5, 5, 5] = 10.0
+    # Ray from the center of voxel (5,5,5), going +y.
+    # The ray should pass through ONLY the cells ABOVE (5,5,5), not (5,5,5) itself.
+    # All other cells have LAI=0, so T ≈ 1.0.
+    T = grid.sample_transmission(np.array([0.55, 0.55, 0.55]), np.array([0.0, 1.0, 0.0]), k=0.5)
+    assert T == pytest.approx(1.0, rel=1e-3)
+
+
 def test_sample_transmission_outside_origin_marches_into_grid():
     """Ray starting outside the grid must still pick up LAI when it enters."""
     cfg = LightConfig(

@@ -123,7 +123,7 @@ class LightGrid:
         max_steps = int(np.ceil(grid_diag / step_len)) + 2
 
         optical_depth = 0.0
-        pos = p.astype(np.float64).copy()
+        pos = p.astype(np.float64).copy() + 0.5 * step_len * d
         for _ in range(max_steps):
             cell = self.world_to_cell(pos)
             if cell is None:
