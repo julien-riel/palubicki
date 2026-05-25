@@ -52,3 +52,19 @@ def test_config_rejects_missing_output_parent(tmp_path):
 def test_config_rejects_ring_sides_too_low(tmp_path):
     with pytest.raises(ConfigError, match="ring_sides"):
         _make_config(geom=GeomConfig(ring_sides=2), output=tmp_path / "out.glb")
+
+
+def test_config_rejects_negative_r_perception(tmp_path):
+    with pytest.raises(ConfigError, match="r_perception"):
+        _make_config(
+            sim=SimConfig(r_perception=-0.1),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_config_rejects_zero_r_tip(tmp_path):
+    with pytest.raises(ConfigError, match="r_tip"):
+        _make_config(
+            geom=GeomConfig(r_tip=0),
+            output=tmp_path / "out.glb",
+        )

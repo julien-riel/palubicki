@@ -90,8 +90,12 @@ class Config:
             raise ConfigError(f"sim.theta_perception_deg must be in (0, 180], got {s.theta_perception_deg}")
         if not (0.0 <= s.lambda_apical <= 1.0):
             raise ConfigError(f"sim.lambda_apical must be in [0, 1], got {s.lambda_apical}")
-        if s.r_perception <= 0 or s.r_kill <= 0 or s.internode_length <= 0:
-            raise ConfigError("sim r_perception, r_kill, internode_length must all be > 0")
+        if s.r_perception <= 0:
+            raise ConfigError(f"sim.r_perception must be > 0, got {s.r_perception}")
+        if s.r_kill <= 0:
+            raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
+        if s.internode_length <= 0:
+            raise ConfigError(f"sim.internode_length must be > 0, got {s.internode_length}")
         if s.max_iterations <= 0:
             raise ConfigError(f"sim.max_iterations must be > 0, got {s.max_iterations}")
 
@@ -100,8 +104,10 @@ class Config:
             raise ConfigError(f"geom.pipe_exponent must be in [1, 4], got {g.pipe_exponent}")
         if g.ring_sides < 3:
             raise ConfigError(f"geom.ring_sides must be >= 3, got {g.ring_sides}")
-        if g.r_tip <= 0 or g.leaf_size <= 0:
-            raise ConfigError("geom r_tip and leaf_size must be > 0")
+        if g.r_tip <= 0:
+            raise ConfigError(f"geom.r_tip must be > 0, got {g.r_tip}")
+        if g.leaf_size <= 0:
+            raise ConfigError(f"geom.leaf_size must be > 0, got {g.leaf_size}")
 
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")
