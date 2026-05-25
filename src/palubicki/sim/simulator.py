@@ -79,7 +79,7 @@ def simulate(cfg: Config) -> Tree:
                     parent_node=current_bud.parent_node,
                     child_node=new_node,
                     length=cfg.sim.internode_length,
-                    is_main_axis=(current_bud.axis_order == 0),
+                    is_main_axis=(current_bud is current_bud.parent_node.terminal_bud),
                     window=cfg.shedding.window,
                 )
                 current_bud.parent_node.children_internodes.append(iod)
