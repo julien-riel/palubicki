@@ -111,3 +111,62 @@ class Config:
 
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")
+
+
+# --- YAML loading ---
+
+from dataclasses import fields, is_dataclass  # noqa: E402
+
+import yaml  # noqa: E402
+
+
+_SECTION_TYPES = {
+    "envelope": EnvelopeConfig,
+    "sim": SimConfig,
+    "tropism": TropismConfig,
+    "phyllotaxy": PhyllotaxyConfig,
+    "shedding": SheddingConfig,
+    "geom": GeomConfig,
+}
+
+
+def load_config(*, yaml_path: Path | None, cli_overrides: dict, output: Path) -> Config:
+    data: dict = {}
+    if yaml_path is not None:
+        with open(yaml_path) as f:
+            data = yaml.safe_load(f) or {}
+
+    for dotted, value in cli_overrides.items():
+        _set_dotted(data, dotted, value)
+
+    sections = {}
+    section_field_names = set(_SECTION_TYPES.keys())
+    top_field_names = {f.name for f in fields(Config)}
+
+    for name, type_ in _SECTION_TYPES.items():
+        sec_data = data.get(name, {}) or {}
+        allowed = {f.name for f in fields(type_)}
+        unknown = set(sec_data) - allowed
+        if unknown:
+            raise ConfigError(f"unknown keys in section '{name}': {sorted(unknown)}")
+        sections[name] = type_(**sec_data)
+
+    top_kwargs = {k: v for k, v in data.items() if k not in section_field_names and k in top_field_names}
+    unknown_top = set(data) - section_field_names - top_field_names
+    if unknown_top:
+        raise ConfigError(f"unknown top-level keys: {sorted(unknown_top)}")
+
+    if "output" in cli_overrides:
+        top_kwargs["output"] = Path(cli_overrides["output"])
+    else:
+        top_kwargs.setdefault("output", output)
+
+    return Config(**sections, **top_kwargs)
+
+
+def _set_dotted(data: dict, dotted: str, value) -> None:
+    parts = dotted.split(".")
+    cur = data
+    for p in parts[:-1]:
+        cur = cur.setdefault(p, {})
+    cur[parts[-1]] = value
