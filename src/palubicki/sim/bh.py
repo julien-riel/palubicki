@@ -25,97 +25,112 @@ def allocate(
     return n_by_bud
 
 
-def _compute_v_subtree(node: Node, quality: dict[Bud, int], out: dict[int, float]) -> float:
-    total = 0.0
-    for iod in node.children_internodes:
-        total += _compute_v_subtree(iod.child_node, quality, out)
-    for bud in _node_buds(node):
-        total += quality.get(bud, 0)
-    out[id(node)] = total
-    return total
+def _compute_v_subtree(root: Node, quality: dict[Bud, int], out: dict[int, float]) -> float:
+    """Iterative post-order: compute v_subtree for each node."""
+    # Build traversal order (pre-order), then process in reverse (post-order)
+    order: list[Node] = []
+    stack: list[Node] = [root]
+    while stack:
+        node = stack.pop()
+        order.append(node)
+        for iod in node.children_internodes:
+            stack.append(iod.child_node)
+    # Process in post-order (children before parents)
+    for node in reversed(order):
+        total = sum(out[id(iod.child_node)] for iod in node.children_internodes)
+        for bud in _node_buds(node):
+            total += quality.get(bud, 0)
+        out[id(node)] = total
+    return out.get(id(root), 0.0)
 
 
 def _distribute(
-    node: Node,
-    v_here: float,
+    root: Node,
+    v_root: float,
     quality: dict[Bud, int],
     v_subtree: dict[int, float],
     lam: float,
     n_by_bud: dict[Bud, int],
 ) -> None:
-    if v_here <= 0:
-        return
+    """Iterative pre-order: distribute resource v_here to each node's buds/children."""
+    # Stack carries (node, v_here) pairs
+    stack: list[tuple[Node, float]] = [(root, v_root)]
+    while stack:
+        node, v_here = stack.pop()
 
-    buds = _node_buds(node)
-    children = node.children_internodes
+        if v_here <= 0:
+            continue
 
-    # If this node has only buds (a tip), split using BH formula between terminal and lateral buds.
-    # Terminal bud acts as main axis; lateral buds collectively act as lateral axis.
-    if not children:
-        terminal = node.terminal_bud
-        laterals = list(node.lateral_buds)
-        q_m = quality.get(terminal, 0) if terminal else 0
-        q_l = sum(quality.get(b, 0) for b in laterals)
-        total_q = q_m + q_l
-        if total_q == 0:
-            return
-        # Apply BH formula between terminal (main) and lateral buds
-        denom = lam * q_m + (1.0 - lam) * q_l
+        buds = _node_buds(node)
+        children = node.children_internodes
+
+        # If this node has only buds (a tip), split using BH formula between terminal and lateral buds.
+        # Terminal bud acts as main axis; lateral buds collectively act as lateral axis.
+        if not children:
+            terminal = node.terminal_bud
+            laterals = list(node.lateral_buds)
+            q_m = quality.get(terminal, 0) if terminal else 0
+            q_l = sum(quality.get(b, 0) for b in laterals)
+            total_q = q_m + q_l
+            if total_q == 0:
+                continue
+            # Apply BH formula between terminal (main) and lateral buds
+            denom = lam * q_m + (1.0 - lam) * q_l
+            if denom <= 0:
+                # all quality in one group — give it all proportionally
+                for b in buds:
+                    qb = quality.get(b, 0)
+                    n_by_bud[b] = math.floor(v_here * qb / total_q)
+                continue
+            v_terminal = v_here * (lam * q_m) / denom if terminal else 0.0
+            v_lateral = v_here - v_terminal
+            if terminal:
+                n_by_bud[terminal] = math.floor(v_terminal)
+            if laterals:
+                lat_q_total = q_l
+                for b in laterals:
+                    qb = quality.get(b, 0)
+                    share = qb / lat_q_total if lat_q_total > 0 else 0.0
+                    n_by_bud[b] = math.floor(v_lateral * share)
+            continue
+
+        # Otherwise: split between main axis (child + maybe terminal_bud) and laterals
+        # (lateral_children internodes + node.lateral_buds at this node).
+        main_child = next((iod for iod in children if iod.is_main_axis), None)
+        lateral_children = [iod for iod in children if not iod.is_main_axis]
+
+        q_main = v_subtree.get(id(main_child.child_node), 0.0) if main_child else 0.0
+        # Include terminal bud at this node if it hasn't grown yet (rare since
+        # the terminal bud typically becomes the main_child).
+        terminal_here = node.terminal_bud if main_child is None else None
+        if terminal_here is not None:
+            q_main += quality.get(terminal_here, 0)
+
+        q_lat = sum(v_subtree.get(id(iod.child_node), 0.0) for iod in lateral_children)
+        # Include node.lateral_buds at this node: these are NEW laterals that have
+        # not yet grown into internodes. Without them, laterals starve forever.
+        laterals_here = list(node.lateral_buds)
+        q_lat += sum(quality.get(b, 0) for b in laterals_here)
+
+        denom = lam * q_main + (1.0 - lam) * q_lat
         if denom <= 0:
-            # all quality in one group — give it all proportionally
-            for b in buds:
+            continue
+        v_main = v_here * (lam * q_main) / denom
+        v_lat = v_here - v_main
+
+        if main_child:
+            stack.append((main_child.child_node, v_main))
+        elif terminal_here is not None and q_main > 0:
+            n_by_bud[terminal_here] = math.floor(v_main)
+
+        if q_lat > 0:
+            for iod in lateral_children:
+                share = v_subtree.get(id(iod.child_node), 0.0) / q_lat
+                stack.append((iod.child_node, v_lat * share))
+            for b in laterals_here:
                 qb = quality.get(b, 0)
-                n_by_bud[b] = math.floor(v_here * qb / total_q)
-            return
-        v_terminal = v_here * (lam * q_m) / denom if terminal else 0.0
-        v_lateral = v_here - v_terminal
-        if terminal:
-            n_by_bud[terminal] = math.floor(v_terminal)
-        if laterals:
-            lat_q_total = q_l
-            for b in laterals:
-                qb = quality.get(b, 0)
-                share = qb / lat_q_total if lat_q_total > 0 else 0.0
-                n_by_bud[b] = math.floor(v_lateral * share)
-        return
-
-    # Otherwise: split between main axis (child + maybe terminal_bud) and laterals
-    # (lateral_children internodes + node.lateral_buds at this node).
-    main_child = next((iod for iod in children if iod.is_main_axis), None)
-    lateral_children = [iod for iod in children if not iod.is_main_axis]
-
-    q_main = v_subtree.get(id(main_child.child_node), 0.0) if main_child else 0.0
-    # Include terminal bud at this node if it hasn't grown yet (rare since
-    # the terminal bud typically becomes the main_child).
-    terminal_here = node.terminal_bud if main_child is None else None
-    if terminal_here is not None:
-        q_main += quality.get(terminal_here, 0)
-
-    q_lat = sum(v_subtree.get(id(iod.child_node), 0.0) for iod in lateral_children)
-    # Include node.lateral_buds at this node: these are NEW laterals that have
-    # not yet grown into internodes. Without them, laterals starve forever.
-    laterals_here = list(node.lateral_buds)
-    q_lat += sum(quality.get(b, 0) for b in laterals_here)
-
-    denom = lam * q_main + (1.0 - lam) * q_lat
-    if denom <= 0:
-        return
-    v_main = v_here * (lam * q_main) / denom
-    v_lat = v_here - v_main
-
-    if main_child:
-        _distribute(main_child.child_node, v_main, quality, v_subtree, lam, n_by_bud)
-    elif terminal_here is not None and q_main > 0:
-        n_by_bud[terminal_here] = math.floor(v_main)
-
-    if q_lat > 0:
-        for iod in lateral_children:
-            share = v_subtree.get(id(iod.child_node), 0.0) / q_lat
-            _distribute(iod.child_node, v_lat * share, quality, v_subtree, lam, n_by_bud)
-        for b in laterals_here:
-            qb = quality.get(b, 0)
-            share = qb / q_lat
-            n_by_bud[b] = math.floor(v_lat * share)
+                share = qb / q_lat
+                n_by_bud[b] = math.floor(v_lat * share)
 
 
 def _node_buds(node: Node) -> list[Bud]:

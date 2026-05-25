@@ -101,6 +101,23 @@ def test_no_spikes_outside_envelope(tmp_path):
     )
 
 
+def test_deep_tree_no_recursion_error(tmp_path):
+    """Regression: default-config tree depth used to exceed Python recursion limit."""
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=5000),
+        sim=SimConfig(max_iterations=20),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=True),
+        geom=GeomConfig(),
+        seed=42,
+        output=tmp_path / "out.glb",
+    )
+    # Should not raise RecursionError
+    tree = simulate(cfg)
+    assert len(tree.all_internodes) > 100, "sanity: deep tree was produced"
+
+
 def _all_nodes(tree):
     out = []
     stack = [tree.root]

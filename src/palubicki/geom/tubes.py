@@ -40,49 +40,45 @@ def build_bark_primitive(tree: Tree, *, ring_sides: int, material: Material) -> 
 
 
 def _collect_chains(tree: Tree) -> list[_ChainBuild]:
+    """Iterative collection of tube chains from the tree.
+
+    The trunk chain starts at the root and follows main-axis children.
+    Each lateral branching point starts a new chain anchored at the parent node.
+    """
     chains: list[_ChainBuild] = []
-    _walk_chains(tree.root, current=None, chains=chains)
-    # Ensure trunk-from-root chain is first
+
+    # Stack carries (node, current_chain, is_chain_start).
+    # is_chain_start=True: we are starting a brand new chain from this node (root or lateral root).
+    # is_chain_start=False: we are continuing an existing chain (following main axis).
+    root = tree.root
+    root_chain = _ChainBuild(nodes=[root], radii=[_avg_radius_at_node(root)])
+    chains.append(root_chain)
+
+    # Stack entries: (node, chain) — node has already been appended to chain.
+    stack: list[tuple[Node, _ChainBuild]] = [(root, root_chain)]
+
+    while stack:
+        node, current = stack.pop()
+
+        main = next((iod for iod in node.children_internodes if iod.is_main_axis), None)
+        laterals = [iod for iod in node.children_internodes if not iod.is_main_axis]
+
+        # Extend current chain with main-axis child
+        if main is not None:
+            current.nodes.append(main.child_node)
+            current.radii.append(_avg_radius_at_node(main.child_node))
+            stack.append((main.child_node, current))
+
+        # Start new chains for laterals
+        for lat in laterals:
+            new_chain = _ChainBuild(
+                nodes=[node, lat.child_node],
+                radii=[lat.diameter / 2.0, _avg_radius_at_node(lat.child_node)],
+            )
+            chains.append(new_chain)
+            stack.append((lat.child_node, new_chain))
+
     return chains
-
-
-def _walk_chains(node: Node, current: _ChainBuild | None, chains: list[_ChainBuild]) -> None:
-    if current is None:
-        current = _ChainBuild(nodes=[node], radii=[_avg_radius_at_node(node)])
-        chains.append(current)
-    else:
-        current.nodes.append(node)
-        current.radii.append(_avg_radius_at_node(node))
-
-    main = next((iod for iod in node.children_internodes if iod.is_main_axis), None)
-    laterals = [iod for iod in node.children_internodes if not iod.is_main_axis]
-
-    if main is not None:
-        _walk_chains(main.child_node, current, chains)
-    for lat in laterals:
-        # Start a NEW chain at the parent node so the lateral tube anchors here.
-        new_chain = _ChainBuild(
-            nodes=[node, lat.child_node],
-            radii=[lat.diameter / 2.0, _avg_radius_at_node(lat.child_node)],
-        )
-        chains.append(new_chain)
-        _walk_chains_continue(lat.child_node, new_chain, chains)
-
-
-def _walk_chains_continue(node: Node, current: _ChainBuild, chains: list[_ChainBuild]) -> None:
-    main = next((iod for iod in node.children_internodes if iod.is_main_axis), None)
-    laterals = [iod for iod in node.children_internodes if not iod.is_main_axis]
-    if main is not None:
-        current.nodes.append(main.child_node)
-        current.radii.append(_avg_radius_at_node(main.child_node))
-        _walk_chains_continue(main.child_node, current, chains)
-    for lat in laterals:
-        new_chain = _ChainBuild(
-            nodes=[node, lat.child_node],
-            radii=[lat.diameter / 2.0, _avg_radius_at_node(lat.child_node)],
-        )
-        chains.append(new_chain)
-        _walk_chains_continue(lat.child_node, new_chain, chains)
 
 
 def _avg_radius_at_node(node: Node) -> float:
