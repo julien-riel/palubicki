@@ -31,6 +31,15 @@ palubicki generate -o tree.glb --config my-config.yaml
 palubicki dump-config tree.glb > used.yaml
 ```
 
+## Tuning notes
+
+Shedding is sensitive. The default `quality_threshold = 0.0` is permissive — it only removes branches whose subtree Q drops to literal 0 averaged over `window=5` iterations. If you want more aggressive pruning of weak branches, increase the threshold incrementally (try `0.1`, then `0.5`); be aware that high values combined with marker depletion can avalanche and strip the entire tree.
+
+If your tree looks too dense or too sparse:
+- **Too dense:** raise `shedding.quality_threshold` (e.g. `0.1`–`0.3`), or lower `marker_count`.
+- **Too sparse / single stem:** lower `shedding.quality_threshold` to 0 (or disable with `--no-shed`), and consider lowering `r_kill` so markers persist longer.
+- **Branches escaping the envelope:** keep `re_perceive_per_substep=True` (the default) — disable only via `--no-resample` for performance, accepting visual spikes.
+
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
