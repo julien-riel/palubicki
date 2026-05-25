@@ -3,6 +3,19 @@ import pytest
 
 from palubicki.config import EnvelopeConfig, LightConfig
 from palubicki.sim.light import LightGrid
+from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+
+
+def _make_tree_with_terminal_at(pos: np.ndarray) -> Tree:
+    """Tree: root → one internode → terminal bud at `pos`. No lateral buds."""
+    root = Node(position=np.zeros(3))
+    leaf_node = Node(position=pos)
+    iod = Internode(parent_node=root, child_node=leaf_node, length=float(np.linalg.norm(pos)), is_main_axis=True)
+    iod.diameter = 0.01  # avoid 0 for later tasks
+    root.children_internodes.append(iod)
+    bud = Bud(position=pos.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=leaf_node)
+    leaf_node.terminal_bud = bud
+    return Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
 
 def test_light_grid_explicit_bounds():
@@ -82,3 +95,80 @@ def test_from_config_autofit_cone():
     # Cone AABB: x/z in [-rx, rx]=[-1.5,1.5], y in [0, ry]=[0, 8]. extent=(3, 8, 3).
     # origin = aabb_min - 0.1 * extent = (-1.5 - 0.3, 0 - 0.8, -1.5 - 0.3) = (-1.8, -0.8, -1.8)
     np.testing.assert_allclose(grid.origin, [-1.8, -0.8, -1.8], atol=1e-9)
+
+
+def test_rebuild_inject_single_leaf():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.04,
+        internode_area_scale=0.0,   # disable internode injection for this test
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    grid.rebuild_from_tree(tree, cfg)
+
+    # cell_volume = 1.0 ; leaf adds 0.04 / 1.0 = 0.04 to one voxel
+    assert grid.lai[5, 7, 1] == pytest.approx(0.04, rel=1e-6)
+    # all other voxels are 0
+    assert grid.lai.sum() == pytest.approx(0.04, rel=1e-6)
+
+
+def test_rebuild_skips_dead_buds():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.04,
+        internode_area_scale=0.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+    tree.active_buds[0].state = BudState.DEAD
+
+    grid.rebuild_from_tree(tree, cfg)
+
+    assert grid.lai.sum() == pytest.approx(0.0)
+
+
+def test_rebuild_skips_non_terminal_nodes():
+    """Only terminal buds (leaves) inject LAI, not lateral buds or internal nodes."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.04,
+        internode_area_scale=0.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+    # Add a lateral bud at a different cell — should NOT contribute LAI
+    lat = Bud(position=np.array([2.5, 3.5, 4.5]), direction=np.array([1.0, 0.0, 0.0]), axis_order=1, parent_node=tree.root)
+    tree.root.lateral_buds.append(lat)
+    tree.active_buds.append(lat)
+
+    grid.rebuild_from_tree(tree, cfg)
+
+    # Only the terminal contributes
+    assert grid.lai[5, 7, 1] == pytest.approx(0.04)
+    assert grid.lai[2, 3, 4] == pytest.approx(0.0)
+
+
+def test_rebuild_idempotent_zeros_first():
+    """Repeated rebuilds reset LAI (no accumulation across steps)."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.04,
+        internode_area_scale=0.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg)
+
+    assert grid.lai.sum() == pytest.approx(0.04)  # not 0.08

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from palubicki.config import EnvelopeConfig, LightConfig
+from palubicki.sim.tree import BudState, Tree
 
 
 def _envelope_aabb(env: EnvelopeConfig) -> tuple[np.ndarray, np.ndarray]:
@@ -76,3 +77,26 @@ class LightGrid:
 
     def cell_to_world_center(self, i: int, j: int, k: int) -> np.ndarray:
         return self.origin + (np.array([i, j, k], dtype=np.float64) + 0.5) * self.cell_size
+
+    def rebuild_from_tree(self, tree: Tree, cfg: LightConfig) -> None:
+        """Full rebuild. Zero LAI, then inject leaves (terminal buds on tip nodes)."""
+        self.lai.fill(0.0)
+        cell_volume = float(np.prod(self.cell_size))
+        if cell_volume <= 0:
+            return
+        leaf_lai = cfg.leaf_area / cell_volume
+
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            for child_iod in node.children_internodes:
+                stack.append(child_iod.child_node)
+            bud = node.terminal_bud
+            if bud is None or bud.state == BudState.DEAD:
+                continue
+            if node.children_internodes:
+                continue  # not a tip — skip (no leaf at an interior node)
+            cell = self.world_to_cell(bud.position)
+            if cell is None:
+                continue
+            self.lai[cell] += leaf_lai
