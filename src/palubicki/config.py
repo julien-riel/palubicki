@@ -96,8 +96,8 @@ class Config:
             raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
         if s.internode_length <= 0:
             raise ConfigError(f"sim.internode_length must be > 0, got {s.internode_length}")
-        if s.max_iterations <= 0:
-            raise ConfigError(f"sim.max_iterations must be > 0, got {s.max_iterations}")
+        if s.max_iterations < 0:
+            raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
 
         g = self.geom
         if not (1.0 <= g.pipe_exponent <= 4.0):
