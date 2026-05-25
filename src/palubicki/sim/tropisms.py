@@ -13,12 +13,28 @@ def growth_direction(
     v_perception: np.ndarray,
     current_direction: np.ndarray,
     cfg: TropismConfig,
+    light_gradient: np.ndarray | None = None,
 ) -> np.ndarray:
-    """Blend perception + gravity + photo + inertia, return unit vector."""
-    photo = np.asarray(cfg.photo_direction, dtype=np.float64)
-    photo_norm = np.linalg.norm(photo)
-    if photo_norm > 1e-12:
-        photo = photo / photo_norm
+    """Blend perception + gravity + photo + inertia, return unit vector.
+
+    When `light_gradient` is provided and non-zero, it replaces `cfg.photo_direction`
+    in the phototropism term. Otherwise falls back to V1 behavior.
+    """
+    if light_gradient is not None:
+        lg = np.asarray(light_gradient, dtype=np.float64)
+        lg_norm = float(np.linalg.norm(lg))
+        if lg_norm > 1e-12:
+            photo = lg / lg_norm
+        else:
+            photo = np.asarray(cfg.photo_direction, dtype=np.float64)
+            pn = np.linalg.norm(photo)
+            if pn > 1e-12:
+                photo = photo / pn
+    else:
+        photo = np.asarray(cfg.photo_direction, dtype=np.float64)
+        pn = np.linalg.norm(photo)
+        if pn > 1e-12:
+            photo = photo / pn
 
     blend = (
         cfg.w_perception * v_perception
@@ -28,7 +44,6 @@ def growth_direction(
     )
     n = np.linalg.norm(blend)
     if n < 1e-12:
-        # all weights zero or directions cancel — fall back to current direction
         cd_n = np.linalg.norm(current_direction)
         if cd_n > 1e-12:
             return current_direction / cd_n
