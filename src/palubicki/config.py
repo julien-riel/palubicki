@@ -135,6 +135,8 @@ class Config:
             raise ConfigError(f"light.internode_area_scale must be >= 0, got {light.internode_area_scale}")
         if any(r <= 0 for r in light.grid_resolution):
             raise ConfigError(f"light.grid_resolution must be all > 0, got {light.grid_resolution}")
+        if sum(c * c for c in light.light_direction) <= 0:
+            raise ConfigError(f"light.light_direction must be non-zero, got {light.light_direction}")
 
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")

@@ -1,6 +1,4 @@
 # tests/test_config.py
-from pathlib import Path
-
 import pytest
 
 from palubicki.config import (
@@ -84,11 +82,10 @@ def test_light_config_defaults():
     assert c.light_direction == (0.0, 1.0, 0.0)
 
 
-def test_light_config_validation_rejects_zero_rays():
-    from palubicki.config import ConfigError, LightConfig
-    from palubicki.config import Config, EnvelopeConfig, SimConfig, TropismConfig, PhyllotaxyConfig, SheddingConfig, GeomConfig
-    from pathlib import Path
-    import pytest
+def test_light_config_validation_rejects_zero_rays(tmp_path):
+    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
+                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
+                                  GeomConfig, LightConfig)
     with pytest.raises(ConfigError, match="n_rays"):
         Config(
             envelope=EnvelopeConfig(),
@@ -98,15 +95,14 @@ def test_light_config_validation_rejects_zero_rays():
             shedding=SheddingConfig(),
             geom=GeomConfig(),
             light=LightConfig(n_rays=0),
-            output=Path("/tmp/x.glb"),
+            output=tmp_path / "x.glb",
         )
 
 
-def test_light_config_validation_rejects_negative_k_absorption():
-    from palubicki.config import ConfigError, LightConfig
-    from palubicki.config import Config, EnvelopeConfig, SimConfig, TropismConfig, PhyllotaxyConfig, SheddingConfig, GeomConfig
-    from pathlib import Path
-    import pytest
+def test_light_config_validation_rejects_negative_k_absorption(tmp_path):
+    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
+                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
+                                  GeomConfig, LightConfig)
     with pytest.raises(ConfigError, match="k_absorption"):
         Config(
             envelope=EnvelopeConfig(),
@@ -116,17 +112,34 @@ def test_light_config_validation_rejects_negative_k_absorption():
             shedding=SheddingConfig(),
             geom=GeomConfig(),
             light=LightConfig(k_absorption=-0.1),
-            output=Path("/tmp/x.glb"),
+            output=tmp_path / "x.glb",
         )
 
 
-def test_config_default_light_is_disabled():
-    from palubicki.config import Config, EnvelopeConfig, SimConfig, TropismConfig, PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig
-    from pathlib import Path
+def test_config_default_light_is_disabled(tmp_path):
+    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
+                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
     c = Config(
         envelope=EnvelopeConfig(), sim=SimConfig(), tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(), shedding=SheddingConfig(), geom=GeomConfig(),
         light=LightConfig(),
-        output=Path("/tmp/x.glb"),
+        output=tmp_path / "x.glb",
     )
     assert c.light.enabled is False
+
+
+def test_light_config_validation_rejects_zero_light_direction(tmp_path):
+    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
+                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
+                                  GeomConfig, LightConfig)
+    with pytest.raises(ConfigError, match="light_direction"):
+        Config(
+            envelope=EnvelopeConfig(),
+            sim=SimConfig(),
+            tropism=TropismConfig(),
+            phyllotaxy=PhyllotaxyConfig(),
+            shedding=SheddingConfig(),
+            geom=GeomConfig(),
+            light=LightConfig(light_direction=(0.0, 0.0, 0.0)),
+            output=tmp_path / "x.glb",
+        )
