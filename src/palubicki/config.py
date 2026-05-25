@@ -29,6 +29,7 @@ class SimConfig:
     alpha_basipetal: float = 2.0
     lambda_apical: float = 0.55
     max_iterations: int = 30
+    re_perceive_per_substep: bool = True
 
 
 @dataclass(frozen=True)

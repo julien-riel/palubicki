@@ -50,6 +50,8 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--leaf-texture", type=Path, default=None)
     g.add_argument("--no-leaves", action="store_true")
     g.add_argument("--no-shed", action="store_true")
+    g.add_argument("--no-resample", action="store_true",
+                   help="disable re-perception per substep (debug / legacy behavior)")
     g.add_argument("--ring-sides", type=int, default=None)
     g.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"], default="INFO")
     g.add_argument("--validate", action="store_true")
@@ -90,6 +92,8 @@ def _cmd_generate(args) -> int:
         overrides["geom.enable_leaves"] = False
     if args.no_shed:
         overrides["shedding.enabled"] = False
+    if args.no_resample:
+        overrides["sim.re_perceive_per_substep"] = False
     if args.ring_sides is not None:
         overrides["geom.ring_sides"] = args.ring_sides
 

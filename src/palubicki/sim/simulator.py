@@ -108,9 +108,25 @@ def simulate(cfg: Config) -> Tree:
                 current_bud.state = BudState.DEAD
                 if step + 1 < n:
                     # Continue multi-step growth from the just-created terminal.
-                    # Reuse the original bud's perception (cheap approximation).
-                    res.direction[terminal] = res.direction.get(current_bud, np.zeros(3))
-                    res.quality[terminal] = res.quality.get(current_bud, 0)
+                    if cfg.sim.re_perceive_per_substep:
+                        # Re-perceive locally so the bud reacts to nearby markers
+                        # (kill-radius depletion will collapse perception once the
+                        # bud has cleared its surroundings, preventing spikes).
+                        sub_result = perceive(
+                            [terminal], markers,
+                            r_perception=cfg.sim.r_perception,
+                            theta_perception_deg=cfg.sim.theta_perception_deg,
+                        )
+                        res.direction[terminal] = sub_result.direction[terminal]
+                        res.quality[terminal] = sub_result.quality[terminal]
+                        if np.linalg.norm(res.direction[terminal]) < 1e-12:
+                            terminal.state = BudState.DORMANT
+                            new_active.append(terminal)
+                            break
+                    else:
+                        # Cheap approximation: reuse the original bud's perception.
+                        res.direction[terminal] = res.direction.get(current_bud, np.zeros(3))
+                        res.quality[terminal] = res.quality.get(current_bud, 0)
                     current_bud = terminal
                 else:
                     new_active.append(terminal)

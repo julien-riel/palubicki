@@ -69,6 +69,38 @@ def test_lateral_axes_get_main_internodes(tmp_path):
     assert found_main_continuation, "lateral sub-axes should produce is_main_axis=True continuations"
 
 
+def test_no_spikes_outside_envelope(tmp_path):
+    """During multi-substep growth, buds must re-perceive and stop growing once
+    they've cleared their local marker neighborhood — no straight spikes
+    blasting through the envelope."""
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=1000),
+        sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_iterations=15),
+        tropism=TropismConfig(w_perception=1.0, w_gravity=0.3, w_direction_inertia=0.4),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        seed=42,
+        output=tmp_path / "out.glb",
+    )
+    tree = simulate(cfg)
+    envelope_max = max(cfg.envelope.rx, cfg.envelope.ry, cfg.envelope.rz)
+    max_dist_allowed = envelope_max * 1.5  # allow modest overshoot near boundary
+    offending = []
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        d = float(np.linalg.norm(n.position))
+        if d > max_dist_allowed:
+            offending.append(d)
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+    assert not offending, (
+        f"Nodes too far from envelope: max={max(offending):.2f} "
+        f"> {max_dist_allowed:.2f}"
+    )
+
+
 def _all_nodes(tree):
     out = []
     stack = [tree.root]
