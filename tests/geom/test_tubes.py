@@ -60,3 +60,49 @@ def test_indices_within_bounds_and_uint32():
     prim = build_bark_primitive(tree, ring_sides=6, material=_mat())
     assert prim.indices.dtype == np.uint32
     assert prim.indices.max() < prim.positions.shape[0]
+
+
+def _tree_with_lateral(main_n=2, lat_n=2, r=0.05):
+    """Build a tree with one lateral branch: trunk of main_n internodes, one lateral at junction."""
+    root = Node(position=np.zeros(3))
+    prev = root
+    iods = []
+    for i in range(main_n):
+        child = Node(position=np.array([0.0, float(i + 1), 0.0]))
+        iod = Internode(parent_node=prev, child_node=child, length=1.0, is_main_axis=True)
+        iod.diameter = 2 * r
+        prev.children_internodes.append(iod)
+        child.parent_internode = iod
+        iods.append(iod)
+        prev = child
+    # Attach a lateral chain at the junction node (root's direct child)
+    junction = root.children_internodes[0].child_node
+    lat_prev = junction
+    for j in range(lat_n):
+        lat_child = Node(position=np.array([float(j + 1), 1.0, 0.0]))
+        lat_iod = Internode(parent_node=lat_prev, child_node=lat_child, length=1.0, is_main_axis=False)
+        lat_iod.diameter = 2 * r * 0.5
+        lat_prev.children_internodes.append(lat_iod)
+        lat_child.parent_internode = lat_iod
+        iods.append(lat_iod)
+        lat_prev = lat_child
+    return Tree(root=root, all_internodes=iods)
+
+
+def test_lateral_chain_produces_valid_primitive():
+    """Lateral branches create additional chains; mesh should be finite and index-valid."""
+    tree = _tree_with_lateral(main_n=2, lat_n=2)
+    prim = build_bark_primitive(tree, ring_sides=6, material=_mat())
+    assert np.isfinite(prim.positions).all()
+    assert np.isfinite(prim.normals).all()
+    assert prim.indices.max() < prim.positions.shape[0]
+
+
+def test_single_node_tree_no_crash():
+    """A tree with only a root node produces a valid primitive without error."""
+    root = Node(position=np.zeros(3))
+    tree = Tree(root=root, all_internodes=[])
+    prim = build_bark_primitive(tree, ring_sides=6, material=_mat())
+    # _emit_chain_tube returns early (len < 2), only root cap center vertex emitted
+    assert prim.positions.shape[1] == 3
+    assert np.isfinite(prim.positions).all()

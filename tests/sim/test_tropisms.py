@@ -56,3 +56,14 @@ def test_returns_unit_vector():
         cfg=cfg,
     )
     assert abs(np.linalg.norm(d) - 1.0) < 1e-7
+
+
+def test_zero_weights_zero_current_direction_falls_back_to_gravity():
+    """When all weights are zero AND current_direction is zero, return GRAVITY_UP."""
+    cfg = TropismConfig(w_perception=0.0, w_gravity=0.0, w_phototropism=0.0, w_direction_inertia=0.0)
+    d = growth_direction(
+        v_perception=np.zeros(3),
+        current_direction=np.zeros(3),
+        cfg=cfg,
+    )
+    np.testing.assert_allclose(d, [0, 1, 0], atol=1e-7)

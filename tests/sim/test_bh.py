@@ -65,3 +65,21 @@ def test_zero_split_when_both_qualities_zero():
     tree = Tree(root=root, active_buds=[m, l], all_internodes=[iod])
     n_by_bud = allocate(tree, quality={m: 0, l: 0}, alpha=2.0, lambda_apical=0.5)
     assert n_by_bud[m] == 0 and n_by_bud[l] == 0
+
+
+def test_denom_zero_proportional_fallback():
+    # lam=0 means only laterals count in denom; if terminal has 0 quality and
+    # laterals have quality, denom = 0*q_m + 1*q_l > 0, not this path.
+    # denom=0 when lam=0 and q_l=0 but total_q>0 → only terminal has quality.
+    # lam=0 → denom = 0*q_m + 1*0 = 0, but total_q = q_m > 0 → triggers fallback.
+    root = Node(position=np.zeros(3))
+    bud = Bud(position=np.zeros(3), direction=np.array([0.0, 1.0, 0.0]),
+              axis_order=0, parent_node=root)
+    root.terminal_bud = bud
+    tree = Tree(root=root, active_buds=[bud])
+    quality = {bud: 5}
+    # lambda_apical=0 makes denom = 0*5 + 1*0 = 0 with only terminal bud
+    # total_q=5>0 so we enter proportional fallback: floor(v_here * 5 / 5) = floor(v_here)
+    n_by_bud = allocate(tree, quality=quality, alpha=1.0, lambda_apical=0.0)
+    # v_total = alpha * 5 = 5; proportional: floor(5 * 5/5) = 5
+    assert n_by_bud[bud] == 5

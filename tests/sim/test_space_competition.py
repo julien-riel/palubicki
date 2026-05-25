@@ -59,3 +59,11 @@ def test_symmetric_markers_average_to_bud_direction():
     res = perceive([bud], cloud, r_perception=5.0, theta_perception_deg=90.0)
     assert res.quality[bud] == 2
     np.testing.assert_allclose(res.direction[bud], [0, 1, 0], atol=1e-7)
+
+
+def test_empty_bud_list_returns_empty_result():
+    """perceive() with no buds hits the early-return branch and returns empty dicts."""
+    cloud = MarkerCloud(np.array([[0, 1, 0]], dtype=float))
+    res = perceive([], cloud, r_perception=2.0, theta_perception_deg=60.0)
+    assert res.quality == {}
+    assert res.direction == {}
