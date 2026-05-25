@@ -253,3 +253,57 @@ def test_rebuild_recomputes_radii():
 
     # After compute_radii: tip is at r_tip=0.005, single-internode tree → iod.diameter = 0.01
     assert iod.diameter == pytest.approx(0.01)
+
+
+def test_sample_transmission_empty_grid_returns_one():
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    # No LAI injected at all
+    T = grid.sample_transmission(np.array([5.0, 5.0, 5.0]), np.array([0.0, 1.0, 0.0]), k=0.5)
+    assert T == pytest.approx(1.0)
+
+
+def test_sample_transmission_uniform_lai():
+    """Uniform LAI L → T(p, dir) = exp(-k * L * dist_in_grid)."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    L = 2.0
+    grid.lai.fill(L)
+    # Ray from (5, 0.001, 5) going up: travels ~10 units inside grid.
+    k = 0.5
+    T = grid.sample_transmission(np.array([5.0, 0.001, 5.0]), np.array([0.0, 1.0, 0.0]), k=k)
+    expected = np.exp(-k * L * 10.0)
+    assert T == pytest.approx(expected, rel=1e-2)
+
+
+def test_sample_transmission_starts_outside_grid():
+    """If origin is outside grid, transmission is 1.0 until the ray enters."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    grid.lai.fill(0.0)   # explicit
+    T = grid.sample_transmission(np.array([-5.0, 5.0, 5.0]), np.array([1.0, 0.0, 0.0]), k=0.5)
+    assert T == pytest.approx(1.0)
+
+
+def test_sample_transmission_zero_direction():
+    """Zero-length direction is a no-op; return 1.0."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    T = grid.sample_transmission(np.array([5.0, 5.0, 5.0]), np.array([0.0, 0.0, 0.0]), k=0.5)
+    assert T == pytest.approx(1.0)

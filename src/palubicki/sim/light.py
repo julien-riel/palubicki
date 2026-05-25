@@ -110,6 +110,29 @@ class LightGrid:
                 continue
             self.lai[cell] += leaf_lai
 
+    def sample_transmission(self, p: np.ndarray, direction: np.ndarray, *, k: float) -> float:
+        """Ray-march Beer-Lambert from p along direction. Returns T = exp(-Σ k·LAI·step)."""
+        d_norm = float(np.linalg.norm(direction))
+        if d_norm < 1e-12:
+            return 1.0
+        d = direction / d_norm
+
+        step_len = float(np.min(self.cell_size))
+        # Max number of steps to traverse the grid diagonally.
+        grid_diag = float(np.linalg.norm(self.cell_size * np.array(self.resolution)))
+        max_steps = int(np.ceil(grid_diag / step_len)) + 2
+
+        optical_depth = 0.0
+        pos = p.astype(np.float64).copy()
+        for _ in range(max_steps):
+            cell = self.world_to_cell(pos)
+            if cell is None:
+                # outside grid — stop accumulating
+                break
+            optical_depth += k * float(self.lai[cell]) * step_len
+            pos = pos + d * step_len
+        return float(np.exp(-optical_depth))
+
     def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""
         if iod.diameter <= 0 or scale <= 0 or iod.length <= 0:
