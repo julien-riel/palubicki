@@ -127,8 +127,8 @@ class LightGrid:
         for _ in range(max_steps):
             cell = self.world_to_cell(pos)
             if cell is None:
-                # outside grid — stop accumulating
-                break
+                pos = pos + d * step_len
+                continue  # outside the grid: don't accumulate, but keep marching
             optical_depth += k * float(self.lai[cell]) * step_len
             pos = pos + d * step_len
         return float(np.exp(-optical_depth))

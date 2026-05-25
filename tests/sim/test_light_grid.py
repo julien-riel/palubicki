@@ -362,6 +362,23 @@ def test_sample_hemisphere_deterministic_with_seed():
     np.testing.assert_array_equal(grad1, grad2)
 
 
+def test_sample_transmission_outside_origin_marches_into_grid():
+    """Ray starting outside the grid must still pick up LAI when it enters."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    L = 2.0
+    grid.lai.fill(L)
+    # Ray from outside (x=-5), going +x toward the dense grid. Travels ~10 units inside.
+    k = 0.5
+    T = grid.sample_transmission(np.array([-5.0, 5.0, 5.0]), np.array([1.0, 0.0, 0.0]), k=k)
+    expected = np.exp(-k * L * 10.0)
+    assert T == pytest.approx(expected, rel=0.1)   # generous tolerance — exact entry depends on discretization
+
+
 def test_sample_hemisphere_gradient_points_to_open_side():
     """Place a dense block on the -x side of the bud; gradient should point +x (away from shadow)."""
     cfg = LightConfig(
