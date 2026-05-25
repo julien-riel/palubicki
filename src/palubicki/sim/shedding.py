@@ -34,8 +34,10 @@ def _walk_and_shed(node: Node, tree: Tree, cfg: SheddingConfig) -> None:
     for iod in list(node.children_internodes):
         if len(iod.quality_history) >= cfg.window and iod.average_quality() < cfg.quality_threshold:
             _kill_subtree(iod.child_node, tree)
-            node.children_internodes.remove(iod)
-            tree.all_internodes[:] = [i for i in tree.all_internodes if i is not iod]
+            # Identity-based filtering (faster than list.remove and unaffected
+            # by any future __eq__ behavior on Internode/Node).
+            node.children_internodes = [i for i in node.children_internodes if i is not iod]
+            tree.all_internodes = [i for i in tree.all_internodes if i is not iod]
         else:
             _walk_and_shed(iod.child_node, tree, cfg)
 

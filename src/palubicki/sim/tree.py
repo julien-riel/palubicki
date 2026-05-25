@@ -24,7 +24,7 @@ class Bud:
     state: BudState = BudState.ACTIVE
 
 
-@dataclass
+@dataclass(eq=False)
 class Node:
     position: np.ndarray
     parent_internode: Optional["Internode"] = None
@@ -33,7 +33,7 @@ class Node:
     lateral_buds: list[Bud] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(eq=False)
 class Internode:
     parent_node: Node
     child_node: Node
