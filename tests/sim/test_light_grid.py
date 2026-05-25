@@ -172,3 +172,84 @@ def test_rebuild_idempotent_zeros_first():
     grid.rebuild_from_tree(tree, cfg)
 
     assert grid.lai.sum() == pytest.approx(0.04)  # not 0.08
+
+
+def test_rebuild_inject_internode_vertical():
+    """A 1.0-length vertical internode of diameter 0.02 (radius 0.01) on cell_size 0.1
+       → ~10 cells get LAI from lateral surface 2π·0.01·0.1 each."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(1.0, 1.0, 1.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.0,             # disable leaf injection for this test
+        internode_area_scale=1.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    # Build: root at (0.5, 0.0, 0.5), tip at (0.5, 1.0, 0.5), internode is vertical
+    root = Node(position=np.array([0.5, 0.0, 0.5]))
+    tip = Node(position=np.array([0.5, 1.0, 0.5]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0, is_main_axis=True)
+    iod.diameter = 0.02   # r = 0.01
+    root.children_internodes.append(iod)
+    bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=tip)
+    tip.terminal_bud = bud
+    tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
+
+    grid.rebuild_from_tree(tree, cfg)
+
+    # Vertical column at (x=5, z=5), y from 0 to 9. Each cell should have LAI > 0.
+    column = grid.lai[5, :, 5]
+    assert np.all(column[:10] > 0.0), f"expected all 10 cells filled, got {column[:10]}"
+    # Total LAI = total lateral surface / cell_volume = (2π·0.01·1.0) / 0.001 = 62.83...
+    expected_total = (2 * np.pi * 0.01 * 1.0) / (0.1 * 0.1 * 0.1)
+    assert grid.lai.sum() == pytest.approx(expected_total, rel=1e-4)
+
+
+def test_rebuild_internode_scaled():
+    """internode_area_scale=0.5 → half the LAI from internodes."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(1.0, 1.0, 1.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.0,
+        internode_area_scale=0.5,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    root = Node(position=np.array([0.5, 0.0, 0.5]))
+    tip = Node(position=np.array([0.5, 1.0, 0.5]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0, is_main_axis=True)
+    iod.diameter = 0.02
+    root.children_internodes.append(iod)
+    bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=tip)
+    tip.terminal_bud = bud
+    tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
+
+    grid.rebuild_from_tree(tree, cfg)
+
+    expected_total = 0.5 * (2 * np.pi * 0.01 * 1.0) / (0.1 * 0.1 * 0.1)
+    assert grid.lai.sum() == pytest.approx(expected_total, rel=1e-4)
+
+
+def test_rebuild_recomputes_radii():
+    """rebuild_from_tree calls compute_radii to populate iod.diameter."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(1.0, 1.0, 1.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.0,
+        internode_area_scale=1.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    root = Node(position=np.array([0.5, 0.0, 0.5]))
+    tip = Node(position=np.array([0.5, 1.0, 0.5]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0, is_main_axis=True)
+    # NO pre-set diameter — let rebuild compute it.
+    root.children_internodes.append(iod)
+    bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=tip)
+    tip.terminal_bud = bud
+    tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
+
+    grid.rebuild_from_tree(tree, cfg, r_tip=0.005, exponent=2.0)
+
+    # After compute_radii: tip is at r_tip=0.005, single-internode tree → iod.diameter = 0.01
+    assert iod.diameter == pytest.approx(0.01)

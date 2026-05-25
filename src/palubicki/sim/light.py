@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from palubicki.config import EnvelopeConfig, LightConfig
+from palubicki.sim.radii import compute_radii
 from palubicki.sim.tree import BudState, Tree
 
 
@@ -78,25 +79,55 @@ class LightGrid:
     def cell_to_world_center(self, i: int, j: int, k: int) -> np.ndarray:
         return self.origin + (np.array([i, j, k], dtype=np.float64) + 0.5) * self.cell_size
 
-    def rebuild_from_tree(self, tree: Tree, cfg: LightConfig) -> None:
-        """Full rebuild. Zero LAI, then inject leaves (terminal buds on tip nodes)."""
+    def rebuild_from_tree(
+        self, tree: Tree, cfg: LightConfig, *, r_tip: float | None = None, exponent: float | None = None,
+    ) -> None:
+        """Full rebuild. Zero LAI, optionally recompute radii, then inject leaves + internodes."""
         self.lai.fill(0.0)
         cell_volume = float(np.prod(self.cell_size))
         if cell_volume <= 0:
             return
+
+        if r_tip is not None and exponent is not None:
+            compute_radii(tree, r_tip=r_tip, exponent=exponent)
+
         leaf_lai = cfg.leaf_area / cell_volume
+        sub_step = float(np.min(self.cell_size))
 
         stack = [tree.root]
         while stack:
             node = stack.pop()
             for child_iod in node.children_internodes:
                 stack.append(child_iod.child_node)
+                self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
             bud = node.terminal_bud
             if bud is None or bud.state == BudState.DEAD:
                 continue
             if node.children_internodes:
-                continue  # not a tip — skip (no leaf at an interior node)
+                continue
             cell = self.world_to_cell(bud.position)
             if cell is None:
                 continue
             self.lai[cell] += leaf_lai
+
+    def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
+        """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""
+        if iod.diameter <= 0 or scale <= 0 or iod.length <= 0:
+            return
+        p0 = iod.parent_node.position
+        p1 = iod.child_node.position
+        seg = p1 - p0
+        seg_len = float(np.linalg.norm(seg))
+        if seg_len < 1e-12:
+            return
+        direction = seg / seg_len
+        radius = 0.5 * iod.diameter
+        n_steps = max(1, int(np.ceil(seg_len / sub_step)))
+        actual_step = seg_len / n_steps
+        sub_surface = 2.0 * np.pi * radius * actual_step * scale
+        sub_lai = sub_surface / cell_volume
+        for k in range(n_steps):
+            p = p0 + (k + 0.5) * actual_step * direction
+            cell = self.world_to_cell(p)
+            if cell is not None:
+                self.lai[cell] += sub_lai
