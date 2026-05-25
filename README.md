@@ -31,6 +31,26 @@ palubicki generate -o tree.glb --config my-config.yaml
 palubicki dump-config tree.glb > used.yaml
 ```
 
+### V2 — voxel light shadowing (BHls hybrid)
+
+Enable with `--light-enabled`. The bud's quality becomes
+`Q = nb_markers × light_factor`, where `light_factor ∈ [0,1]` is the fraction
+of hemispheric rays reaching the bud through accumulated leaf/branch density
+(Beer-Lambert). Light also drives local phototropism (the growth direction
+biases toward the brightest opening) and shedding (branches in deep shadow
+die).
+
+When activating light, the default `tropism.w_phototropism = 0.0` ignores the
+gradient — configure it via the YAML config (`tropism.w_phototropism: 0.3`).
+
+Example:
+
+```bash
+palubicki generate -o oak_light.glb \
+  --envelope ellipsoid --envelope-radii 3 5 3 \
+  --light-enabled --seed 42
+```
+
 ## Tuning notes
 
 Shedding is sensitive. The default `quality_threshold = 0.0` is permissive — it only removes branches whose subtree Q drops to literal 0 averaged over `window=5` iterations. If you want more aggressive pruning of weak branches, increase the threshold incrementally (try `0.1`, then `0.5`); be aware that high values combined with marker depletion can avalanche and strip the entire tree.

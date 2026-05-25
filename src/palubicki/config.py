@@ -68,6 +68,19 @@ class GeomConfig:
 
 
 @dataclass(frozen=True)
+class LightConfig:
+    enabled: bool = False
+    grid_origin: tuple[float, float, float] | None = None
+    grid_size: tuple[float, float, float] | None = None
+    grid_resolution: tuple[int, int, int] = (64, 64, 64)
+    k_absorption: float = 0.5
+    leaf_area: float = 0.04
+    internode_area_scale: float = 1.0
+    n_rays: int = 16
+    light_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
+
+
+@dataclass(frozen=True)
 class Config:
     envelope: EnvelopeConfig
     sim: SimConfig
@@ -75,6 +88,7 @@ class Config:
     phyllotaxy: PhyllotaxyConfig
     shedding: SheddingConfig
     geom: GeomConfig
+    light: LightConfig = field(default_factory=LightConfig)
     seed: int = 0
     output: Path = field(default_factory=lambda: Path("tree.glb"))
     log_level: str = "INFO"
@@ -110,6 +124,20 @@ class Config:
         if g.leaf_size <= 0:
             raise ConfigError(f"geom.leaf_size must be > 0, got {g.leaf_size}")
 
+        light = self.light
+        if light.n_rays <= 0:
+            raise ConfigError(f"light.n_rays must be > 0, got {light.n_rays}")
+        if light.k_absorption < 0:
+            raise ConfigError(f"light.k_absorption must be >= 0, got {light.k_absorption}")
+        if light.leaf_area < 0:
+            raise ConfigError(f"light.leaf_area must be >= 0, got {light.leaf_area}")
+        if light.internode_area_scale < 0:
+            raise ConfigError(f"light.internode_area_scale must be >= 0, got {light.internode_area_scale}")
+        if any(r <= 0 for r in light.grid_resolution):
+            raise ConfigError(f"light.grid_resolution must be all > 0, got {light.grid_resolution}")
+        if sum(c * c for c in light.light_direction) <= 0:
+            raise ConfigError(f"light.light_direction must be non-zero, got {light.light_direction}")
+
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")
 
@@ -128,6 +156,7 @@ _SECTION_TYPES = {
     "phyllotaxy": PhyllotaxyConfig,
     "shedding": SheddingConfig,
     "geom": GeomConfig,
+    "light": LightConfig,
 }
 
 

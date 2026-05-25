@@ -7,7 +7,7 @@ import pygltflib
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
+    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
     SheddingConfig, SimConfig, TropismConfig,
 )
 from palubicki.export.gltf import write_glb
@@ -44,6 +44,20 @@ def _hash_buffers(glb_path: Path) -> str:
     return sha.hexdigest()
 
 
+def _cfg_ellipsoid_light(out: Path) -> Config:
+    return Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=8),
+        tropism=TropismConfig(w_phototropism=0.3),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        light=LightConfig(enabled=True, grid_resolution=(24, 32, 24), n_rays=8, k_absorption=0.5),
+        seed=7,
+        output=out,
+    )
+
+
 def test_golden_ellipsoid(tmp_path, update_goldens):
     cfg = _cfg_ellipsoid(tmp_path / "g.glb")
     tree = simulate(cfg)
@@ -52,6 +66,26 @@ def test_golden_ellipsoid(tmp_path, update_goldens):
 
     h = _hash_buffers(cfg.output)
     golden = GOLDEN_DIR / "ellipsoid.sha256"
+
+    if update_goldens or not golden.exists():
+        GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
+        golden.write_text(h)
+        pytest.skip("golden written; re-run without --update-goldens to verify")
+    expected = golden.read_text().strip()
+    assert h == expected, (
+        f"golden mismatch.\nexpected: {expected}\nactual:   {h}\n"
+        f"if intentional, re-run with --update-goldens after visual review"
+    )
+
+
+def test_golden_ellipsoid_light(tmp_path, update_goldens):
+    cfg = _cfg_ellipsoid_light(tmp_path / "g_light.glb")
+    tree = simulate(cfg)
+    mesh = build_mesh(tree, cfg)
+    write_glb(mesh, cfg.output, asset_meta={"seed": cfg.seed, "light_enabled": True})
+
+    h = _hash_buffers(cfg.output)
+    golden = GOLDEN_DIR / "ellipsoid_light.sha256"
 
     if update_goldens or not golden.exists():
         GOLDEN_DIR.mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,8 @@ import numpy as np
 from palubicki.config import Config
 from palubicki.sim.bh import allocate
 from palubicki.sim.envelope import sample_markers
+from palubicki.sim.light import LightGrid
+from palubicki.sim.light_perception import perceive_light
 from palubicki.sim.markers import MarkerCloud
 from palubicki.sim.phyllotaxy import lateral_bud_directions
 from palubicki.sim.shedding import record_qualities, shed_low_quality
@@ -35,6 +37,8 @@ def simulate(cfg: Config) -> Tree:
     root.terminal_bud = bud
     tree = Tree(root=root, active_buds=[bud])
 
+    light_grid = LightGrid.from_config(cfg.light, cfg.envelope) if cfg.light.enabled else None
+
     node_index = 0
     no_new_streak = 0
     t0 = time.time()
@@ -43,16 +47,34 @@ def simulate(cfg: Config) -> Tree:
         if not tree.active_buds:
             break
 
+        if light_grid is not None:
+            light_grid.rebuild_from_tree(
+                tree, cfg.light,
+                r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
+            )
+            light_info = perceive_light(
+                tree.active_buds, light_grid, cfg.light,
+                seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
+            )
+        else:
+            light_info = None
+
         res = perceive(
             tree.active_buds, markers,
             r_perception=cfg.sim.r_perception,
             theta_perception_deg=cfg.sim.theta_perception_deg,
         )
+
+        if light_info is not None:
+            quality = {b: res.quality[b] * light_info.light_factor[b] for b in tree.active_buds}
+        else:
+            quality = res.quality
+
         n_by_bud = allocate(
-            tree, quality=res.quality,
+            tree, quality=quality,
             alpha=cfg.sim.alpha_basipetal, lambda_apical=cfg.sim.lambda_apical,
         )
-        record_qualities(tree, quality=res.quality)
+        record_qualities(tree, quality=quality)
 
         new_node_positions: list[np.ndarray] = []
         new_active: list[Bud] = []
@@ -68,10 +90,12 @@ def simulate(cfg: Config) -> Tree:
 
             current_bud = bud_old
             for step in range(n):
+                light_grad = light_info.gradient[current_bud] if light_info else None
                 d = growth_direction(
                     v_perception=res.direction[current_bud],
                     current_direction=current_bud.direction,
                     cfg=cfg.tropism,
+                    light_gradient=light_grad,
                 )
                 new_pos = current_bud.position + d * cfg.sim.internode_length
                 new_node = Node(position=new_pos)
@@ -103,15 +127,10 @@ def simulate(cfg: Config) -> Tree:
                     )
                     new_node.lateral_buds.append(lat)
 
-                # Laterals from every sub-step survive into the next iteration.
                 new_active.extend(new_node.lateral_buds)
                 current_bud.state = BudState.DEAD
                 if step + 1 < n:
-                    # Continue multi-step growth from the just-created terminal.
                     if cfg.sim.re_perceive_per_substep:
-                        # Re-perceive locally so the bud reacts to nearby markers
-                        # (kill-radius depletion will collapse perception once the
-                        # bud has cleared its surroundings, preventing spikes).
                         sub_result = perceive(
                             [terminal], markers,
                             r_perception=cfg.sim.r_perception,
@@ -119,6 +138,16 @@ def simulate(cfg: Config) -> Tree:
                         )
                         res.direction[terminal] = sub_result.direction[terminal]
                         res.quality[terminal] = sub_result.quality[terminal]
+                        if light_grid is not None and light_info is not None:
+                            lf, grad = light_grid.sample_hemisphere(
+                                terminal.position,
+                                n_rays=cfg.light.n_rays,
+                                light_direction=np.asarray(cfg.light.light_direction, dtype=np.float64),
+                                k=cfg.light.k_absorption,
+                                    seed=int(np.random.SeedSequence([cfg.seed, iteration, step + 1]).generate_state(1)[0]),
+                            )
+                            light_info.light_factor[terminal] = lf
+                            light_info.gradient[terminal] = grad
                         if np.linalg.norm(res.direction[terminal]) < 1e-12:
                             terminal.state = BudState.DORMANT
                             new_active.append(terminal)
@@ -127,6 +156,9 @@ def simulate(cfg: Config) -> Tree:
                         # Cheap approximation: reuse the original bud's perception.
                         res.direction[terminal] = res.direction.get(current_bud, np.zeros(3))
                         res.quality[terminal] = res.quality.get(current_bud, 0)
+                        if light_info is not None:
+                            light_info.light_factor[terminal] = light_info.light_factor.get(current_bud, 1.0)
+                            light_info.gradient[terminal] = light_info.gradient.get(current_bud, np.zeros(3))
                     current_bud = terminal
                 else:
                     new_active.append(terminal)

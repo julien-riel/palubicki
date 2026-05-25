@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
+    Config, ConfigError, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
     SheddingConfig, SimConfig, TropismConfig, load_config,
 )
 from palubicki.export.gltf import ExportError, write_glb
@@ -56,6 +56,14 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"], default="INFO")
     g.add_argument("--validate", action="store_true")
     g.add_argument("--save-config", type=Path, default=None)
+    g.add_argument("--light-enabled", action="store_true",
+                   help="Enable V2 voxel light shadowing (BHls hybrid)")
+    g.add_argument("--light-k", type=float, default=None,
+                   help="Beer-Lambert absorption coefficient (default 0.5)")
+    g.add_argument("--light-rays", type=int, default=None,
+                   help="Hemispheric rays per bud (default 16)")
+    g.add_argument("--light-res", type=int, default=None,
+                   help="Light grid resolution N → N×N×N cells (default 64)")
 
     sub.add_parser("dump-defaults", help="Print full default config as YAML")
 
@@ -96,6 +104,14 @@ def _cmd_generate(args) -> int:
         overrides["sim.re_perceive_per_substep"] = False
     if args.ring_sides is not None:
         overrides["geom.ring_sides"] = args.ring_sides
+    if args.light_enabled:
+        overrides["light.enabled"] = True
+    if args.light_k is not None:
+        overrides["light.k_absorption"] = args.light_k
+    if args.light_rays is not None:
+        overrides["light.n_rays"] = args.light_rays
+    if args.light_res is not None:
+        overrides["light.grid_resolution"] = [args.light_res, args.light_res, args.light_res]
 
     try:
         cfg = load_config(yaml_path=args.config, cli_overrides=overrides, output=args.output)
