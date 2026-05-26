@@ -215,11 +215,21 @@ _SECTION_TYPES = {
 }
 
 
-def load_config(*, yaml_path: Path | None, cli_overrides: dict, output: Path) -> Config:
+def load_config(
+    *,
+    yaml_path: Path | None,
+    cli_overrides: dict,
+    output: Path,
+    species: str | None = None,
+) -> Config:
     data: dict = {}
+    if species is not None:
+        data = _load_packaged_species(species)
+
     if yaml_path is not None:
         with open(yaml_path) as f:
-            data = yaml.safe_load(f) or {}
+            user = yaml.safe_load(f) or {}
+        _deep_merge(data, user)
 
     for dotted, value in cli_overrides.items():
         _set_dotted(data, dotted, value)
@@ -250,6 +260,37 @@ def load_config(*, yaml_path: Path | None, cli_overrides: dict, output: Path) ->
         top_kwargs.setdefault("output", output)
 
     return Config(**sections, **top_kwargs)
+
+
+def _deep_merge(base: dict, override: dict) -> None:
+    """Merge `override` into `base` in-place. Recursive on dict-vs-dict; otherwise replace."""
+    for k, v in override.items():
+        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+            _deep_merge(base[k], v)
+        else:
+            base[k] = v
+
+
+def _load_packaged_species(name: str) -> dict:
+    from importlib import resources
+    try:
+        text = (
+            resources.files("palubicki.configs.species")
+            .joinpath(f"{name}.yaml")
+            .read_text()
+        )
+    except (FileNotFoundError, ModuleNotFoundError, AttributeError) as e:
+        raise ConfigError(f"unknown species preset: {name!r}") from e
+    return yaml.safe_load(text) or {}
+
+
+def _list_species() -> list[str]:
+    from importlib import resources
+    try:
+        files = resources.files("palubicki.configs.species").iterdir()
+    except (FileNotFoundError, ModuleNotFoundError):
+        return []
+    return sorted(f.stem for f in files if f.name.endswith(".yaml"))
 
 
 def _set_dotted(data: dict, dotted: str, value) -> None:
