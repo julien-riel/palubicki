@@ -4,12 +4,11 @@ from __future__ import annotations
 import io
 import logging
 import time
-from pathlib import Path
 
 import numpy as np
 
 from palubicki.geom.mesh import Mesh
-from palubicki.render import RenderDependencyError, RenderError
+from palubicki.render.errors import RenderDependencyError, RenderError
 from palubicki.render.camera import Camera
 
 _LOG = logging.getLogger("palubicki.render")

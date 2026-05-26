@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from palubicki.render import RenderError
+from palubicki.render.errors import RenderError
 
 if TYPE_CHECKING:
     from palubicki.geom.mesh import Mesh

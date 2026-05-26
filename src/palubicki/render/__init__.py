@@ -7,13 +7,7 @@ deferred to render_mesh() / render_glb() — failures raise RenderDependencyErro
 """
 from __future__ import annotations
 
-
-class RenderError(Exception):
-    """Generic render module failure (bad input, degenerate mesh, etc.)."""
-
-
-class RenderDependencyError(RenderError):
-    """Raised when an optional dep (matplotlib) is missing."""
+from palubicki.render.errors import RenderError, RenderDependencyError
 
 
 def render_mesh(mesh, **kwargs):
