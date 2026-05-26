@@ -49,10 +49,10 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
 def _load_bark_texture(path: Path | None) -> bytes | None:
     if path is None:
         return None
-    return Path(path).read_bytes()
+    return path.read_bytes()
 
 
 def _load_leaf_texture(path: Path | None) -> bytes:
     if path is None:
         return default_leaf_png()
-    return Path(path).read_bytes()
+    return path.read_bytes()
