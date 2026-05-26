@@ -41,10 +41,10 @@ def test_per_tree_config_overrides_win_over_species(tmp_path):
     seed_entry = ForestSeed(
         position=(0.0, 0.0, 0.0),
         species="oak",
-        overrides={"tropism.w_gravity": 0.99},
+        overrides={"tropism.w_orthotropy": 0.99},
     )
     derived = per_tree_config(cfg, seed_entry, tree_index=0)
-    assert derived.tropism.w_gravity == pytest.approx(0.99)
+    assert derived.tropism.w_orthotropy == pytest.approx(0.99)
     assert derived.envelope.shape == "half_ellipsoid"  # oak preserved
 
 

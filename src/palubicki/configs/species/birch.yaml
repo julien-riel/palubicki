@@ -11,15 +11,26 @@ sim:
   alpha_basipetal: 2.0
   max_iterations: 32
 tropism:
-  w_gravity: 0.45
-  w_phototropism: 0.30
-  w_direction_inertia: 0.35
+  # Pendula → trunk orthotropic, mild gravitropic bias; the real droop comes
+  # from post-sim mechanical sag (see sag section below).
+  w_orthotropy: 0.35
+  w_gravitropism: 0.05
+  w_phototropism: 0.25
+  w_direction_inertia: 0.50
+  axis_decay: 0.85
+sag:
+  enabled: true
+  k: 0.04
+  max_bend_deg: 10.0
+  rigid_axis_order: 1
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5
   branch_angle_deg: 45
 shedding:
-  quality_threshold: 0.10
+  # Pendula self-shadows heavily; threshold must be very permissive to keep
+  # the drooping skirt alive.
+  quality_threshold: 0.02
 light:
   enabled: true
   k_absorption: 0.45

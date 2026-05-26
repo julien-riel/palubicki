@@ -8,11 +8,13 @@ from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.radii import compute_radii
 from palubicki.geom.tubes import build_bark_primitive
+from palubicki.sim.sag import apply_sag
 from palubicki.sim.tree import Tree
 
 
 def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     compute_radii(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
+    apply_sag(tree, cfg.sag)
 
     bark_png = _resolve_texture(cfg.geom.bark_texture)
     bark_mat = Material(
@@ -49,6 +51,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             cluster_count=cfg.geom.leaf_cluster_count,
             aspect=cfg.geom.leaf_aspect,
             splay_deg=cfg.geom.leaf_splay_deg,
+            foliage_depth=cfg.geom.foliage_depth,
         )
         primitives.append(leaf_prim)
 

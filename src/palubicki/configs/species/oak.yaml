@@ -11,9 +11,11 @@ sim:
   alpha_basipetal: 2.2
   max_iterations: 35
 tropism:
-  w_gravity: 0.25
+  # Oak: strong orthotropic trunk, primary branches go more horizontal.
+  w_orthotropy: 0.25
   w_phototropism: 0.35
   w_direction_inertia: 0.5
+  axis_decay: 0.65
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5
@@ -23,6 +25,12 @@ shedding:
 light:
   enabled: true
   k_absorption: 0.55
+sag:
+  # Subtle: large branches sag visibly under their own weight.
+  enabled: true
+  k: 0.005
+  max_bend_deg: 5.0
+  rigid_axis_order: 1
 geom:
   ring_sides: 10
   pipe_exponent: 2.55

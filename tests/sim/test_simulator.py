@@ -15,7 +15,7 @@ def _tiny_config(tmp_path):
             internode_length=0.1, alpha_basipetal=2.0, lambda_apical=0.55,
             max_iterations=10,
         ),
-        tropism=TropismConfig(w_perception=1.0, w_gravity=0.2, w_direction_inertia=0.3),
+        tropism=TropismConfig(w_perception=1.0, w_orthotropy=0.2, w_direction_inertia=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
         geom=GeomConfig(),
@@ -76,7 +76,7 @@ def test_no_spikes_outside_envelope(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=1000),
         sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_iterations=15),
-        tropism=TropismConfig(w_perception=1.0, w_gravity=0.3, w_direction_inertia=0.4),
+        tropism=TropismConfig(w_perception=1.0, w_orthotropy=0.3, w_direction_inertia=0.4),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
         geom=GeomConfig(),
@@ -271,9 +271,11 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
         for iod in node.children_internodes:
             stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
-    # This hash is pinned by running ONCE against the V2 code, before refactor.
-    # If the hash changes, the refactor broke bit-exactness — investigate.
-    EXPECTED = "aeac979ef2bafa69b40d74bfdda47c07afdaa7178b94163f85973b66b91a2c9c"
+    # This hash is pinned to detect unintended drift during refactors.
+    # Re-pinned after the realism / perf prototype (Fix #1..6 + mechanical sag).
+    # Sag is OFF by default for this config, so the only behavior change comes
+    # from Fix #1 (envelope-boundary U-turn dormancy).
+    EXPECTED = "0edc481fc9db027a7a0b86264d73c63215cfcb3611b5d9311cbac3494f023973"
     assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
     # Side-effect: print so we can copy the value if needed
     print(f"V2 hash: {digest}")
@@ -345,7 +347,7 @@ def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
         sim=SimConfig(max_iterations=4, internode_length=0.5),
-        tropism=TropismConfig(w_gravity=0.0),   # don't fight gravity, just go up
+        tropism=TropismConfig(w_orthotropy=0.0),   # don't fight gravity, just go up
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),  # disable shedding for clarity
         geom=GeomConfig(), light=LightConfig(),
@@ -376,7 +378,7 @@ def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
         sim=SimConfig(max_iterations=6, internode_length=0.3),
-        tropism=TropismConfig(w_gravity=0.0),
+        tropism=TropismConfig(w_orthotropy=0.0),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
         geom=GeomConfig(), light=LightConfig(),

@@ -30,15 +30,30 @@ class SimConfig:
     lambda_apical: float = 0.55
     max_iterations: int = 30
     re_perceive_per_substep: bool = True
+    # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
+    # is sitting at the envelope boundary (markers only behind/below). It goes
+    # DORMANT instead of folding back. -0.2 ≈ allow 100° before bending; raise
+    # toward 0.0 to be strict, lower toward -1.0 to disable.
+    cos_min_perception: float = -0.2
 
 
 @dataclass(frozen=True)
 class TropismConfig:
     w_perception: float = 1.0
-    w_gravity: float = 0.3
+    # Orthotropy: tendency to grow UPWARD (+Y). What the previous code called
+    # "w_gravity" was actually orthotropy. Old YAML keys "w_gravity" still load
+    # via _load_tropism_compat (config loader).
+    w_orthotropy: float = 0.3
+    # True gravitropism: tendency to grow DOWNWARD (-Y). For weeping/drooping
+    # species (birch pendula, weeping willow). Default 0 keeps prior behavior.
+    w_gravitropism: float = 0.0
     w_phototropism: float = 0.0
     w_direction_inertia: float = 0.4
     photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
+    # Fix #2: per-axis-order decay. Each tropism weight at order k is multiplied
+    # by axis_decay**k. With 0.7: trunk gets full w, primaries 0.7 w, secondaries
+    # 0.49 w. Set to 1.0 to disable (uniform across orders).
+    axis_decay: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -57,6 +72,30 @@ class SheddingConfig:
 
 
 @dataclass(frozen=True)
+class SagConfig:
+    """Post-sim mechanical sag (cantilever beam approximation).
+
+    For each internode, computes a bending angle ``bend = k * load / stiffness``
+    where ``load`` is the subtree's wood volume and ``stiffness`` is ``diameter²``
+    (proxy for the section's bending moment of inertia). The rotation is applied
+    at the internode's proximal joint; all descendants follow rigidly. Resulting
+    shape: tips droop more than mid-branches, the trunk barely moves.
+    """
+    enabled: bool = False
+    # Global gain on the per-internode bend angle (rad). 0.01 produces visible
+    # but moderate droop on default oak; 0.05 yields pronounced weep on birch.
+    k: float = 0.01
+    # Hard cap (deg) per single internode to avoid pathological hairpins near tips
+    # where diameter² → 0.
+    max_bend_deg: float = 8.0
+    # Sag direction (typically straight down).
+    direction: tuple[float, float, float] = (0.0, -1.0, 0.0)
+    # Internodes whose ``axis_order`` is less than this stay rigid. 1 = trunk
+    # doesn't sag (typical); 0 = even trunk can sag (extreme weep).
+    rigid_axis_order: int = 1
+
+
+@dataclass(frozen=True)
 class GeomConfig:
     ring_sides: int = 8
     r_tip: float = 0.005
@@ -69,6 +108,10 @@ class GeomConfig:
     leaf_aspect: float = 1.0
     leaf_splay_deg: float = 0.0
     enable_leaves: bool = True
+    # Fix #4: emit leaves on internodes within ``foliage_depth`` steps of the
+    # nearest terminal apex. 1 = legacy (apex only). 3–4 = realistic young
+    # shoot coverage. Larger values approach evergreen full-foliage density.
+    foliage_depth: int = 1
 
 
 @dataclass(frozen=True)
@@ -139,6 +182,7 @@ class Config:
     geom: GeomConfig
     light: LightConfig = field(default_factory=LightConfig)
     forest: ForestConfig = field(default_factory=ForestConfig)
+    sag: SagConfig = field(default_factory=SagConfig)
     seed: int = 0
     output: Path = field(default_factory=lambda: Path("tree.glb"))
     log_level: str = "INFO"
@@ -213,7 +257,17 @@ _SECTION_TYPES = {
     "shedding": SheddingConfig,
     "geom": GeomConfig,
     "light": LightConfig,
+    "sag": SagConfig,
 }
+
+
+def _apply_section_aliases(section_name: str, sec_data: dict) -> dict:
+    """Map legacy keys to renamed ones. Mutation-safe: returns a new dict."""
+    if section_name == "tropism" and "w_gravity" in sec_data and "w_orthotropy" not in sec_data:
+        out = dict(sec_data)
+        out["w_orthotropy"] = out.pop("w_gravity")
+        return out
+    return sec_data
 
 
 def load_config(
@@ -240,7 +294,7 @@ def load_config(
     top_field_names = {f.name for f in fields(Config)}
 
     for name, type_ in _SECTION_TYPES.items():
-        sec_data = data.get(name, {}) or {}
+        sec_data = _apply_section_aliases(name, data.get(name, {}) or {})
         allowed = {f.name for f in fields(type_)}
         unknown = set(sec_data) - allowed
         if unknown:

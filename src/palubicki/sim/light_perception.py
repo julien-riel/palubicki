@@ -23,20 +23,28 @@ def perceive_light(
     *,
     seed: int,
 ) -> LightPerception:
-    """Compute light_factor and gradient at each bud via hemispheric sampling."""
+    """Compute light_factor and gradient at each bud via hemispheric sampling.
+
+    Fix #5: single batched ray-march across (B × n_rays) instead of B sequential calls.
+    Per-bud RNG seeding is preserved (each bud spawns from the same SeedSequence as
+    before) so the random directions stay identical.
+    """
     result = LightPerception()
+    if not buds:
+        return result
     light_dir = np.asarray(cfg.light_direction, dtype=np.float64)
     ss = np.random.SeedSequence(seed)
     sub_seeds = ss.spawn(len(buds))
-    for bud, sub in zip(buds, sub_seeds):
-        per_bud_seed = int(sub.generate_state(1)[0])
-        lf, grad = grid.sample_hemisphere(
-            bud.position,
-            n_rays=cfg.n_rays,
-            light_direction=light_dir,
-            k=cfg.k_absorption,
-            seed=per_bud_seed,
-        )
-        result.light_factor[bud] = lf
-        result.gradient[bud] = grad
+    seeds = [int(sub.generate_state(1)[0]) for sub in sub_seeds]
+    positions = np.asarray([bud.position for bud in buds], dtype=np.float64)
+    light_factors, gradients = grid.sample_hemisphere_batch(
+        positions,
+        n_rays=cfg.n_rays,
+        light_direction=light_dir,
+        k=cfg.k_absorption,
+        seeds=seeds,
+    )
+    for i, bud in enumerate(buds):
+        result.light_factor[bud] = float(light_factors[i])
+        result.gradient[bud] = gradients[i]
     return result

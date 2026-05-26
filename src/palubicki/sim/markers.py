@@ -43,6 +43,19 @@ class MarkerCloud:
         local_idx = self._tree.query_ball_point(point, r)
         return self._tree_alive_indices[np.asarray(local_idx, dtype=np.intp)]
 
+    def query_radius_batch(self, points: np.ndarray, r: float) -> list[np.ndarray]:
+        """Batched query: list of ORIGINAL alive-marker indices, one entry per query point.
+
+        Preserves per-point ordering identical to a sequence of query_radius() calls so
+        downstream insertion-order-dependent code (perceive pass 2) stays bit-exact.
+        """
+        self._ensure_tree()
+        if len(self._tree_alive_indices) == 0:
+            return [np.array([], dtype=np.intp) for _ in range(len(points))]
+        local_lists = self._tree.query_ball_point(np.asarray(points, dtype=np.float64), r)
+        alive = self._tree_alive_indices
+        return [alive[np.asarray(lst, dtype=np.intp)] for lst in local_lists]
+
     def kill_near(self, points: np.ndarray, kill_radius: float) -> None:
         """Mark all alive markers within kill_radius of any point as dead. Rebuild tree."""
         if self.alive_count == 0 or len(points) == 0:

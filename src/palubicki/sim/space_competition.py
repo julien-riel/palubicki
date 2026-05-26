@@ -30,13 +30,17 @@ def perceive(
 
     cos_theta = math.cos(math.radians(theta_perception_deg))
 
-    # Pass 1: per-bud candidate scan (still requires KDTree per bud).
-    per_bud_kept_idx: list[np.ndarray] = []
-    per_bud_kept_dist: list[np.ndarray] = []
+    # Pass 1 (Fix #6): batched KDTree radius query, then per-bud vector filtering.
+    # We still allocate per-bud kept arrays because the cone test depends on the bud's
+    # own direction; only the KDTree scan is hoisted out of the Python loop.
     for bud in buds:
         result.quality[bud] = 0
         result.direction[bud] = np.zeros(3, dtype=np.float64)
-        idx = markers.query_radius(bud.position, r_perception)
+    bud_positions = np.asarray([bud.position for bud in buds], dtype=np.float64)
+    idx_lists = markers.query_radius_batch(bud_positions, r_perception)
+    per_bud_kept_idx: list[np.ndarray] = []
+    per_bud_kept_dist: list[np.ndarray] = []
+    for bud, idx in zip(buds, idx_lists):
         if len(idx) == 0:
             per_bud_kept_idx.append(np.empty(0, dtype=np.intp))
             per_bud_kept_dist.append(np.empty(0, dtype=np.float64))

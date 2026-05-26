@@ -23,7 +23,18 @@ def _make_config(**overrides):
 def test_config_with_defaults_is_valid(tmp_path):
     cfg = _make_config(output=tmp_path / "out.glb")
     assert cfg.sim.max_iterations == 30
-    assert cfg.tropism.w_gravity == 0.3
+    assert cfg.tropism.w_orthotropy == 0.3
+
+
+def test_legacy_w_gravity_yaml_alias_maps_to_w_orthotropy(tmp_path):
+    """Backwards-compat: YAML files with the old `w_gravity` key still load
+    by mapping to `w_orthotropy`. This shim can be removed once external configs
+    have been migrated."""
+    from palubicki.config import load_config
+    yaml_path = tmp_path / "old.yaml"
+    yaml_path.write_text("tropism:\n  w_gravity: 0.77\n")
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.tropism.w_orthotropy == pytest.approx(0.77)
 
 
 def test_config_rejects_zero_radius(tmp_path):

@@ -160,7 +160,8 @@ def _cmd_generate(args) -> int:
     if args.lambda_apical is not None:
         overrides["sim.lambda_apical"] = args.lambda_apical
     if args.w_gravity is not None:
-        overrides["tropism.w_gravity"] = args.w_gravity
+        # Legacy flag name kept for backwards compat; maps to w_orthotropy.
+        overrides["tropism.w_orthotropy"] = args.w_gravity
     if args.leaf_texture is not None:
         overrides["geom.leaf_texture"] = args.leaf_texture
     if args.no_leaves:

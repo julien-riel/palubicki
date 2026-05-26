@@ -11,9 +11,11 @@ sim:
   alpha_basipetal: 1.8
   max_iterations: 40
 tropism:
-  w_gravity: 0.15
+  # Conifer: strong apical dominance — orthotropy preserved across orders.
+  w_orthotropy: 0.15
   w_phototropism: 0.20
   w_direction_inertia: 0.8
+  axis_decay: 0.85
 phyllotaxy:
   mode: whorled
   whorl_count: 5

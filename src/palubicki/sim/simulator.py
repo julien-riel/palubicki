@@ -113,7 +113,8 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
         for bud_old in list(tree.active_buds):
             n = n_by_bud.get(bud_old, 0)
             v_perc = res.direction[bud_old]
-            if n < 1 or np.linalg.norm(v_perc) < 1e-12:
+            v_perc_norm = float(np.linalg.norm(v_perc))
+            if n < 1 or v_perc_norm < 1e-12:
                 bud_old.state = BudState.DORMANT
                 new_active.append(bud_old)
                 continue
@@ -126,7 +127,18 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     current_direction=current_bud.direction,
                     cfg=cfg.tropism,
                     light_gradient=light_grad,
+                    axis_order=current_bud.axis_order,
                 )
+                # Fix #1: U-turn check on the BLENDED growth direction. After
+                # tropisms (gravity/photo/inertia) and perception have been mixed,
+                # if the resulting d points sharply against the bud's prior
+                # direction, the bud is folding back — kill it. This catches
+                # envelope-boundary curls without fighting gravitropism (where
+                # the blend can legitimately rotate downward).
+                if float(np.dot(d, current_bud.direction)) < cfg.sim.cos_min_perception:
+                    current_bud.state = BudState.DORMANT
+                    new_active.append(current_bud)
+                    break
                 new_pos = current_bud.position + d * cfg.sim.internode_length
 
                 # V3: obstacle blocking

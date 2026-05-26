@@ -177,6 +177,67 @@ class LightGrid:
             pos = pos + d * step_len
         return float(np.exp(-optical_depth))
 
+    def sample_hemisphere_batch(
+        self,
+        positions: np.ndarray,
+        *,
+        n_rays: int,
+        light_direction: np.ndarray,
+        k: float,
+        seeds: list[int],
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Batched cosine-weighted hemisphere sampling for B query positions.
+
+        Returns:
+          light_factors: (B,) float64, mean transmission per bud.
+          gradients:     (B, 3) float64, normalised brightness-weighted direction.
+
+        Bit-exact with sequential ``sample_hemisphere`` calls: each (bud, ray) pair
+        accumulates its optical depth step-by-step independently; we only batch the
+        per-step LAI lookup across rays.
+        """
+        positions = np.asarray(positions, dtype=np.float64)
+        B = positions.shape[0]
+        if B == 0:
+            return np.zeros(0, dtype=np.float64), np.zeros((0, 3), dtype=np.float64)
+
+        # Per-bud frame and direction sampling — done independently per bud to
+        # preserve the canonical-axis choice and the rng-stream-per-bud invariants.
+        w = np.asarray(light_direction, dtype=np.float64)
+        w_norm = float(np.linalg.norm(w))
+        if w_norm < 1e-12:
+            return np.ones(B, dtype=np.float64), np.zeros((B, 3), dtype=np.float64)
+        w = w / w_norm
+        canonical = np.array([1.0, 0.0, 0.0]) if abs(w[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+        u = canonical - np.dot(canonical, w) * w
+        u = u / np.linalg.norm(u)
+        v = np.cross(w, u)
+
+        all_dirs = np.empty((B, n_rays, 3), dtype=np.float64)
+        for bi, s in enumerate(seeds):
+            rng = np.random.default_rng(s)
+            u1 = rng.random(n_rays)
+            u2 = rng.random(n_rays)
+            r = np.sqrt(u1)
+            phi = 2 * np.pi * u2
+            x_d = r * np.cos(phi)
+            y_d = r * np.sin(phi)
+            z_d = np.sqrt(np.maximum(0.0, 1.0 - u1))
+            all_dirs[bi] = x_d[:, None] * u + y_d[:, None] * v + z_d[:, None] * w
+
+        flat_dirs = all_dirs.reshape(B * n_rays, 3)
+        flat_origins = np.repeat(positions, n_rays, axis=0)  # (B*n_rays, 3)
+        transmissions = self._sample_transmission_batch_origins(flat_origins, flat_dirs, k=k)
+        T = transmissions.reshape(B, n_rays)
+
+        light_factors = T.mean(axis=1)
+        weighted = (T[:, :, None] * all_dirs).sum(axis=1)  # (B, 3)
+        grad_norms = np.linalg.norm(weighted, axis=1)
+        gradients = np.zeros((B, 3), dtype=np.float64)
+        nz = grad_norms > 1e-12
+        gradients[nz] = weighted[nz] / grad_norms[nz, None]
+        return light_factors, gradients
+
     def sample_hemisphere(
         self,
         p: np.ndarray,
@@ -223,6 +284,52 @@ class LightGrid:
         grad_norm = float(np.linalg.norm(weighted))
         gradient = weighted / grad_norm if grad_norm > 1e-12 else np.zeros(3)
         return light_factor, gradient
+
+    def _sample_transmission_batch_origins(
+        self, origins: np.ndarray, dirs: np.ndarray, *, k: float,
+    ) -> np.ndarray:
+        """Same as _sample_transmission_batch but each ray has its own origin.
+
+        Used by sample_hemisphere_batch for cross-bud batching.
+        """
+        n_rays = dirs.shape[0]
+        d_norms = np.linalg.norm(dirs, axis=1)
+        out = np.ones(n_rays, dtype=np.float64)
+        active = d_norms >= 1e-12
+        if not active.any():
+            return out
+        dirs_n = np.zeros_like(dirs)
+        dirs_n[active] = dirs[active] / d_norms[active, None]
+
+        step_len = float(np.min(self.cell_size))
+        grid_diag = float(np.linalg.norm(self.cell_size * np.array(self.resolution)))
+        max_steps = int(np.ceil(grid_diag / step_len)) + 2
+
+        nx, ny, nz = self.resolution
+        n_active = int(active.sum())
+        positions = (origins[active] + 0.5 * step_len * dirs_n[active]).copy()
+        step_vec = dirs_n[active] * step_len
+        optical_depth = np.zeros(n_active, dtype=np.float64)
+
+        cell_size = self.cell_size
+        origin = self.origin
+        lai = self.lai
+        for _ in range(max_steps):
+            local = positions - origin
+            cells = np.floor(local / cell_size).astype(np.intp)
+            in_grid = (
+                (cells[:, 0] >= 0) & (cells[:, 0] < nx) &
+                (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
+                (cells[:, 2] >= 0) & (cells[:, 2] < nz)
+            )
+            if in_grid.any():
+                vc = cells[in_grid]
+                lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
+                optical_depth[in_grid] += (k * lai_vals) * step_len
+            positions += step_vec
+
+        out[active] = np.exp(-optical_depth)
+        return out
 
     def _sample_transmission_batch(
         self, p: np.ndarray, dirs: np.ndarray, *, k: float,

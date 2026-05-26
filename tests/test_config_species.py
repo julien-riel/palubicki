@@ -76,35 +76,40 @@ def test_load_preset_birch(tmp_path):
     cfg = load_config(yaml_path=None, cli_overrides={},
                       output=tmp_path / "x.glb", species="birch")
     assert cfg.envelope.shape == "ellipsoid"
-    assert cfg.tropism.w_gravity == pytest.approx(0.45)
+    # Birch preset: orthotropic trunk, near-zero direct gravitropism; the real
+    # weeping look comes from the mechanical sag pass (cfg.sag.enabled=true).
+    assert cfg.tropism.w_orthotropy == pytest.approx(0.35)
+    assert cfg.tropism.w_gravitropism == pytest.approx(0.05)
+    assert cfg.sag.enabled is True
+    assert cfg.sag.k == pytest.approx(0.04)
 
 
 def test_user_yaml_overrides_preset(tmp_path):
     user_yaml = tmp_path / "user.yaml"
-    user_yaml.write_text("tropism:\n  w_gravity: 0.99\n")
+    user_yaml.write_text("tropism:\n  w_orthotropy: 0.99\n")
     cfg = load_config(yaml_path=user_yaml, cli_overrides={},
                       output=tmp_path / "x.glb", species="oak")
-    assert cfg.tropism.w_gravity == pytest.approx(0.99)
+    assert cfg.tropism.w_orthotropy == pytest.approx(0.99)
     assert cfg.envelope.shape == "half_ellipsoid"
     assert cfg.geom.leaf_cluster_count == 1
 
 
 def test_cli_override_wins_over_user_yaml(tmp_path):
     user_yaml = tmp_path / "user.yaml"
-    user_yaml.write_text("tropism:\n  w_gravity: 0.5\n")
+    user_yaml.write_text("tropism:\n  w_orthotropy: 0.5\n")
     cfg = load_config(yaml_path=user_yaml,
-                      cli_overrides={"tropism.w_gravity": 0.1},
+                      cli_overrides={"tropism.w_orthotropy": 0.1},
                       output=tmp_path / "x.glb", species="oak")
-    assert cfg.tropism.w_gravity == pytest.approx(0.1)
+    assert cfg.tropism.w_orthotropy == pytest.approx(0.1)
 
 
 def test_deep_merge_preserves_sibling_sections(tmp_path):
     """User YAML touching only `tropism` must not erase preset's `envelope` or `phyllotaxy`."""
     user_yaml = tmp_path / "user.yaml"
-    user_yaml.write_text("tropism:\n  w_gravity: 0.3\n")
+    user_yaml.write_text("tropism:\n  w_orthotropy: 0.3\n")
     cfg = load_config(yaml_path=user_yaml, cli_overrides={},
                       output=tmp_path / "x.glb", species="pine")
     assert cfg.envelope.shape == "cone"
     assert cfg.phyllotaxy.mode == "whorled"
     assert cfg.geom.leaf_cluster_count == 5
-    assert cfg.tropism.w_gravity == pytest.approx(0.3)
+    assert cfg.tropism.w_orthotropy == pytest.approx(0.3)
