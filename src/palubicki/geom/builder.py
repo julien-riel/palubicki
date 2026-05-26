@@ -55,7 +55,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     return Mesh(primitives=primitives)
 
 
-def _resolve_texture(value) -> bytes | None:
+def _resolve_texture(value: Path | str | None) -> bytes | None:
     if value is None:
         return None
     s = str(value)
