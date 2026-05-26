@@ -5,7 +5,7 @@ from typing import Protocol
 
 import numpy as np
 
-from palubicki.config import ObstacleAABB, ObstacleSphere, ObstacleOBB
+from palubicki.config import ObstacleAABB, ObstacleSphere, ObstacleOBB, ObstacleMesh
 
 LAI_OPAQUE: float = 1e6
 
@@ -98,6 +98,7 @@ class SphereObstacle:
 
 
 class OBBObstacle:
+
     """Oriented box. `axes` is a row-major 3x3 orthonormal rotation matrix R that
     maps WORLD vectors to LOCAL (point_local = R @ (point_world - center)). A point
     is inside iff |local[i]| <= half_extents[i] for all i."""
@@ -147,3 +148,60 @@ class OBBObstacle:
 
     def voxelize(self, grid) -> np.ndarray:
         raise NotImplementedError("voxelize: implemented in Task 13")
+
+
+class MeshObstacle:
+    """Wraps a trimesh.Trimesh. Supports translate + uniform scale (applied at load).
+    Uses trimesh.contains for point-in-mesh and ray casting for segment intersection."""
+
+    def __init__(self, cfg: ObstacleMesh):
+        import trimesh
+        mesh = trimesh.load(str(cfg.path), force="mesh")
+        if not isinstance(mesh, trimesh.Trimesh):
+            raise ValueError(f"path {cfg.path} did not load as a single Trimesh")
+        mesh = mesh.copy()
+        if cfg.scale != 1.0:
+            mesh.apply_scale(cfg.scale)
+        if cfg.translate != (0.0, 0.0, 0.0):
+            mesh.apply_translation(np.asarray(cfg.translate, dtype=np.float64))
+        self._mesh = mesh
+        self._ray = trimesh.ray.ray_triangle.RayMeshIntersector(mesh)
+
+    def contains(self, points: np.ndarray) -> np.ndarray:
+        pts = np.asarray(points, dtype=np.float64)
+        if pts.shape[0] == 0:
+            return np.zeros(0, dtype=bool)
+        return self._mesh.contains(pts)
+
+    def segment_intersects(self, p0: np.ndarray, p1: np.ndarray) -> bool:
+        p0 = np.asarray(p0, dtype=np.float64)
+        p1 = np.asarray(p1, dtype=np.float64)
+        # Endpoint-inside test (cheap; covers buds-already-inside cases)
+        if bool(self._mesh.contains(p0.reshape(1, 3))[0]) or bool(self._mesh.contains(p1.reshape(1, 3))[0]):
+            return True
+        d = p1 - p0
+        seg_len = float(np.linalg.norm(d))
+        if seg_len < 1e-12:
+            return False
+        direction = d / seg_len
+        locations, _, _ = self._ray.intersects_location(
+            ray_origins=p0.reshape(1, 3),
+            ray_directions=direction.reshape(1, 3),
+            multiple_hits=False,
+        )
+        if len(locations) == 0:
+            return False
+        # Distance from p0 to the first hit
+        dist = float(np.linalg.norm(locations[0] - p0))
+        return dist <= seg_len
+
+    def aabb(self) -> tuple[np.ndarray, np.ndarray]:
+        bb = self._mesh.bounds   # (2, 3): [[xmin, ymin, zmin], [xmax, ymax, zmax]]
+        return bb[0].astype(np.float64), bb[1].astype(np.float64)
+
+    def voxelize(self, grid) -> np.ndarray:
+        raise NotImplementedError("voxelize: implemented in Task 13")
+
+    @property
+    def trimesh(self):
+        return self._mesh

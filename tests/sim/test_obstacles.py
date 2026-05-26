@@ -135,3 +135,54 @@ def test_obb_aabb_envelope():
     assert amax[0] == pytest.approx(1.0, abs=1e-9)
     assert amin[2] == pytest.approx(-2.0, abs=1e-9)
     assert amax[2] == pytest.approx(2.0, abs=1e-9)
+
+
+from pathlib import Path
+from palubicki.config import ObstacleMesh
+from palubicki.sim.obstacles import MeshObstacle
+
+
+CUBE_OBJ = Path(__file__).parent.parent / "fixtures" / "unit_cube.obj"
+
+
+def test_mesh_contains_unit_cube():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ))
+    pts = np.array([
+        [0.5, 0.5, 0.5],   # inside
+        [2.0, 0.5, 0.5],   # outside
+        [-0.1, 0.5, 0.5],  # outside
+    ])
+    out = o.contains(pts)
+    assert out[0]
+    assert not out[1]
+    assert not out[2]
+
+
+def test_mesh_translate_scale():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ, translate=(10.0, 0.0, 0.0), scale=2.0))
+    # Original cube was (0..1)^3; scaled to (0..2)^3 then translated by +10x → (10..12)^3
+    pts = np.array([[11.0, 1.0, 1.0], [0.5, 0.5, 0.5], [11.0, 3.0, 1.0]])
+    out = o.contains(pts)
+    assert out.tolist() == [True, False, False]
+
+
+def test_mesh_segment_traverse():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ))
+    assert o.segment_intersects(np.array([-1.0, 0.5, 0.5]), np.array([2.0, 0.5, 0.5])) is True
+
+
+def test_mesh_segment_miss():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ))
+    assert o.segment_intersects(np.array([2.0, 2.0, 2.0]), np.array([3.0, 2.0, 2.0])) is False
+
+
+def test_mesh_segment_endpoint_inside():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ))
+    assert o.segment_intersects(np.array([2.0, 0.5, 0.5]), np.array([0.5, 0.5, 0.5])) is True
+
+
+def test_mesh_aabb():
+    o = MeshObstacle(ObstacleMesh(path=CUBE_OBJ, translate=(1.0, 2.0, 3.0), scale=2.0))
+    amin, amax = o.aabb()
+    np.testing.assert_allclose(amin, [1.0, 2.0, 3.0])
+    np.testing.assert_allclose(amax, [3.0, 4.0, 5.0])
