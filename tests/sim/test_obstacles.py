@@ -186,3 +186,55 @@ def test_mesh_aabb():
     amin, amax = o.aabb()
     np.testing.assert_allclose(amin, [1.0, 2.0, 3.0])
     np.testing.assert_allclose(amax, [3.0, 4.0, 5.0])
+
+
+from palubicki.config import ForestConfig
+from palubicki.sim.obstacles import (
+    build_obstacles, filter_markers, segment_blocked, any_contains,
+)
+
+
+def test_build_obstacles_dispatches_by_kind():
+    cfg = ForestConfig(obstacles=(
+        ObstacleAABB(min=(0, 0, 0), max=(1, 1, 1)),
+        ObstacleSphere(center=(5, 0, 0), radius=2.0),
+    ))
+    obs = build_obstacles(cfg)
+    assert isinstance(obs[0], AABBObstacle)
+    assert isinstance(obs[1], SphereObstacle)
+
+
+def test_filter_markers_drops_inside():
+    obs = [AABBObstacle(ObstacleAABB(min=(0, 0, 0), max=(1, 1, 1)))]
+    pts = np.array([[0.5, 0.5, 0.5], [2.0, 0.5, 0.5], [0.0, 0.0, 0.0]])
+    out = filter_markers(pts, obs)
+    assert out.shape == (1, 3)
+    assert np.allclose(out[0], [2.0, 0.5, 0.5])
+
+
+def test_filter_markers_empty_obstacles_passthrough():
+    pts = np.array([[1.0, 2.0, 3.0]])
+    out = filter_markers(pts, [])
+    np.testing.assert_array_equal(out, pts)
+
+
+def test_segment_blocked_any_obstacle():
+    obs = [
+        AABBObstacle(ObstacleAABB(min=(10, 10, 10), max=(11, 11, 11))),
+        SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0)),
+    ]
+    assert segment_blocked(np.array([-2.0, 0.0, 0.0]), np.array([2.0, 0.0, 0.0]), obs) is True
+
+
+def test_segment_blocked_no_obstacle():
+    assert segment_blocked(np.array([0, 0, 0]), np.array([1, 1, 1]), []) is False
+
+
+def test_any_contains_true_when_any_obstacle_contains():
+    obs = [SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0))]
+    assert any_contains(np.array([0.5, 0.0, 0.0]), obs) is True
+    assert any_contains(np.array([2.0, 0.0, 0.0]), obs) is False
+
+
+def test_any_contains_empty_obstacles_false():
+    assert any_contains(np.array([0.0, 0.0, 0.0]), []) is False

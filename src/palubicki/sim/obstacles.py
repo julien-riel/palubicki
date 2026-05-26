@@ -205,3 +205,49 @@ class MeshObstacle:
     @property
     def trimesh(self):
         return self._mesh
+
+
+def build_obstacles(cfg) -> list:
+    """Instantiate concrete obstacles from ForestConfig.obstacles."""
+    out = []
+    for entry in cfg.obstacles:
+        if isinstance(entry, ObstacleAABB):
+            out.append(AABBObstacle(entry))
+        elif isinstance(entry, ObstacleSphere):
+            out.append(SphereObstacle(entry))
+        elif isinstance(entry, ObstacleOBB):
+            out.append(OBBObstacle(entry))
+        elif isinstance(entry, ObstacleMesh):
+            out.append(MeshObstacle(entry))
+        else:
+            raise TypeError(f"unknown obstacle config type: {type(entry).__name__}")
+    return out
+
+
+def filter_markers(positions: np.ndarray, obstacles: list) -> np.ndarray:
+    """Drop positions that fall inside any obstacle."""
+    if len(obstacles) == 0 or len(positions) == 0:
+        return positions
+    keep = np.ones(len(positions), dtype=bool)
+    for o in obstacles:
+        keep &= ~o.contains(positions)
+    return positions[keep]
+
+
+def segment_blocked(p0: np.ndarray, p1: np.ndarray, obstacles: list) -> bool:
+    """True iff any obstacle blocks the segment [p0, p1]."""
+    for o in obstacles:
+        if o.segment_intersects(p0, p1):
+            return True
+    return False
+
+
+def any_contains(point: np.ndarray, obstacles: list) -> bool:
+    """True iff `point` lies inside any obstacle."""
+    if len(obstacles) == 0:
+        return False
+    pts = np.asarray(point, dtype=np.float64).reshape(1, 3)
+    for o in obstacles:
+        if bool(o.contains(pts)[0]):
+            return True
+    return False
