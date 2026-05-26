@@ -86,6 +86,84 @@ def _envelope_aabb(env: EnvelopeConfig) -> tuple[np.ndarray, np.ndarray]:
     raise ValueError(f"unknown envelope shape: {env.shape}")
 
 
+from dataclasses import dataclass, field as _dc_field
+
+from palubicki.sim.markers import MarkerCloud
+from palubicki.sim.envelope import sample_markers
+from palubicki.sim.obstacles import build_obstacles, filter_markers
+from palubicki.sim.tree import Bud, Node, Tree
+
+
+@dataclass
+class Forest:
+    trees: list[Tree]
+    seeds: list
+    obstacles: list
+    per_tree_cfgs: list
+    markers: MarkerCloud
+    light_grid: object | None = None
+    obstacle_voxel_mask: np.ndarray | None = None
+
+
+def all_active_buds(forest: Forest) -> list[Bud]:
+    """Flatten active buds across trees in (tree_index, bud_index_in_tree) order."""
+    out: list[Bud] = []
+    for tree in forest.trees:
+        out.extend(tree.active_buds)
+    return out
+
+
+def build_forest(cfg: Config) -> Forest:
+    """Build the initial Forest from cfg.
+
+    - If cfg.forest.seeds is empty, create one tree using cfg.envelope as-is.
+    - Otherwise, derive a per_tree_config for each seed; sample its markers.
+    - Concatenate all markers and filter via obstacles.
+    - Light grid is created LATER (in simulator) if cfg.light.enabled.
+    """
+    obstacles = build_obstacles(cfg.forest)
+    seeds_input = cfg.forest.seeds
+    if not seeds_input:
+        # Single-tree mode: one synthetic seed at envelope.center
+        synthetic_seed = ForestSeed(position=tuple(cfg.envelope.center))
+        seeds_list = [synthetic_seed]
+        per_tree_cfgs = [cfg]
+    else:
+        seeds_list = list(seeds_input)
+        per_tree_cfgs = [per_tree_config(cfg, s, i) for i, s in enumerate(seeds_list)]
+
+    # Sample markers per-tree using each tree's own RNG/envelope
+    marker_chunks: list[np.ndarray] = []
+    trees: list[Tree] = []
+    for tree_index, ptc in enumerate(per_tree_cfgs):
+        rng = np.random.default_rng(ptc.seed)
+        marker_chunks.append(sample_markers(ptc.envelope, rng))
+
+        # Build root bud at seed position (y forced to 0, matching V2 simulate)
+        root_pos = np.array([ptc.envelope.center[0], 0.0, ptc.envelope.center[2]], dtype=float)
+        root = Node(position=root_pos)
+        bud = Bud(
+            position=root_pos.copy(),
+            direction=np.array([0.0, 1.0, 0.0]),
+            axis_order=0,
+            parent_node=root,
+        )
+        root.terminal_bud = bud
+        trees.append(Tree(root=root, active_buds=[bud]))
+
+    all_markers = np.concatenate(marker_chunks, axis=0) if marker_chunks else np.zeros((0, 3))
+    filtered = filter_markers(all_markers, obstacles)
+    cloud = MarkerCloud(filtered)
+
+    return Forest(
+        trees=trees,
+        seeds=seeds_list,
+        obstacles=obstacles,
+        per_tree_cfgs=per_tree_cfgs,
+        markers=cloud,
+    )
+
+
 def forest_light_bounds(envelopes: list[EnvelopeConfig], obstacles: list) -> tuple[np.ndarray, np.ndarray]:
     """Auto-fit AABB(union envelopes + obstacles) + V2-style sky margin
     (10% pad in x/z below/above, 10% below + 30% above in y)."""

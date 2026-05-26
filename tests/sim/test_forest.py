@@ -91,3 +91,60 @@ def test_forest_light_bounds_with_obstacle_extends_aabb():
     extent = np.array([13.0, 3.0, 4.0])
     expected_origin = np.array([-1.0, -2.0, -2.0]) - 0.1 * extent
     np.testing.assert_allclose(origin, expected_origin)
+
+
+from palubicki.sim.forest import Forest, build_forest, all_active_buds
+
+
+def test_build_forest_single_tree_default():
+    """When forest.seeds is empty, build_forest creates a 1-tree forest from cfg.envelope."""
+    cfg = _base_cfg()
+    forest = build_forest(cfg)
+    assert isinstance(forest, Forest)
+    assert len(forest.trees) == 1
+    assert forest.obstacles == []
+    assert forest.markers.alive_count == cfg.envelope.marker_count
+    # Root is at envelope.center (translated to y=0)
+    root = forest.trees[0].root
+    assert tuple(root.position) == (cfg.envelope.center[0], 0.0, cfg.envelope.center[2])
+
+
+def test_build_forest_two_trees():
+    from palubicki.config import ForestConfig, ForestSeed
+    cfg = _base_cfg(forest=ForestConfig(seeds=(
+        ForestSeed(position=(0.0, 0.0, 0.0)),
+        ForestSeed(position=(5.0, 0.0, 0.0)),
+    )))
+    forest = build_forest(cfg)
+    assert len(forest.trees) == 2
+    # Each tree has its own root at the seed position (translated to y=0)
+    assert tuple(forest.trees[0].root.position) == (0.0, 0.0, 0.0)
+    assert tuple(forest.trees[1].root.position) == (5.0, 0.0, 0.0)
+    # Markers: 2 × marker_count, minus 0 inside obstacles
+    assert forest.markers.alive_count == 2 * cfg.envelope.marker_count
+
+
+def test_build_forest_obstacles_filter_markers():
+    from palubicki.config import ForestConfig, ForestSeed, ObstacleAABB
+    cfg = _base_cfg(forest=ForestConfig(
+        seeds=(ForestSeed(position=(0.0, 0.0, 0.0)),),
+        # Big AABB covering the lower half of the envelope (y < 0)
+        obstacles=(ObstacleAABB(min=(-5, -5, -5), max=(5, 0, 5)),),
+    ))
+    forest = build_forest(cfg)
+    # About half the markers should have been dropped
+    assert 0.3 * cfg.envelope.marker_count < forest.markers.alive_count < 0.7 * cfg.envelope.marker_count
+
+
+def test_all_active_buds_deterministic_order():
+    from palubicki.config import ForestConfig, ForestSeed
+    cfg = _base_cfg(forest=ForestConfig(seeds=(
+        ForestSeed(position=(0.0, 0.0, 0.0)),
+        ForestSeed(position=(5.0, 0.0, 0.0)),
+    )))
+    forest = build_forest(cfg)
+    buds = all_active_buds(forest)
+    # Initially each tree has 1 root bud → 2 total, in tree order
+    assert len(buds) == 2
+    assert buds[0] is forest.trees[0].active_buds[0]
+    assert buds[1] is forest.trees[1].active_buds[0]
