@@ -74,6 +74,7 @@ def _emit_leaf_cluster(center, direction, size, cluster_count, aspect, splay_rad
         az = 2.0 * math.pi * k / cluster_count
         rot_axis_u = math.cos(az) * right + math.sin(az) * forward
         rot_axis_w = -math.sin(az) * right + math.cos(az) * forward  # in-plane perpendicular
+        # Tilt growth direction outward by splay_rad in the rot_axis_u half-plane.
         leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
 
         v_off = k * 8
