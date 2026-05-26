@@ -1,0 +1,36 @@
+# Betula pendula — élancé, branches fines, port pleureur léger
+envelope:
+  shape: ellipsoid
+  rx: 2.5
+  ry: 7.0
+  rz: 2.5
+  marker_count: 20000
+sim:
+  internode_length: 0.10
+  lambda_apical: 0.65
+  alpha_basipetal: 2.0
+  max_iterations: 32
+tropism:
+  w_gravity: 0.45
+  w_phototropism: 0.30
+  w_direction_inertia: 0.35
+phyllotaxy:
+  mode: alternate
+  divergence_angle_deg: 137.5
+  branch_angle_deg: 45
+shedding:
+  quality_threshold: 0.10
+light:
+  enabled: true
+  k_absorption: 0.45
+geom:
+  ring_sides: 8
+  pipe_exponent: 2.40
+  r_tip: 0.004
+  bark_color: [0.85, 0.82, 0.75]
+  bark_texture: "proc:birch_bark"
+  leaf_texture: "proc:birch_leaf"
+  leaf_size: 0.07
+  leaf_cluster_count: 2
+  leaf_aspect: 0.7
+  leaf_splay_deg: 15

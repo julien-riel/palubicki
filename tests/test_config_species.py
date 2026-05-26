@@ -49,3 +49,63 @@ def test_unknown_species_raises(tmp_path):
             output=tmp_path / "x.glb",
             species="redwood",
         )
+
+
+def test_list_species_finds_three():
+    names = _list_species()
+    assert set(names) == {"oak", "pine", "birch"}
+
+
+def test_load_preset_oak(tmp_path):
+    cfg = load_config(yaml_path=None, cli_overrides={},
+                      output=tmp_path / "x.glb", species="oak")
+    assert cfg.envelope.shape == "half_ellipsoid"
+    assert cfg.geom.leaf_cluster_count == 1
+    # bark_texture may be stored as Path or str depending on dataclass field coercion
+    assert str(cfg.geom.bark_texture) == "proc:oak_bark"
+
+
+def test_load_preset_pine(tmp_path):
+    cfg = load_config(yaml_path=None, cli_overrides={},
+                      output=tmp_path / "x.glb", species="pine")
+    assert cfg.envelope.shape == "cone"
+    assert cfg.phyllotaxy.mode == "whorled"
+    assert cfg.geom.leaf_cluster_count == 5
+
+
+def test_load_preset_birch(tmp_path):
+    cfg = load_config(yaml_path=None, cli_overrides={},
+                      output=tmp_path / "x.glb", species="birch")
+    assert cfg.envelope.shape == "ellipsoid"
+    assert cfg.tropism.w_gravity == pytest.approx(0.45)
+
+
+def test_user_yaml_overrides_preset(tmp_path):
+    user_yaml = tmp_path / "user.yaml"
+    user_yaml.write_text("tropism:\n  w_gravity: 0.99\n")
+    cfg = load_config(yaml_path=user_yaml, cli_overrides={},
+                      output=tmp_path / "x.glb", species="oak")
+    assert cfg.tropism.w_gravity == pytest.approx(0.99)
+    assert cfg.envelope.shape == "half_ellipsoid"
+    assert cfg.geom.leaf_cluster_count == 1
+
+
+def test_cli_override_wins_over_user_yaml(tmp_path):
+    user_yaml = tmp_path / "user.yaml"
+    user_yaml.write_text("tropism:\n  w_gravity: 0.5\n")
+    cfg = load_config(yaml_path=user_yaml,
+                      cli_overrides={"tropism.w_gravity": 0.1},
+                      output=tmp_path / "x.glb", species="oak")
+    assert cfg.tropism.w_gravity == pytest.approx(0.1)
+
+
+def test_deep_merge_preserves_sibling_sections(tmp_path):
+    """User YAML touching only `tropism` must not erase preset's `envelope` or `phyllotaxy`."""
+    user_yaml = tmp_path / "user.yaml"
+    user_yaml.write_text("tropism:\n  w_gravity: 0.3\n")
+    cfg = load_config(yaml_path=user_yaml, cli_overrides={},
+                      output=tmp_path / "x.glb", species="pine")
+    assert cfg.envelope.shape == "cone"
+    assert cfg.phyllotaxy.mode == "whorled"
+    assert cfg.geom.leaf_cluster_count == 5
+    assert cfg.tropism.w_gravity == pytest.approx(0.3)
