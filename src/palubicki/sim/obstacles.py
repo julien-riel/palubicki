@@ -5,7 +5,7 @@ from typing import Protocol
 
 import numpy as np
 
-from palubicki.config import ObstacleAABB, ObstacleSphere
+from palubicki.config import ObstacleAABB, ObstacleSphere, ObstacleOBB
 
 LAI_OPAQUE: float = 1e6
 
@@ -92,6 +92,58 @@ class SphereObstacle:
     def aabb(self) -> tuple[np.ndarray, np.ndarray]:
         r = np.array([self._radius, self._radius, self._radius])
         return self._center - r, self._center + r
+
+    def voxelize(self, grid) -> np.ndarray:
+        raise NotImplementedError("voxelize: implemented in Task 13")
+
+
+class OBBObstacle:
+    """Oriented box. `axes` is a row-major 3x3 orthonormal rotation matrix R that
+    maps WORLD vectors to LOCAL (point_local = R @ (point_world - center)). A point
+    is inside iff |local[i]| <= half_extents[i] for all i."""
+
+    def __init__(self, cfg: ObstacleOBB):
+        self._center = np.asarray(cfg.center, dtype=np.float64)
+        self._half = np.asarray(cfg.half_extents, dtype=np.float64)
+        self._R = np.asarray(cfg.axes, dtype=np.float64).reshape(3, 3)
+
+    def _to_local(self, pts: np.ndarray) -> np.ndarray:
+        return (pts - self._center) @ self._R.T
+
+    def contains(self, points: np.ndarray) -> np.ndarray:
+        pts = np.asarray(points, dtype=np.float64)
+        if pts.shape[0] == 0:
+            return np.zeros(0, dtype=bool)
+        local = self._to_local(pts)
+        return np.all(np.abs(local) <= self._half, axis=1)
+
+    def segment_intersects(self, p0: np.ndarray, p1: np.ndarray) -> bool:
+        # Transform segment into local frame, then slab test against [-half, +half]
+        p0_l = self._to_local(np.asarray(p0, dtype=np.float64).reshape(1, 3))[0]
+        p1_l = self._to_local(np.asarray(p1, dtype=np.float64).reshape(1, 3))[0]
+        d = p1_l - p0_l
+        t_enter = 0.0
+        t_exit = 1.0
+        for axis in range(3):
+            if abs(d[axis]) < 1e-12:
+                if p0_l[axis] < -self._half[axis] or p0_l[axis] > self._half[axis]:
+                    return False
+                continue
+            inv = 1.0 / d[axis]
+            t1 = (-self._half[axis] - p0_l[axis]) * inv
+            t2 = (self._half[axis] - p0_l[axis]) * inv
+            t_lo, t_hi = (t1, t2) if t1 <= t2 else (t2, t1)
+            t_enter = max(t_enter, t_lo)
+            t_exit = min(t_exit, t_hi)
+            if t_enter > t_exit:
+                return False
+        return bool(t_enter <= t_exit)
+
+    def aabb(self) -> tuple[np.ndarray, np.ndarray]:
+        # World AABB = center ± |R^T| @ half_extents (extent of all 8 corners projected
+        # to world axes equals sum of |R^T_ij| * half_extents_j for each world axis i).
+        extent = np.abs(self._R.T) @ self._half
+        return self._center - extent, self._center + extent
 
     def voxelize(self, grid) -> np.ndarray:
         raise NotImplementedError("voxelize: implemented in Task 13")
