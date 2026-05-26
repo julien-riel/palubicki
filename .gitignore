@@ -45,3 +45,6 @@ output/
 
 # Test artifacts
 tests/golden/*.actual.glb
+
+# Claude Code local state
+.claude/
