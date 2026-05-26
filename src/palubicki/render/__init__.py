@@ -2,6 +2,8 @@
 """Headless PNG rendering for palubicki Mesh / .glb (diagnostic level).
 
 Matplotlib is an optional dependency: install with `pip install -e '.[render]'`.
+Importing this module does NOT import matplotlib. The matplotlib import is
+deferred to render_mesh() / render_glb() — failures raise RenderDependencyError.
 """
 from __future__ import annotations
 

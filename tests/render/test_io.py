@@ -1,5 +1,4 @@
 # tests/render/test_io.py
-import io as stdio
 from pathlib import Path
 
 import numpy as np
