@@ -1,5 +1,4 @@
 # tests/render/test_init.py
-import pytest
 
 
 def test_render_exceptions_are_importable():
@@ -9,9 +8,15 @@ def test_render_exceptions_are_importable():
 
 
 def test_render_module_does_not_require_matplotlib_to_import():
-    """The base module must import even if matplotlib is missing —
-    only render_mesh / render_glb may force the import."""
-    import importlib
-    import palubicki.render
-    importlib.reload(palubicki.render)  # ensure clean import path
-    assert hasattr(palubicki.render, "RenderError")
+    """Importing palubicki.render must NOT eager-import matplotlib.
+    The matplotlib import is deferred to render_mesh / render_glb."""
+    import sys
+    # Force a clean re-import so a previously cached palubicki.render
+    # (which may have been loaded after matplotlib in this session) is
+    # not what we test against.
+    sys.modules.pop("palubicki.render", None)
+    sys.modules.pop("matplotlib", None)
+    import palubicki.render  # noqa: F401
+    assert "matplotlib" not in sys.modules, (
+        "palubicki.render eager-imported matplotlib; it must stay lazy"
+    )
