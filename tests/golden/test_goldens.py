@@ -148,7 +148,10 @@ def test_golden_forest_v3(tmp_path):
             for iod in node.children_internodes:
                 stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True, default=list).encode()).hexdigest()
-    EXPECTED = "e1a988fdff57b08ad0a50d0b30a89ae378fd007e420326c8148c5961720a09c2"
+    # Re-pinned after the step-major substep batching refactor in _iteration_step
+    # (inner substep loop now interleaves state.node_index across chains within each
+    # substep level, and batched substep perceive() introduces cross-bud competition).
+    EXPECTED = "6346a2d095400a8092de9f3c838ced296c3f9467e0606ee2ac747fd3b21b7e6a"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")

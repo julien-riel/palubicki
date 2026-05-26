@@ -106,3 +106,70 @@ def test_single_node_tree_no_crash():
     # _emit_chain_tube returns early (len < 2), only root cap center vertex emitted
     assert prim.positions.shape[1] == 3
     assert np.isfinite(prim.positions).all()
+
+
+def test_vertical_chain_geometric_pin():
+    """Hand-computed pin test: catches any drift in vertex layout, UVs, or index order
+    during refactors of _emit_chain_tube / _emit_root_cap.
+
+    Geometry derivation for _vertical_chain(n=3, length=1.0, r=0.05), ring_sides=4:
+      - 4 nodes at (0, i, 0), i=0..3; tangent constant = (0, 1, 0)
+      - Frame: right=(1,0,0), up=cross((0,1,0),(1,0,0))=(0,0,-1) — constant (no rotation)
+      - columns = ring_sides + 1 = 5; total tube vertices = 4 × 5 = 20
+      - Plus 1 root-cap center vertex = 21 total
+      - Per-ring layout (k=0..4): angles 0, π/2, π, 3π/2, 0 (seam)
+    """
+    tree = _vertical_chain(n=3, length=1.0, r=0.05)
+    prim = build_bark_primitive(tree, ring_sides=4, material=_mat())
+
+    assert prim.positions.shape == (21, 3)
+    assert prim.normals.shape == (21, 3)
+    assert prim.uvs.shape == (21, 2)
+    # tube: 3 segs × 4 sides × 6 = 72; cap: 4 tris × 3 = 12; total 84
+    assert prim.indices.shape == (84,)
+    assert prim.indices.dtype == np.uint32
+
+    # --- Ring 0 (node at y=0) ---
+    assert np.allclose(prim.positions[0], [0.05, 0.0, 0.0], atol=1e-6)
+    assert np.allclose(prim.normals[0],   [1.0,  0.0, 0.0], atol=1e-6)
+    assert np.allclose(prim.uvs[0],       [0.0,  0.0],      atol=1e-6)
+
+    assert np.allclose(prim.positions[1], [0.0,  0.0, -0.05], atol=1e-6)
+    assert np.allclose(prim.normals[1],   [0.0,  0.0, -1.0],  atol=1e-6)
+    assert np.allclose(prim.uvs[1],       [0.25, 0.0],        atol=1e-6)
+
+    assert np.allclose(prim.positions[2], [-0.05, 0.0, 0.0], atol=1e-6)
+    assert np.allclose(prim.normals[2],   [-1.0,  0.0, 0.0], atol=1e-6)
+
+    assert np.allclose(prim.positions[3], [0.0, 0.0, 0.05], atol=1e-6)
+    assert np.allclose(prim.normals[3],   [0.0, 0.0, 1.0], atol=1e-6)
+
+    # Seam vertex (k=4): same 3D as k=0, UV at u=1.0
+    assert np.allclose(prim.positions[4], prim.positions[0], atol=1e-12)
+    assert np.allclose(prim.normals[4],   prim.normals[0],   atol=1e-12)
+    assert np.allclose(prim.uvs[4],       [1.0, 0.0],        atol=1e-6)
+
+    # --- Ring 1 (node at y=1): same XZ layout, y=1, v=1.0 ---
+    assert np.allclose(prim.positions[5], [0.05, 1.0, 0.0], atol=1e-6)
+    assert np.allclose(prim.uvs[5],       [0.0,  1.0],      atol=1e-6)
+
+    # --- Ring 3 (last node, y=3, v=3.0) ---
+    assert np.allclose(prim.positions[15], [0.05, 3.0, 0.0], atol=1e-6)
+    assert np.allclose(prim.uvs[15],       [0.0,  3.0],      atol=1e-6)
+
+    # --- Root cap center vertex (last appended) at (0,0,0) ---
+    assert np.allclose(prim.positions[20], [0.0, 0.0, 0.0], atol=1e-12)
+
+    # --- Tube indices (segment 0, k=0..3 → 24 ints) ---
+    # k=0: a=0,b=5,c=6,d=1  → [0,5,6, 0,6,1]
+    # k=1: a=1,b=6,c=7,d=2  → [1,6,7, 1,7,2]
+    # k=2: a=2,b=7,c=8,d=3  → [2,7,8, 2,8,3]
+    # k=3: a=3,b=8,c=9,d=4  → [3,8,9, 3,9,4]
+    expected_seg0 = [0,5,6,0,6,1, 1,6,7,1,7,2, 2,7,8,2,8,3, 3,8,9,3,9,4]
+    assert prim.indices[:24].tolist() == expected_seg0
+
+    # --- Cap indices: [center=20, ring0[k+1], ring0[k]] for k=0..3 ---
+    assert prim.indices[72:75].tolist() == [20, 1, 0]
+    assert prim.indices[75:78].tolist() == [20, 2, 1]
+    assert prim.indices[78:81].tolist() == [20, 3, 2]
+    assert prim.indices[81:84].tolist() == [20, 4, 3]

@@ -19,22 +19,39 @@ class _ChainBuild:
 def build_bark_primitive(tree: Tree, *, ring_sides: int, material: Material) -> Primitive:
     chains = _collect_chains(tree)
 
-    positions: list[np.ndarray] = []
-    normals: list[np.ndarray] = []
-    uvs: list[np.ndarray] = []
-    indices: list[int] = []
+    pos_parts: list[np.ndarray] = []
+    nor_parts: list[np.ndarray] = []
+    uv_parts: list[np.ndarray] = []
+    idx_parts: list[np.ndarray] = []
+    vertex_offset = 0
 
     for chain in chains:
-        _emit_chain_tube(chain, ring_sides, positions, normals, uvs, indices)
+        p, n, u, idx = _emit_chain_tube(chain, ring_sides, vertex_offset)
+        if p.shape[0]:
+            pos_parts.append(p)
+            nor_parts.append(n)
+            uv_parts.append(u)
+            idx_parts.append(idx)
+            vertex_offset += p.shape[0]
 
     # Cap root: only the main trunk's first ring
     if chains:
-        _emit_root_cap(chains[0], ring_sides, positions, normals, uvs, indices)
+        p, n, u, idx = _emit_root_cap(chains[0], ring_sides, vertex_offset)
+        if p.shape[0]:
+            pos_parts.append(p)
+            nor_parts.append(n)
+            uv_parts.append(u)
+            idx_parts.append(idx)
+            vertex_offset += p.shape[0]
 
-    pos_arr = np.asarray(positions, dtype=np.float32) if positions else np.zeros((0, 3), dtype=np.float32)
-    nor_arr = np.asarray(normals, dtype=np.float32) if normals else np.zeros((0, 3), dtype=np.float32)
-    uv_arr = np.asarray(uvs, dtype=np.float32) if uvs else np.zeros((0, 2), dtype=np.float32)
-    idx_arr = np.asarray(indices, dtype=np.uint32) if indices else np.zeros((0,), dtype=np.uint32)
+    pos_arr = (np.concatenate(pos_parts, axis=0).astype(np.float32, copy=False)
+               if pos_parts else np.zeros((0, 3), dtype=np.float32))
+    nor_arr = (np.concatenate(nor_parts, axis=0).astype(np.float32, copy=False)
+               if nor_parts else np.zeros((0, 3), dtype=np.float32))
+    uv_arr = (np.concatenate(uv_parts, axis=0)
+              if uv_parts else np.zeros((0, 2), dtype=np.float32))
+    idx_arr = (np.concatenate(idx_parts, axis=0).astype(np.uint32, copy=False)
+               if idx_parts else np.zeros((0,), dtype=np.uint32))
 
     return Primitive(positions=pos_arr, normals=nor_arr, uvs=uv_arr, indices=idx_arr, material=material)
 
@@ -97,101 +114,139 @@ def _avg_radius_at_node(node: Node) -> float:
 def _emit_chain_tube(
     chain: _ChainBuild,
     ring_sides: int,
-    positions: list,
-    normals: list,
-    uvs: list,
-    indices: list,
-) -> None:
-    if len(chain.nodes) < 2:
-        return
+    vertex_offset: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Emit a tube along ``chain``. Returns ``(positions, normals, uvs, indices)``.
+
+    Vectorised column expansion: parallel-transport frame is propagated node-by-node
+    (inherently sequential), then the per-node ring of ``columns = ring_sides + 1``
+    vertices is built by numpy broadcasting in one shot — replacing the original
+    ``for k in range(columns)`` Python loop.
+
+    Returned ``indices`` are already shifted by ``vertex_offset`` for direct
+    concatenation by the caller.
+    """
+    n_nodes = len(chain.nodes)
+    if n_nodes < 2:
+        return (
+            np.zeros((0, 3), dtype=np.float64),
+            np.zeros((0, 3), dtype=np.float64),
+            np.zeros((0, 2), dtype=np.float32),
+            np.zeros((0,), dtype=np.int64),
+        )
 
     columns = ring_sides + 1  # seam duplicated for clean UVs
 
-    # Build tangents per node
-    tangents = _compute_tangents([n.position for n in chain.nodes])
+    node_positions = np.asarray([n.position for n in chain.nodes], dtype=np.float64)  # (N, 3)
+    radii_arr = np.asarray(chain.radii, dtype=np.float64)  # (N,)
 
-    # Parallel transport frame
+    tangents = _compute_tangents(node_positions)  # (N, 3)
+
+    # Parallel-transport frame — sequential across nodes, vectorised across columns.
+    rights = np.empty((n_nodes, 3), dtype=np.float64)
+    ups = np.empty((n_nodes, 3), dtype=np.float64)
     t0 = tangents[0]
     canonical = np.array([1.0, 0.0, 0.0]) if abs(t0[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     right = canonical - np.dot(canonical, t0) * t0
     right = right / np.linalg.norm(right)
-    up = _cross3(t0, right)
+    rights[0] = right
+    ups[0] = _cross3(t0, right)
+    for i in range(1, n_nodes):
+        rights[i], ups[i] = _transport_frame(rights[i - 1], ups[i - 1], tangents[i - 1], tangents[i])
 
-    start_vertex = len(positions)
-    cum_length = 0.0
-    prev_pos: np.ndarray | None = None
+    # Cumulative arc length per node (matches the original ``cum_length += ‖Δp‖`` accumulation).
+    seg_lens = np.zeros(n_nodes, dtype=np.float64)
+    seg_lens[1:] = np.linalg.norm(node_positions[1:] - node_positions[:-1], axis=1)
+    cum_lengths = np.cumsum(seg_lens)
 
-    for i, (node, r) in enumerate(zip(chain.nodes, chain.radii)):
-        if i > 0:
-            cum_length += float(np.linalg.norm(node.position - prev_pos))
-            new_t = tangents[i]
-            old_t = tangents[i - 1]
-            right, up = _transport_frame(right, up, old_t, new_t)
-        for k in range(columns):
-            angle = 2.0 * math.pi * (k % ring_sides) / ring_sides
-            radial = math.cos(angle) * right + math.sin(angle) * up
-            positions.append(node.position + r * radial)
-            normals.append(radial)
-            u = k / ring_sides
-            v = cum_length
-            uvs.append(np.array([u, v], dtype=np.float32))
-        prev_pos = node.position
+    # Per-column angles. ``k % ring_sides`` makes column ``ring_sides`` reuse angle 0
+    # so the seam vertex sits bit-exactly on top of column 0 in 3D.
+    k_indices = np.arange(columns)
+    angles = 2.0 * np.pi * (k_indices % ring_sides) / ring_sides
+    cos_a = np.cos(angles)  # (columns,)
+    sin_a = np.sin(angles)  # (columns,)
 
-    # Quads between consecutive rings
-    for i in range(len(chain.nodes) - 1):
-        ring0 = start_vertex + i * columns
-        ring1 = start_vertex + (i + 1) * columns
-        for k in range(ring_sides):
-            a = ring0 + k
-            b = ring1 + k
-            c = ring1 + k + 1
-            d = ring0 + k + 1
-            indices.extend([a, b, c, a, c, d])
+    # radials[i, k] = cos_a[k] * rights[i] + sin_a[k] * ups[i]  →  (N, columns, 3)
+    radials = cos_a[None, :, None] * rights[:, None, :] + sin_a[None, :, None] * ups[:, None, :]
+    positions = node_positions[:, None, :] + radii_arr[:, None, None] * radials
+    normals = radials  # already unit length: |cos²+sin²|·|right⊥up|=1
+
+    u_row = k_indices.astype(np.float32) / np.float32(ring_sides)
+    uvs = np.empty((n_nodes, columns, 2), dtype=np.float32)
+    uvs[..., 0] = u_row[None, :]
+    uvs[..., 1] = cum_lengths.astype(np.float32)[:, None]
+
+    positions_flat = positions.reshape(n_nodes * columns, 3)
+    normals_flat = normals.reshape(n_nodes * columns, 3)
+    uvs_flat = uvs.reshape(n_nodes * columns, 2)
+
+    # Vectorised quad indices: per segment i, per side k, emit two tris [a,b,c,a,c,d]
+    # with a = ring0+k, b = ring1+k, c = ring1+k+1, d = ring0+k+1.
+    n_seg = n_nodes - 1
+    i_arr = np.arange(n_seg)
+    k_arr = np.arange(ring_sides)
+    ring0 = vertex_offset + i_arr[:, None] * columns          # (n_seg, 1)
+    ring1 = vertex_offset + (i_arr[:, None] + 1) * columns
+    a = ring0 + k_arr[None, :]
+    b = ring1 + k_arr[None, :]
+    c = ring1 + k_arr[None, :] + 1
+    d = ring0 + k_arr[None, :] + 1
+    indices = np.stack([a, b, c, a, c, d], axis=-1).reshape(-1).astype(np.int64)
+
+    return positions_flat, normals_flat, uvs_flat, indices
 
 
 def _emit_root_cap(
     chain: _ChainBuild,
     ring_sides: int,
-    positions: list,
-    normals: list,
-    uvs: list,
-    indices: list,
-) -> None:
-    # Bottom of trunk: fan from center down.
-    # If the trunk chain has <2 nodes, _emit_chain_tube did not emit a ring,
-    # so referencing ring0 vertices here would produce OOB indices.
+    vertex_offset: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Bottom-of-trunk fan: one center vertex + ``ring_sides`` triangles.
+
+    Triangles assume the trunk's first ring is at global indices [0..columns-1] —
+    i.e., the trunk chain was emitted first by ``build_bark_primitive``.
+
+    When the trunk chain had < 2 nodes, no ring exists; the center vertex is still
+    emitted (legacy behavior) but no triangles are issued.
+    """
+    center = chain.nodes[0].position.astype(np.float64)
+    positions = center[None, :]                                       # (1, 3)
+    normals = np.array([[0.0, -1.0, 0.0]], dtype=np.float64)          # (1, 3)
+    uvs = np.array([[0.5, 0.5]], dtype=np.float32)                    # (1, 2)
+
     if len(chain.nodes) < 2:
-        return
-    columns = ring_sides + 1
-    center = chain.nodes[0].position.copy()
-    center_index = len(positions)
-    positions.append(center)
-    normals.append(np.array([0.0, -1.0, 0.0]))
-    uvs.append(np.array([0.5, 0.5], dtype=np.float32))
-    # The chain's first ring was emitted at indices [start..start+columns-1]
-    # We need its start: it's the very first ring written for this chain.
-    # Assume the chain is the first one emitted (trunk), so start = 0.
-    # For safety, re-derive: ring 0 = first `columns` vertices of this chain.
-    # In our emission order, chain[0] starts at position index 0 (called first).
+        return positions, normals, uvs, np.zeros((0,), dtype=np.int64)
+
     ring0_start = 0
-    for k in range(ring_sides):
-        a = ring0_start + k
-        b = ring0_start + k + 1
-        indices.extend([center_index, b, a])
+    center_index = vertex_offset
+    k_arr = np.arange(ring_sides)
+    a = ring0_start + k_arr
+    b = ring0_start + k_arr + 1
+    centers = np.full_like(a, center_index)
+    indices = np.stack([centers, b, a], axis=-1).reshape(-1).astype(np.int64)
+    return positions, normals, uvs, indices
 
 
-def _compute_tangents(positions: list[np.ndarray]) -> list[np.ndarray]:
-    tangents: list[np.ndarray] = []
-    for i, p in enumerate(positions):
-        if i == 0:
-            t = positions[1] - p
-        elif i == len(positions) - 1:
-            t = p - positions[i - 1]
-        else:
-            t = positions[i + 1] - positions[i - 1]
-        n = np.linalg.norm(t)
-        tangents.append(t / n if n > 1e-12 else np.array([0.0, 1.0, 0.0]))
-    return tangents
+def _compute_tangents(positions: np.ndarray) -> np.ndarray:
+    """Vectorised central-difference tangents. ``positions``: ``(N, 3)`` → ``(N, 3)``,
+    unit-normalised. Endpoints use forward/backward difference; degenerate (zero-norm)
+    rows fall back to ``(0, 1, 0)`` (matching the scalar version's behavior)."""
+    n = positions.shape[0]
+    if n < 2:
+        out = np.empty((n, 3), dtype=np.float64)
+        if n == 1:
+            out[0] = (0.0, 1.0, 0.0)
+        return out
+    t = np.empty_like(positions)
+    t[0] = positions[1] - positions[0]
+    t[-1] = positions[-1] - positions[-2]
+    if n > 2:
+        t[1:-1] = positions[2:] - positions[:-2]
+    norms = np.linalg.norm(t, axis=1)
+    safe = norms > 1e-12
+    t[safe] /= norms[safe, None]
+    t[~safe] = (0.0, 1.0, 0.0)
+    return t
 
 
 def _transport_frame(

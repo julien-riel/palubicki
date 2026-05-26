@@ -272,10 +272,12 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
             stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
     # This hash is pinned to detect unintended drift during refactors.
-    # Re-pinned after the realism / perf prototype (Fix #1..6 + mechanical sag).
-    # Sag is OFF by default for this config, so the only behavior change comes
-    # from Fix #1 (envelope-boundary U-turn dormancy).
-    EXPECTED = "0edc481fc9db027a7a0b86264d73c63215cfcb3611b5d9311cbac3494f023973"
+    # Re-pinned after step-major substep batching: the inner substep loop now processes
+    # all chains at substep level s before advancing to s+1, which interleaves
+    # state.node_index assignments across chains and brings cross-bud competition into
+    # the substep perceive() call. Biologically equivalent, but per-node lateral
+    # phyllotaxy angles shift.
+    EXPECTED = "4923a34e5a41fc3fe878d6230bcb31d314b60095458180e0da89681000f7922a"
     assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
     # Side-effect: print so we can copy the value if needed
     print(f"V2 hash: {digest}")

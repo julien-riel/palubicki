@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -16,6 +17,15 @@ from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
 from palubicki.sim.tropisms import growth_direction
+
+
+@dataclass
+class _SubstepChain:
+    """A single bud's substep chain: evolves over ``n`` steps until ``done``."""
+    bud_old: Bud      # the original active bud (becomes DEAD after step 0)
+    current: Bud      # the "growing tip" — initially ``bud_old``, then the latest terminal
+    n: int            # planned number of substeps (from allocate())
+    done: bool        # True once the chain breaks (U-turn / obstacle / dormant)
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +119,23 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
         )
         record_qualities(tree, v_subtree=v_subtree)
 
+        # Step-major substep loop. The original code was bud-major (each bud's n substeps
+        # in sequence), with each substep calling perceive() and sample_hemisphere() with
+        # a single bud — paying the Python setup cost B-times. Here we walk one substep
+        # level at a time across all chains, then issue ONE batched perceive() and ONE
+        # sample_hemisphere_batch() for the new substep terminals. Two consequences vs.
+        # the original bud-major path:
+        #   - state.node_index assignments are interleaved across chains within each
+        #     substep level (not all-of-A before any-of-B), so lateral phyllotaxy angles
+        #     at substep-created nodes differ → small tree-shape drift vs. pre-refactor
+        #     goldens. The qualitative biology (apical dominance, light-driven curvature,
+        #     marker competition) is preserved.
+        #   - The batched perceive() introduces cross-bud competition between substep
+        #     terminals (closest-bud claims each marker). The previous singleton path had
+        #     no such competition. This brings substep perception in line with the main-
+        #     loop perception (which already competes across all active buds).
         new_active: list[Bud] = []
+        chains: list[_SubstepChain] = []
         for bud_old in list(tree.active_buds):
             n = n_by_bud.get(bud_old, 0)
             v_perc = res.direction[bud_old]
@@ -118,49 +144,59 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 bud_old.state = BudState.DORMANT
                 new_active.append(bud_old)
                 continue
+            chains.append(_SubstepChain(bud_old=bud_old, current=bud_old, n=n, done=False))
 
-            current_bud = bud_old
-            for step in range(n):
-                light_grad = light_info.gradient[current_bud] if light_info else None
+        max_n = max((c.n for c in chains), default=0)
+        for step in range(max_n):
+            # Stage 1: per-chain emission for this substep level, in tree.active_buds order.
+            step_terminals: list[Bud] = []
+            step_chains: list[_SubstepChain] = []
+            step_parents: list[Bud] = []     # the "current" bud each terminal grew from (for re_perceive=False inheritance)
+            for chain in chains:
+                if chain.done or chain.n <= step:
+                    continue
+                cur = chain.current
+                light_grad = light_info.gradient[cur] if light_info else None
                 d = growth_direction(
-                    v_perception=res.direction[current_bud],
-                    current_direction=current_bud.direction,
+                    v_perception=res.direction[cur],
+                    current_direction=cur.direction,
                     cfg=cfg.tropism,
                     light_gradient=light_grad,
-                    axis_order=current_bud.axis_order,
+                    axis_order=cur.axis_order,
                 )
-                # Fix #1: U-turn check on the BLENDED growth direction. After
-                # tropisms (gravity/photo/inertia) and perception have been mixed,
-                # if the resulting d points sharply against the bud's prior
-                # direction, the bud is folding back — kill it. This catches
-                # envelope-boundary curls without fighting gravitropism (where
-                # the blend can legitimately rotate downward).
-                if float(np.dot(d, current_bud.direction)) < cfg.sim.cos_min_perception:
-                    current_bud.state = BudState.DORMANT
-                    new_active.append(current_bud)
-                    break
-                new_pos = current_bud.position + d * cfg.sim.internode_length
+                # Fix #1: U-turn check on the BLENDED growth direction. After tropisms
+                # have mixed with perception, a sharp fold-back means the bud is folding
+                # against the envelope — kill it. Catches envelope-boundary curls without
+                # fighting gravitropism.
+                if float(np.dot(d, cur.direction)) < cfg.sim.cos_min_perception:
+                    cur.state = BudState.DORMANT
+                    new_active.append(cur)
+                    chain.done = True
+                    continue
+                new_pos = cur.position + d * cfg.sim.internode_length
 
                 # V3: obstacle blocking
                 if forest.obstacles:
                     from palubicki.sim.obstacles import segment_blocked, any_contains
-                    if segment_blocked(current_bud.position, new_pos, forest.obstacles):
-                        current_bud.state = BudState.DORMANT
-                        new_active.append(current_bud)
-                        break
+                    if segment_blocked(cur.position, new_pos, forest.obstacles):
+                        cur.state = BudState.DORMANT
+                        new_active.append(cur)
+                        chain.done = True
+                        continue
                     if any_contains(new_pos, forest.obstacles):
-                        current_bud.state = BudState.DEAD
-                        break
+                        cur.state = BudState.DEAD
+                        chain.done = True
+                        continue
 
                 new_node = Node(position=new_pos)
                 iod = Internode(
-                    parent_node=current_bud.parent_node,
+                    parent_node=cur.parent_node,
                     child_node=new_node,
                     length=cfg.sim.internode_length,
-                    is_main_axis=(current_bud is current_bud.parent_node.terminal_bud),
+                    is_main_axis=(cur is cur.parent_node.terminal_bud),
                     window=cfg.shedding.window,
                 )
-                current_bud.parent_node.children_internodes.append(iod)
+                cur.parent_node.children_internodes.append(iod)
                 new_node.parent_internode = iod
                 tree.all_internodes.append(iod)
                 new_node_positions.append(new_pos)
@@ -168,7 +204,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
 
                 terminal = Bud(
                     position=new_pos.copy(), direction=d,
-                    axis_order=current_bud.axis_order, parent_node=new_node,
+                    axis_order=cur.axis_order, parent_node=new_node,
                 )
                 new_node.terminal_bud = terminal
 
@@ -177,44 +213,69 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 for ld in lateral_dirs:
                     lat = Bud(
                         position=new_pos.copy(), direction=ld,
-                        axis_order=current_bud.axis_order + 1, parent_node=new_node,
+                        axis_order=cur.axis_order + 1, parent_node=new_node,
                     )
                     new_node.lateral_buds.append(lat)
 
                 new_active.extend(new_node.lateral_buds)
-                current_bud.state = BudState.DEAD
-                if step + 1 < n:
-                    if cfg.sim.re_perceive_per_substep:
-                        sub_result = perceive(
-                            [terminal], forest.markers,
-                            r_perception=cfg.sim.r_perception,
-                            theta_perception_deg=cfg.sim.theta_perception_deg,
-                        )
-                        res.direction[terminal] = sub_result.direction[terminal]
-                        res.quality[terminal] = sub_result.quality[terminal]
-                        if light_grid is not None and light_info is not None:
-                            lf, grad = light_grid.sample_hemisphere(
-                                terminal.position,
-                                n_rays=cfg.light.n_rays,
-                                light_direction=np.asarray(cfg.light.light_direction, dtype=np.float64),
-                                k=cfg.light.k_absorption,
-                                seed=int(np.random.SeedSequence([cfg.seed, iteration, step + 1]).generate_state(1)[0]),
-                            )
-                            light_info.light_factor[terminal] = lf
-                            light_info.gradient[terminal] = grad
-                        if np.linalg.norm(res.direction[terminal]) < 1e-12:
-                            terminal.state = BudState.DORMANT
-                            new_active.append(terminal)
-                            break
-                    else:
-                        res.direction[terminal] = res.direction.get(current_bud, np.zeros(3))
-                        res.quality[terminal] = res.quality.get(current_bud, 0)
-                        if light_info is not None:
-                            light_info.light_factor[terminal] = light_info.light_factor.get(current_bud, 1.0)
-                            light_info.gradient[terminal] = light_info.gradient.get(current_bud, np.zeros(3))
-                    current_bud = terminal
+                cur.state = BudState.DEAD
+
+                if step + 1 < chain.n:
+                    step_terminals.append(terminal)
+                    step_chains.append(chain)
+                    step_parents.append(cur)
                 else:
                     new_active.append(terminal)
+                    chain.done = True
+
+            # Stage 2: batched perception + light for substep terminals.
+            if step_terminals:
+                if cfg.sim.re_perceive_per_substep:
+                    sub_result = perceive(
+                        step_terminals, forest.markers,
+                        r_perception=cfg.sim.r_perception,
+                        theta_perception_deg=cfg.sim.theta_perception_deg,
+                    )
+                    for term in step_terminals:
+                        res.direction[term] = sub_result.direction[term]
+                        res.quality[term] = sub_result.quality[term]
+                    if light_grid is not None and light_info is not None:
+                        positions = np.asarray([t.position for t in step_terminals], dtype=np.float64)
+                        # Match the scalar substep seed: SeedSequence([cfg.seed, iteration, step+1])
+                        # is independent of bud, so all terminals at this substep level share it
+                        # — identical to the original per-call behavior.
+                        seed_step = int(
+                            np.random.SeedSequence([cfg.seed, iteration, step + 1]).generate_state(1)[0]
+                        )
+                        seeds = [seed_step] * len(step_terminals)
+                        lfs, grads = light_grid.sample_hemisphere_batch(
+                            positions,
+                            n_rays=cfg.light.n_rays,
+                            light_direction=np.asarray(cfg.light.light_direction, dtype=np.float64),
+                            k=cfg.light.k_absorption,
+                            seeds=seeds,
+                        )
+                        for i, term in enumerate(step_terminals):
+                            light_info.light_factor[term] = float(lfs[i])
+                            light_info.gradient[term] = grads[i]
+                    # Zero-direction → mark dormant + close the chain (matches original break).
+                    for chain, term in zip(step_chains, step_terminals):
+                        if np.linalg.norm(res.direction[term]) < 1e-12:
+                            term.state = BudState.DORMANT
+                            new_active.append(term)
+                            chain.done = True
+                        else:
+                            chain.current = term
+                else:
+                    # re_perceive_per_substep=False → each terminal inherits perception
+                    # from its parent ``cur`` (same as the original else-branch).
+                    for chain, parent, term in zip(step_chains, step_parents, step_terminals):
+                        res.direction[term] = res.direction.get(parent, np.zeros(3))
+                        res.quality[term] = res.quality.get(parent, 0)
+                        if light_info is not None:
+                            light_info.light_factor[term] = light_info.light_factor.get(parent, 1.0)
+                            light_info.gradient[term] = light_info.gradient.get(parent, np.zeros(3))
+                        chain.current = term
 
         tree.active_buds = [b for b in new_active if b.state != BudState.DEAD]
 
