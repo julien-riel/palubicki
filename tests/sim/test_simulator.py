@@ -277,3 +277,57 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
     assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
     # Side-effect: print so we can copy the value if needed
     print(f"V2 hash: {digest}")
+
+
+def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
+    """Two trees far apart (envelopes disjoint) → each tree grows independently."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=3000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(seeds=(
+            ForestSeed(position=(0.0, 0.0, 0.0)),
+            ForestSeed(position=(20.0, 0.0, 0.0)),
+        )),
+    )
+    forest = simulate_forest(cfg)
+    assert len(forest.trees) == 2
+    assert len(forest.trees[0].all_internodes) > 0
+    assert len(forest.trees[1].all_internodes) > 0
+
+
+def test_simulate_forest_reproducible(tmp_path):
+    """Two runs with the same cfg produce identical trees."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+
+    def make_cfg():
+        return Config(
+            envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+            sim=SimConfig(max_iterations=6),
+            tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+            shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+            output=tmp_path / "x.glb", seed=99,
+            forest=ForestConfig(seeds=(
+                ForestSeed(position=(0.0, 0.0, 0.0)),
+                ForestSeed(position=(5.0, 0.0, 0.0)),
+            )),
+        )
+
+    f1 = simulate_forest(make_cfg())
+    f2 = simulate_forest(make_cfg())
+    for t1, t2 in zip(f1.trees, f2.trees):
+        assert len(t1.all_internodes) == len(t2.all_internodes)
+        for i1, i2 in zip(t1.all_internodes, t2.all_internodes):
+            np.testing.assert_allclose(i1.child_node.position, i2.child_node.position)
