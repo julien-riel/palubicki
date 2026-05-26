@@ -207,3 +207,31 @@ def test_preview_parses_bg_flag():
     assert _parse_bg("white") == (1.0, 1.0, 1.0, 1.0)
     assert _parse_bg("black") == (0.0, 0.0, 0.0, 1.0)
     assert _parse_bg("transparent") == (1.0, 1.0, 1.0, 0.0)
+
+
+def test_preview_renderer_dep_missing_exits_2(tmp_path, capsys, monkeypatch):
+    """If matplotlib is missing at runtime, preview returns exit 2 (setup error),
+    not exit 1 (data error)."""
+    from palubicki.cli import main
+    # Generate a valid .glb first
+    glb = tmp_path / "tree.glb"
+    rc = main([
+        "generate", "-o", str(glb),
+        "--seed", "7",
+        "--envelope", "ellipsoid",
+        "--envelope-radii", "0.5", "1.0", "0.5",
+        "--marker-count", "200",
+        "--iterations", "4",
+    ])
+    assert rc == 0
+
+    # Force the matplotlib import inside render_mesh to fail
+    import sys as _sys
+    monkeypatch.setitem(_sys.modules, "matplotlib", None)
+
+    rc = main(["preview", str(glb), "-o", str(tmp_path / "out.png"),
+               "--size", "100x100"])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "preview error" in err
+    assert "matplotlib" in err

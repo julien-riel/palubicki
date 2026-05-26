@@ -266,7 +266,10 @@ def _cmd_forest(args) -> int:
 
 def _cmd_preview(args) -> int:
     try:
-        from palubicki.render import Camera, RenderError, render_glb, save_png
+        from palubicki.render import (
+            Camera, RenderDependencyError, RenderError, render_mesh, save_png,
+        )
+        from palubicki.render.io import _glb_to_mesh
     except ImportError:
         print(
             "preview error: render extra not installed. "
@@ -275,21 +278,23 @@ def _cmd_preview(args) -> int:
         )
         return 2
 
-    cam = Camera(
-        elevation_deg=args.elevation,
-        azimuth_deg=args.azimuth,
-        distance=args.distance,
-    )
     try:
-        img = render_glb(
-            args.glb_path,
-            size=args.size,
-            camera=cam,
-            bg=args.bg,
-            drop_leaves=args.no_leaves,
-        )
+        mesh = _glb_to_mesh(args.glb_path, drop_leaves=args.no_leaves)
+        cam_overrides = {
+            "elevation_deg": args.elevation,
+            "azimuth_deg": args.azimuth,
+        }
+        if args.distance is not None:
+            cam_overrides["distance"] = args.distance
+        cam = Camera.fit(mesh, **cam_overrides)
+        img = render_mesh(mesh, size=args.size, camera=cam, bg=args.bg)
         save_png(img, args.output)
+    except RenderDependencyError as e:
+        # matplotlib missing at runtime (setup error) → exit 2
+        print(f"preview error: {e}", file=sys.stderr)
+        return 2
     except RenderError as e:
+        # Bad data / runtime failure → exit 1
         print(f"preview error: {e}", file=sys.stderr)
         return 1
     return 0
