@@ -96,3 +96,46 @@ def test_golden_ellipsoid_light(tmp_path, update_goldens):
         f"golden mismatch.\nexpected: {expected}\nactual:   {h}\n"
         f"if intentional, re-run with --update-goldens after visual review"
     )
+
+
+@pytest.mark.slow
+def test_golden_forest_v3(tmp_path):
+    """Pin a hash for a deterministic V3 forest run."""
+    import hashlib
+    import json
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=1.5, ry=2.5, rz=1.5, shape="ellipsoid", marker_count=2000),
+        sim=SimConfig(max_iterations=10),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=GeomConfig(),
+        light=LightConfig(enabled=True),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(
+                ForestSeed(position=(0.0, 0.0, 0.0)),
+                ForestSeed(position=(4.0, 0.0, 0.0)),
+                ForestSeed(position=(2.0, 0.0, 3.0)),
+            ),
+            obstacles=(ObstacleAABB(min=(1.5, 0.0, -1.0), max=(2.5, 2.0, 1.0)),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    positions = []
+    for tree_index, tree in enumerate(forest.trees):
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            positions.append((tree_index, tuple(np.round(node.position, 6).tolist())))
+            for iod in node.children_internodes:
+                stack.append(iod.child_node)
+    digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True, default=list).encode()).hexdigest()
+    EXPECTED = "e1a988fdff57b08ad0a50d0b30a89ae378fd007e420326c8148c5961720a09c2"
+    if EXPECTED is not None:
+        assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
+    print(f"V3 forest golden hash: {digest}")
