@@ -52,3 +52,61 @@ def test_unknown_yaml_key_rejected(tmp_path):
     p.write_text("sim:\n  not_a_real_key: 1\n")
     with pytest.raises(ConfigError, match="not_a_real_key"):
         load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_load_config_with_obstacles(tmp_path):
+    from palubicki.config import load_config, ObstacleAABB, ObstacleSphere, ObstacleMesh
+    yaml_path = tmp_path / "scene.yaml"
+    yaml_path.write_text("""
+forest:
+  obstacles:
+    - kind: aabb
+      min: [0.0, 0.0, 0.0]
+      max: [2.0, 1.0, 2.0]
+    - kind: sphere
+      center: [5.0, 0.0, 5.0]
+      radius: 1.5
+""")
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert len(cfg.forest.obstacles) == 2
+    assert isinstance(cfg.forest.obstacles[0], ObstacleAABB)
+    assert cfg.forest.obstacles[0].min == (0.0, 0.0, 0.0)
+    assert cfg.forest.obstacles[0].max == (2.0, 1.0, 2.0)
+    assert isinstance(cfg.forest.obstacles[1], ObstacleSphere)
+    assert cfg.forest.obstacles[1].radius == 1.5
+
+
+def test_load_config_with_forest_seeds(tmp_path):
+    from palubicki.config import load_config, ForestSeed
+    yaml_path = tmp_path / "scene.yaml"
+    yaml_path.write_text("""
+forest:
+  seeds:
+    - position: [0.0, 0.0, 0.0]
+    - position: [5.0, 0.0, 0.0]
+      seed: 42
+      overrides:
+        envelope.shape: cone
+        tropism.w_gravity: 0.5
+""")
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert len(cfg.forest.seeds) == 2
+    assert cfg.forest.seeds[0].position == (0.0, 0.0, 0.0)
+    assert cfg.forest.seeds[0].seed is None
+    assert cfg.forest.seeds[1].position == (5.0, 0.0, 0.0)
+    assert cfg.forest.seeds[1].seed == 42
+    assert cfg.forest.seeds[1].overrides == {"envelope.shape": "cone", "tropism.w_gravity": 0.5}
+
+
+def test_load_config_unknown_obstacle_kind_raises(tmp_path):
+    from palubicki.config import load_config, ConfigError
+    import pytest
+    yaml_path = tmp_path / "scene.yaml"
+    yaml_path.write_text("""
+forest:
+  obstacles:
+    - kind: tetrahedron
+      min: [0, 0, 0]
+""")
+    with pytest.raises(ConfigError, match="unknown obstacle kind"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")

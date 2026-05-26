@@ -215,7 +215,7 @@ def load_config(*, yaml_path: Path | None, cli_overrides: dict, output: Path) ->
         _set_dotted(data, dotted, value)
 
     sections = {}
-    section_field_names = set(_SECTION_TYPES.keys())
+    section_field_names = set(_SECTION_TYPES.keys()) | {"forest"}
     top_field_names = {f.name for f in fields(Config)}
 
     for name, type_ in _SECTION_TYPES.items():
@@ -225,6 +225,9 @@ def load_config(*, yaml_path: Path | None, cli_overrides: dict, output: Path) ->
         if unknown:
             raise ConfigError(f"unknown keys in section '{name}': {sorted(unknown)}")
         sections[name] = type_(**sec_data)
+
+    if "forest" in data:
+        sections["forest"] = _load_forest_config(data["forest"])
 
     top_kwargs = {k: v for k, v in data.items() if k not in section_field_names and k in top_field_names}
     unknown_top = set(data) - section_field_names - top_field_names
@@ -245,3 +248,62 @@ def _set_dotted(data: dict, dotted: str, value) -> None:
     for p in parts[:-1]:
         cur = cur.setdefault(p, {})
     cur[parts[-1]] = value
+
+
+_OBSTACLE_TYPES = {
+    "aabb": ObstacleAABB,
+    "sphere": ObstacleSphere,
+    "obb": ObstacleOBB,
+    "mesh": ObstacleMesh,
+}
+
+
+def _load_obstacle(d: dict):
+    if not isinstance(d, dict):
+        raise ConfigError(f"obstacle must be a dict, got {type(d).__name__}")
+    kind = d.get("kind")
+    if kind is None:
+        raise ConfigError(f"obstacle missing 'kind' field: {d}")
+    type_ = _OBSTACLE_TYPES.get(kind)
+    if type_ is None:
+        raise ConfigError(f"unknown obstacle kind: {kind!r} (expected one of {sorted(_OBSTACLE_TYPES)})")
+    fields_allowed = {f.name for f in fields(type_)}
+    payload = {k: v for k, v in d.items() if k != "kind"}
+    unknown = set(payload) - fields_allowed
+    if unknown:
+        raise ConfigError(f"unknown keys in obstacle {kind!r}: {sorted(unknown)}")
+    if "path" in payload:
+        payload["path"] = Path(payload["path"])
+    for tuple_field in ("min", "max", "center", "half_extents", "translate", "axes"):
+        if tuple_field in payload:
+            payload[tuple_field] = tuple(payload[tuple_field])
+    return type_(**payload)
+
+
+def _load_forest_seed(d: dict) -> "ForestSeed":
+    if not isinstance(d, dict):
+        raise ConfigError(f"forest seed must be a dict, got {type(d).__name__}")
+    allowed = {"position", "seed", "overrides"}
+    unknown = set(d) - allowed
+    if unknown:
+        raise ConfigError(f"unknown keys in forest seed: {sorted(unknown)}")
+    if "position" not in d:
+        raise ConfigError("forest seed missing 'position'")
+    return ForestSeed(
+        position=tuple(d["position"]),
+        seed=d.get("seed"),
+        overrides=dict(d.get("overrides") or {}),
+    )
+
+
+def _load_forest_config(d: dict) -> "ForestConfig":
+    if not isinstance(d, dict):
+        raise ConfigError(f"forest section must be a dict, got {type(d).__name__}")
+    allowed = {"seeds", "obstacles", "export_obstacles_geometry"}
+    unknown = set(d) - allowed
+    if unknown:
+        raise ConfigError(f"unknown keys in forest section: {sorted(unknown)}")
+    seeds = tuple(_load_forest_seed(s) for s in (d.get("seeds") or ()))
+    obstacles = tuple(_load_obstacle(o) for o in (d.get("obstacles") or ()))
+    export = bool(d.get("export_obstacles_geometry", True))
+    return ForestConfig(seeds=seeds, obstacles=obstacles, export_obstacles_geometry=export)
