@@ -67,6 +67,13 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--light-res", type=int, default=None,
                    help="Light grid resolution N → N×N×N cells (default 64)")
 
+    from palubicki.config import _list_species
+    species_choices = _list_species()
+    g.add_argument("--species",
+                   choices=species_choices if species_choices else None,
+                   default=None,
+                   help=f"Load a packaged species preset (choices: {', '.join(species_choices) if species_choices else 'none'})")
+
     sub.add_parser("dump-defaults", help="Print full default config as YAML")
 
     dc = sub.add_parser("dump-config", help="Extract config embedded in a .glb")
@@ -124,7 +131,12 @@ def _cmd_generate(args) -> int:
         overrides["light.grid_resolution"] = [args.light_res, args.light_res, args.light_res]
 
     try:
-        cfg = load_config(yaml_path=args.config, cli_overrides=overrides, output=args.output)
+        cfg = load_config(
+            yaml_path=args.config,
+            cli_overrides=overrides,
+            output=args.output,
+            species=args.species,
+        )
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2

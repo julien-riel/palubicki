@@ -125,3 +125,24 @@ forest:
     assert code == 1
     captured = capsys.readouterr()
     assert "forest error" in captured.err
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("species", ["oak", "pine", "birch"])
+def test_generate_species_creates_valid_glb(tmp_path, species):
+    out = tmp_path / f"{species}.glb"
+    res = _run("generate", "--species", species, "--seed", "42",
+               "--marker-count", "500",
+               "--iterations", "8",
+               "-o", str(out))
+    assert res.returncode == 0, res.stderr
+    assert out.exists()
+    loaded = pygltflib.GLTF2().load(str(out))
+    assert len(loaded.meshes) == 1
+    assert len(loaded.meshes[0].primitives) >= 2  # bark + leaves
+    assert len(loaded.textures) >= 1
+
+
+def test_species_unknown_exits_nonzero(tmp_path):
+    res = _run("generate", "--species", "redwood", "-o", str(tmp_path / "x.glb"))
+    assert res.returncode != 0
