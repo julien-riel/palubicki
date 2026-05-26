@@ -2,7 +2,7 @@ import io
 
 from PIL import Image
 
-from palubicki.geom._leaf_texture import default_leaf_png
+from palubicki.geom._textures import default_leaf_png
 
 
 def test_returns_png_bytes():

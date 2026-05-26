@@ -29,6 +29,9 @@ palubicki = "palubicki.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/palubicki"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/palubicki/configs/species" = "palubicki/configs/species"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [

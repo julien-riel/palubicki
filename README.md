@@ -51,6 +51,40 @@ palubicki generate -o oak_light.glb \
   --light-enabled --seed 42
 ```
 
+### V3 — obstacles + forêt multi-arbres
+
+Subcommand `palubicki forest -o scene.glb --config scene.yaml`. The YAML adds a
+top-level `forest:` section with multiple seeds (each with its own position,
+optional `seed`, `species`, and dotted-key `overrides`) and a list of
+obstacles (AABB, Sphere, OBB, Mesh OBJ). Trees compete on a shared marker
+cloud and a shared light grid; obstacles kill markers, block growth segments,
+and occlude light.
+
+### V4 — species presets
+
+Three packaged presets: `oak`, `pine`, `birch`. Each is a YAML in
+`src/palubicki/configs/species/` selected with the `--species` flag.
+
+```bash
+palubicki generate --species oak --seed 42 -o oak.glb
+palubicki generate --species pine --seed 42 -o pine.glb
+palubicki generate --species birch --seed 42 -o birch.glb
+
+# Override a preset value (CLI wins over YAML wins over preset)
+palubicki generate --species oak --w-gravity 0.5 -o oak_droopy.glb
+
+# Dump a preset to a file as starting point for a custom species
+palubicki dump-defaults --species pine > my_pine.yaml
+```
+
+Forêts mixtes : ajouter `species: oak` (ou `pine`/`birch`) à chaque entrée
+`forest.seeds` du YAML pour appliquer le preset à cet arbre, puis appliquer
+les `overrides` par-dessus.
+
+Textures bark + leaf : générateurs procéduraux PIL packagés sous l'URI
+`proc:<name>` (e.g. `bark_texture: "proc:oak_bark"`). Pointer vers un PNG
+externe reste possible : `bark_texture: ./my_bark.png`.
+
 ## Tuning notes
 
 Shedding is sensitive. The default `quality_threshold = 0.0` is permissive — it only removes branches whose subtree Q drops to literal 0 averaged over `window=5` iterations. If you want more aggressive pruning of weak branches, increase the threshold incrementally (try `0.1`, then `0.5`); be aware that high values combined with marker depletion can avalanche and strip the entire tree.
@@ -63,7 +97,7 @@ If your tree looks too dense or too sparse:
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
-- `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + cross-quad leaves. Outputs a neutral `Mesh`.
+- `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + parametric leaf clusters (1..N cross-quads per bud). Outputs a neutral `Mesh`.
 - `src/palubicki/export/` — `Mesh` → `.glb`. Core glTF 2.0, no extensions, max viewer compatibility.
 - `src/palubicki/cli.py` — orchestrates.
 
@@ -85,7 +119,7 @@ pytest --cov            # coverage report
 
 - **V2** : voxel light shadowing (BHls).
 - **V3** : obstacles + multi-tree forest simulation.
-- **V4** : species presets (apple, oak, pine, willow, birch) reproducing Fig. 12.
+- ~~**V4** : species presets (oak, pine, birch) — livré~~. Apple, willow, weeping ash reportés (saule en particulier nécessite un tropisme de poids non implémenté).
 
 See `docs/superpowers/roadmap/`.
 

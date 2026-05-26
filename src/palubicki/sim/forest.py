@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from palubicki.config import Config, EnvelopeConfig, ForestSeed
+from palubicki.config import Config, ConfigError, EnvelopeConfig, ForestSeed, _SECTION_TYPES, _load_packaged_species
 
 if TYPE_CHECKING:
     from palubicki.sim.markers import MarkerCloud
@@ -19,11 +19,28 @@ _SECTION_FIELDS = {
 
 
 def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Config:
-    """Return a new Config: cfg with seed_entry.overrides applied (dotted keys) and
-    envelope.center translated to seed_entry.position."""
+    """Return a new Config: cfg with species preset (if any) + seed_entry.overrides
+    applied (dotted keys) and envelope.center translated to seed_entry.position."""
+    if seed_entry.species is not None:
+        preset = _load_packaged_species(seed_entry.species)
+        new_sections: dict = {}
+        for section_name, type_ in _SECTION_TYPES.items():
+            cur_section = getattr(cfg, section_name)
+            cur_dict = {f.name: getattr(cur_section, f.name) for f in fields(type_)}
+            preset_section = preset.get(section_name, {}) or {}
+            allowed = {f.name for f in fields(type_)}
+            unknown = set(preset_section) - allowed
+            if unknown:
+                raise ConfigError(
+                    f"unknown keys in species preset section '{section_name}': {sorted(unknown)}"
+                )
+            cur_dict.update(preset_section)
+            new_sections[section_name] = type_(**cur_dict)
+    else:
+        new_sections = {s: getattr(cfg, s) for s in _SECTION_FIELDS}
+
     section_updates: dict[str, dict] = {s: {} for s in _SECTION_FIELDS}
     top_updates: dict[str, object] = {}
-
     for dotted, value in seed_entry.overrides.items():
         parts = dotted.split(".", 1)
         if len(parts) == 1:
@@ -31,22 +48,13 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
         else:
             section, key = parts
             if section not in _SECTION_FIELDS:
-                from palubicki.config import ConfigError
                 raise ConfigError(f"unknown section in override: {dotted!r}")
             section_updates[section][key] = value
 
-    # Apply section overrides via replace()
-    new_sections = {}
     for s in _SECTION_FIELDS:
-        cur = getattr(cfg, s)
-        updates = section_updates[s]
-        if updates:
-            new_sections[s] = replace(cur, **updates)
-        else:
-            new_sections[s] = cur
+        if section_updates[s]:
+            new_sections[s] = replace(new_sections[s], **section_updates[s])
 
-    # Translate envelope center to seed position (after overrides, so explicit
-    # envelope.center in overrides wins if user did that)
     if "envelope.center" not in seed_entry.overrides:
         new_sections["envelope"] = replace(new_sections["envelope"], center=tuple(seed_entry.position))
 

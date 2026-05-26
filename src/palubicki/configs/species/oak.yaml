@@ -1,0 +1,35 @@
+# Quercus robur — dense, étalé, ramure tortueuse
+envelope:
+  shape: half_ellipsoid
+  rx: 5.0
+  ry: 6.5
+  rz: 5.0
+  marker_count: 25000
+sim:
+  internode_length: 0.12
+  lambda_apical: 0.50
+  alpha_basipetal: 2.2
+  max_iterations: 35
+tropism:
+  w_gravity: 0.25
+  w_phototropism: 0.35
+  w_direction_inertia: 0.5
+phyllotaxy:
+  mode: alternate
+  divergence_angle_deg: 137.5
+  branch_angle_deg: 55
+shedding:
+  quality_threshold: 0.15
+light:
+  enabled: true
+  k_absorption: 0.55
+geom:
+  ring_sides: 10
+  pipe_exponent: 2.55
+  bark_color: [0.32, 0.22, 0.14]
+  bark_texture: "proc:oak_bark"
+  leaf_texture: "proc:oak_leaf"
+  leaf_size: 0.10
+  leaf_cluster_count: 1
+  leaf_aspect: 1.0
+  leaf_splay_deg: 0

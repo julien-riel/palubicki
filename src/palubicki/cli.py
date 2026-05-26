@@ -11,7 +11,7 @@ import yaml
 
 from palubicki.config import (
     Config, ConfigError, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig, load_config,
+    SheddingConfig, SimConfig, TropismConfig, _list_species, _load_packaged_species, load_config,
 )
 from palubicki.export.gltf import ExportError, write_glb
 from palubicki.geom.builder import build_mesh
@@ -67,7 +67,15 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--light-res", type=int, default=None,
                    help="Light grid resolution N → N×N×N cells (default 64)")
 
-    sub.add_parser("dump-defaults", help="Print full default config as YAML")
+    species_choices = _list_species()
+    g.add_argument("--species",
+                   choices=species_choices if species_choices else None,
+                   default=None,
+                   help=f"Load a packaged species preset (choices: {', '.join(species_choices) if species_choices else 'none'})")
+
+    dd = sub.add_parser("dump-defaults", help="Print full default config as YAML")
+    dd.add_argument("--species", default=None,
+                    help="Print the packaged preset for this species instead of generic defaults")
 
     dc = sub.add_parser("dump-config", help="Extract config embedded in a .glb")
     dc.add_argument("glb_path", type=Path)
@@ -124,7 +132,12 @@ def _cmd_generate(args) -> int:
         overrides["light.grid_resolution"] = [args.light_res, args.light_res, args.light_res]
 
     try:
-        cfg = load_config(yaml_path=args.config, cli_overrides=overrides, output=args.output)
+        cfg = load_config(
+            yaml_path=args.config,
+            cli_overrides=overrides,
+            output=args.output,
+            species=args.species,
+        )
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
         return 2
@@ -202,7 +215,16 @@ def _cmd_forest(args) -> int:
     return 0
 
 
-def _cmd_dump_defaults(_args) -> int:
+def _cmd_dump_defaults(args) -> int:
+    if args.species is not None:
+        try:
+            data = _load_packaged_species(args.species)
+        except ConfigError as e:
+            print(f"config error: {e}", file=sys.stderr)
+            return 2
+        yaml.safe_dump(data, sys.stdout, sort_keys=False)
+        return 0
+
     default = Config(
         envelope=EnvelopeConfig(),
         sim=SimConfig(),
