@@ -31,6 +31,37 @@ palubicki generate -o tree.glb --config my-config.yaml
 palubicki dump-config tree.glb > used.yaml
 ```
 
+### Preview — render a `.glb` to PNG
+
+For quick visual iteration without an external glTF viewer:
+
+```bash
+# Install the optional render extra (matplotlib)
+pip install -e ".[render]"
+
+# Default: 800x800 white background
+palubicki preview tree.glb -o tree.png
+
+# Custom view angle and size
+palubicki preview tree.glb -o tree.png --size 1200x900 --elevation 15 --azimuth 60
+
+# Transparent background, no leaves (silhouette of bark only)
+palubicki preview forest.glb -o forest.png --bg transparent --no-leaves
+```
+
+The renderer is **diagnostic level**: silhouette + flat Lambert shading + base
+material colors. No textures, no shadows, no anti-aliasing tricks. It exists
+so that iterating on configs and species presets doesn't require opening every
+`.glb` in an external viewer.
+
+In notebooks, use the underlying API directly:
+
+```python
+from palubicki.render import render_glb
+import matplotlib.pyplot as plt
+plt.imshow(render_glb("oak.glb"))
+```
+
 ### V2 — voxel light shadowing (BHls hybrid)
 
 Enable with `--light-enabled`. The bud's quality becomes

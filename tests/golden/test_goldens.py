@@ -58,7 +58,7 @@ def _cfg_ellipsoid_light(out: Path) -> Config:
     )
 
 
-def test_golden_ellipsoid(tmp_path, update_goldens):
+def test_golden_ellipsoid(tmp_path, update_goldens, render_on_fail):
     cfg = _cfg_ellipsoid(tmp_path / "g.glb")
     tree = simulate(cfg)
     mesh = build_mesh(tree, cfg)
@@ -72,9 +72,22 @@ def test_golden_ellipsoid(tmp_path, update_goldens):
         golden.write_text(h)
         pytest.skip("golden written; re-run without --update-goldens to verify")
     expected = golden.read_text().strip()
+
+    if h != expected and render_on_fail:
+        diff_dir = tmp_path / "diff"
+        diff_dir.mkdir(exist_ok=True)
+        try:
+            from palubicki.render import render_mesh, save_png
+            save_png(render_mesh(mesh, size=(600, 600)), diff_dir / "actual.png")
+            extra = f"\n  rendered actual to: {diff_dir / 'actual.png'}"
+        except Exception as e:  # render is best-effort, never block the assert
+            extra = f"\n  (render-on-fail unavailable: {e})"
+    else:
+        extra = ""
+
     assert h == expected, (
         f"golden mismatch.\nexpected: {expected}\nactual:   {h}\n"
-        f"if intentional, re-run with --update-goldens after visual review"
+        f"if intentional, re-run with --update-goldens after visual review{extra}"
     )
 
 
