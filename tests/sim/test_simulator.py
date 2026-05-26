@@ -238,3 +238,42 @@ def test_simulator_light_reproducible():
     t1 = simulate(Config(**base))
     t2 = simulate(Config(**base))
     assert pos_hash(t1) == pos_hash(t2)
+
+
+def test_simulate_v2_bit_exact_after_refactor(tmp_path):
+    """After refactor: simulate(cfg) with empty forest must produce the same Tree as
+    a hash-pinned baseline. The baseline is recomputed once and saved in the test."""
+    import hashlib
+    import json
+    from palubicki.config import (
+        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
+        SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=3, ry=5, rz=3, shape="ellipsoid", marker_count=5000),
+        sim=SimConfig(max_iterations=10),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        light=LightConfig(),
+        output=tmp_path / "x.glb",
+        seed=42,
+    )
+    tree = simulate(cfg)
+    positions = []
+    stack = [tree.root]
+    while stack:
+        node = stack.pop()
+        positions.append(tuple(node.position.tolist()))
+        for iod in node.children_internodes:
+            stack.append(iod.child_node)
+    digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
+    # This hash is pinned by running ONCE against the V2 code, before refactor.
+    # If the hash changes, the refactor broke bit-exactness — investigate.
+    EXPECTED = "aeac979ef2bafa69b40d74bfdda47c07afdaa7178b94163f85973b66b91a2c9c"
+    assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
+    # Side-effect: print so we can copy the value if needed
+    print(f"V2 hash: {digest}")
