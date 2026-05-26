@@ -4,6 +4,7 @@ import hashlib
 import io
 import math
 import random
+from collections.abc import Callable
 
 from PIL import Image, ImageDraw
 
@@ -51,12 +52,13 @@ def oak_bark_png(size: int = 256) -> bytes:
         x0 = rng.randint(0, size)
         amp = rng.uniform(2.0, 6.0)
         phase = rng.uniform(0, math.tau)
+        width = rng.randint(2, 4)
         for tile_dx in (0, size):
             pts = []
             for y in range(0, size + 1, 4):
                 x = x0 + tile_dx + amp * math.sin(phase + y * 0.05)
                 pts.append((x, y))
-            draw.line(pts, fill=(35, 25, 18), width=rng.randint(2, 4))
+            draw.line(pts, fill=(35, 25, 18), width=width)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -150,7 +152,7 @@ def pine_needle_png(size: int = 128) -> bytes:
     bot = int(size * 0.95)
     draw.rectangle((cx - w, top, cx + w, bot), fill=(40, 80, 35, 255))
     draw.ellipse((cx - w, top - w, cx + w, top + w), fill=(40, 80, 35, 255))
-    draw.polygon([(cx - w, bot), (cx + w, bot), (cx, bot + w * 2)], fill=(40, 80, 35, 255))
+    draw.polygon([(cx - w, bot), (cx + w, bot), (cx, min(bot + w * 2, size - 1))], fill=(40, 80, 35, 255))
     draw.line((cx, top, cx, bot), fill=(70, 110, 55, 200), width=1)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -191,7 +193,7 @@ def birch_leaf_png(size: int = 128) -> bytes:
 
 # ---------- REGISTRY ----------
 
-_PROC_TEXTURES: dict[str, callable] = {
+_PROC_TEXTURES: dict[str, Callable[..., bytes]] = {
     "oak_bark": oak_bark_png,
     "pine_bark": pine_bark_png,
     "birch_bark": birch_bark_png,
