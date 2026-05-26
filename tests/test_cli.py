@@ -78,3 +78,26 @@ def test_dump_defaults_includes_light():
     assert "light" in data
     assert data["light"]["enabled"] is False
     assert data["light"]["n_rays"] == 16
+
+
+def test_cli_forest_subcommand_generates_glb(tmp_path):
+    from palubicki.cli import main
+    output = tmp_path / "scene.glb"
+    code = main([
+        "forest",
+        "-o", str(output),
+        "--config", "tests/fixtures/forest_minimal.yaml",
+    ])
+    assert code == 0
+    assert output.exists()
+    assert output.stat().st_size > 0
+
+
+def test_cli_forest_help_returns_zero():
+    import subprocess
+    import sys
+    result = subprocess.run(
+        [sys.executable, "-m", "palubicki", "forest", "--help"],
+        capture_output=True,
+    )
+    assert result.returncode == 0
