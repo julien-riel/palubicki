@@ -53,3 +53,41 @@ def test_per_tree_config_does_not_mutate_input():
     _ = per_tree_config(cfg, seed, tree_index=0)
     assert cfg.envelope.center == (0.0, 0.0, 0.0)   # original untouched
     assert cfg.sim.r_perception == 0.6
+
+
+from palubicki.config import ObstacleAABB
+from palubicki.sim.forest import forest_light_bounds
+from palubicki.sim.obstacles import AABBObstacle
+
+
+def test_forest_light_bounds_single_envelope_no_obstacle():
+    env = EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, center=(0.0, 0.0, 0.0), shape="ellipsoid")
+    origin, size = forest_light_bounds([env], obstacles=[])
+    # Envelope AABB: x ∈ ±2, y ∈ ±3, z ∈ ±2
+    # 10% pad below/above on x,z → factor 1.2; 10% below + 30% above on y → factor 1.4
+    extent = np.array([4.0, 6.0, 4.0])
+    expected_origin = np.array([-2.0, -3.0, -2.0]) - 0.1 * extent
+    np.testing.assert_allclose(origin, expected_origin)
+    expected_size = extent + np.array([0.2 * 4.0, 0.4 * 6.0, 0.2 * 4.0])
+    np.testing.assert_allclose(size, expected_size)
+
+
+def test_forest_light_bounds_multi_envelope_union():
+    env_a = EnvelopeConfig(rx=1.0, ry=1.0, rz=1.0, center=(0.0, 0.0, 0.0), shape="ellipsoid")
+    env_b = EnvelopeConfig(rx=1.0, ry=1.0, rz=1.0, center=(5.0, 0.0, 0.0), shape="ellipsoid")
+    origin, size = forest_light_bounds([env_a, env_b], obstacles=[])
+    # AABB union spans x in [-1, 6], y in [-1, 1], z in [-1, 1]
+    extent = np.array([7.0, 2.0, 2.0])
+    expected_origin = np.array([-1.0, -1.0, -1.0]) - 0.1 * extent
+    np.testing.assert_allclose(origin, expected_origin)
+    np.testing.assert_allclose(size, extent + np.array([0.2 * 7.0, 0.4 * 2.0, 0.2 * 2.0]))
+
+
+def test_forest_light_bounds_with_obstacle_extends_aabb():
+    env = EnvelopeConfig(rx=1.0, ry=1.0, rz=1.0, center=(0.0, 0.0, 0.0), shape="ellipsoid")
+    obstacle = AABBObstacle(ObstacleAABB(min=(10.0, -2.0, -2.0), max=(12.0, 0.0, 2.0)))
+    origin, size = forest_light_bounds([env], obstacles=[obstacle])
+    # Union AABB: x in [-1, 12], y in [-2, 1], z in [-2, 2]
+    extent = np.array([13.0, 3.0, 4.0])
+    expected_origin = np.array([-1.0, -2.0, -2.0]) - 0.1 * extent
+    np.testing.assert_allclose(origin, expected_origin)
