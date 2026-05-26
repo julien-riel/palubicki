@@ -120,10 +120,17 @@ def test_shade_clamps_to_color():
 
 def test_shade_normalizes_non_unit_light_dir():
     """_shade must normalize light_dir internally so that a non-unit vector
-    yields the same result as its unit counterpart."""
+    yields the same result as its unit counterpart.
+
+    Uses an oblique unit-length normal (so intensity < 1 with normalization)
+    and sub-unit colors (so the final clip doesn't saturate) — otherwise the
+    test is a tautology because intensity > 1 gets clipped to 1.
+    """
     from palubicki.render.renderer import _shade
-    normals = np.array([[0, 1, 0]], dtype=np.float32)
-    colors = np.array([[1, 1, 1]], dtype=np.float32)
+    # Oblique unit-length normal: 45° to the vertical
+    s = float(np.sqrt(0.5))
+    normals = np.array([[0, s, s]], dtype=np.float32)
+    colors = np.array([[0.5, 0.5, 0.5]], dtype=np.float32)
     unit_result = _shade(normals, colors, (0, -1, 0))
     nonunit_result = _shade(normals, colors, (0, -5, 0))
     np.testing.assert_allclose(unit_result, nonunit_result, atol=1e-5)
