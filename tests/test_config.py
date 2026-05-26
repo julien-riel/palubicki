@@ -143,3 +143,38 @@ def test_light_config_validation_rejects_zero_light_direction(tmp_path):
             light=LightConfig(light_direction=(0.0, 0.0, 0.0)),
             output=tmp_path / "x.glb",
         )
+
+
+def test_obstacle_aabb_defaults():
+    from palubicki.config import ObstacleAABB
+    o = ObstacleAABB()
+    assert o.kind == "aabb"
+    assert o.min == (0.0, 0.0, 0.0)
+    assert o.max == (1.0, 1.0, 1.0)
+
+
+def test_obstacle_sphere_defaults():
+    from palubicki.config import ObstacleSphere
+    o = ObstacleSphere()
+    assert o.kind == "sphere"
+    assert o.center == (0.0, 0.0, 0.0)
+    assert o.radius == 1.0
+
+
+def test_obstacle_obb_defaults():
+    from palubicki.config import ObstacleOBB
+    o = ObstacleOBB()
+    assert o.kind == "obb"
+    assert o.center == (0.0, 0.0, 0.0)
+    assert o.half_extents == (1.0, 1.0, 1.0)
+    assert o.axes == (1, 0, 0, 0, 1, 0, 0, 0, 1)
+
+
+def test_obstacle_mesh_defaults():
+    from palubicki.config import ObstacleMesh
+    from pathlib import Path
+    o = ObstacleMesh(path=Path("foo.obj"))
+    assert o.kind == "mesh"
+    assert o.path == Path("foo.obj")
+    assert o.translate == (0.0, 0.0, 0.0)
+    assert o.scale == 1.0

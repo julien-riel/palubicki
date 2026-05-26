@@ -81,6 +81,36 @@ class LightConfig:
 
 
 @dataclass(frozen=True)
+class ObstacleAABB:
+    kind: Literal["aabb"] = "aabb"
+    min: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    max: tuple[float, float, float] = (1.0, 1.0, 1.0)
+
+
+@dataclass(frozen=True)
+class ObstacleSphere:
+    kind: Literal["sphere"] = "sphere"
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    radius: float = 1.0
+
+
+@dataclass(frozen=True)
+class ObstacleOBB:
+    kind: Literal["obb"] = "obb"
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    half_extents: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    axes: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+
+
+@dataclass(frozen=True)
+class ObstacleMesh:
+    kind: Literal["mesh"] = "mesh"
+    path: Path = field(default_factory=lambda: Path("obstacle.obj"))
+    translate: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    scale: float = 1.0
+
+
+@dataclass(frozen=True)
 class Config:
     envelope: EnvelopeConfig
     sim: SimConfig
