@@ -16,4 +16,10 @@ class RenderDependencyError(RenderError):
     """Raised when an optional dep (matplotlib) is missing."""
 
 
-__all__ = ["RenderError", "RenderDependencyError"]
+def render_mesh(mesh, **kwargs):
+    """See palubicki.render.renderer.render_mesh."""
+    from palubicki.render.renderer import render_mesh as _impl
+    return _impl(mesh, **kwargs)
+
+
+__all__ = ["RenderError", "RenderDependencyError", "render_mesh"]

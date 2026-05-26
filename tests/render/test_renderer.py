@@ -134,3 +134,65 @@ def test_shade_normalizes_non_unit_light_dir():
     unit_result = _shade(normals, colors, (0, -1, 0))
     nonunit_result = _shade(normals, colors, (0, -5, 0))
     np.testing.assert_allclose(unit_result, nonunit_result, atol=1e-5)
+
+
+def test_render_mesh_returns_rgba_uint8_array():
+    from palubicki.render import render_mesh
+    p = _mk_prim(
+        positions=[(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+        normals=[(0, 0, 1)] * 3,
+        indices=[0, 1, 2],
+    )
+    img = render_mesh(Mesh(primitives=[p]), size=(200, 150))
+    assert img.dtype == np.uint8
+    assert img.ndim == 3
+    assert img.shape[2] == 4                       # RGBA
+    # Size is "best effort" due to bbox_inches='tight' — allow ±60px.
+    assert abs(img.shape[1] - 200) < 60
+    assert abs(img.shape[0] - 150) < 60
+
+
+def test_render_mesh_rejects_empty_mesh():
+    from palubicki.render import RenderError, render_mesh
+    with pytest.raises(RenderError, match="no triangles"):
+        render_mesh(Mesh(primitives=[]))
+
+
+def test_render_mesh_rejects_degenerate_mesh():
+    from palubicki.render import RenderError, render_mesh
+    p = _mk_prim(
+        positions=[(0, 0, 0), (0, 0, 0), (0, 0, 0)],
+        normals=[(0, 0, 1)] * 3,
+        indices=[0, 1, 2],
+    )
+    with pytest.raises(RenderError, match="degenerate"):
+        render_mesh(Mesh(primitives=[p]))
+
+
+def test_render_mesh_rejects_absurd_size():
+    from palubicki.render import render_mesh
+    p = _mk_prim(
+        positions=[(0, 0, 0), (1, 0, 0), (0, 1, 0)],
+        normals=[(0, 0, 1)] * 3,
+        indices=[0, 1, 2],
+    )
+    with pytest.raises(ValueError, match="size"):
+        render_mesh(Mesh(primitives=[p]), size=(-1, 100))
+    with pytest.raises(ValueError, match="size"):
+        render_mesh(Mesh(primitives=[p]), size=(100_000, 100_000))
+
+
+def test_render_mesh_produces_non_background_pixels():
+    """Smoke check: rendering something on a white bg yields some non-white pixels."""
+    from palubicki.render import render_mesh
+    p = _mk_prim(
+        positions=[(-1, -1, 0), (1, -1, 0), (0, 1, 0)],
+        normals=[(0, 0, 1)] * 3,
+        indices=[0, 1, 2],
+        rgb=(0.2, 0.6, 0.3),
+    )
+    img = render_mesh(Mesh(primitives=[p]), size=(300, 300))
+    # Pixel is "non-background" if any channel differs from white by > 8/255.
+    delta = np.abs(img[:, :, :3].astype(int) - 255).max(axis=2)
+    nonbg_ratio = (delta > 8).mean()
+    assert nonbg_ratio > 0.005, f"expected >0.5% non-bg pixels, got {nonbg_ratio:.4%}"
