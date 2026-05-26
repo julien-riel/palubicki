@@ -53,8 +53,7 @@ class AABBObstacle:
         return self._min.copy(), self._max.copy()
 
     def voxelize(self, grid) -> np.ndarray:
-        # Implemented in Task 13.
-        raise NotImplementedError("voxelize: implemented in Task 13")
+        return _voxelize_via_centers(grid, self.contains)
 
 
 class SphereObstacle:
@@ -94,7 +93,7 @@ class SphereObstacle:
         return self._center - r, self._center + r
 
     def voxelize(self, grid) -> np.ndarray:
-        raise NotImplementedError("voxelize: implemented in Task 13")
+        return _voxelize_via_centers(grid, self.contains)
 
 
 class OBBObstacle:
@@ -147,7 +146,7 @@ class OBBObstacle:
         return self._center - extent, self._center + extent
 
     def voxelize(self, grid) -> np.ndarray:
-        raise NotImplementedError("voxelize: implemented in Task 13")
+        return _voxelize_via_centers(grid, self.contains)
 
 
 class MeshObstacle:
@@ -200,7 +199,7 @@ class MeshObstacle:
         return bb[0].astype(np.float64), bb[1].astype(np.float64)
 
     def voxelize(self, grid) -> np.ndarray:
-        raise NotImplementedError("voxelize: implemented in Task 13")
+        return _voxelize_via_centers(grid, self.contains)
 
     @property
     def trimesh(self):
@@ -251,3 +250,18 @@ def any_contains(point: np.ndarray, obstacles: list) -> bool:
         if bool(o.contains(pts)[0]):
             return True
     return False
+
+
+def _voxelize_via_centers(grid, contains_callable) -> np.ndarray:
+    """Generic voxelization: build the array of cell centers, query contains(), reshape."""
+    nx, ny, nz = grid.resolution
+    i_idx = np.arange(nx)
+    j_idx = np.arange(ny)
+    k_idx = np.arange(nz)
+    ii, jj, kk = np.meshgrid(i_idx, j_idx, k_idx, indexing="ij")
+    centers = (grid.origin
+               + (np.stack([ii, jj, kk], axis=-1).astype(np.float64) + 0.5)
+               * grid.cell_size)   # (nx, ny, nz, 3)
+    flat = centers.reshape(-1, 3)
+    inside = contains_callable(flat)
+    return inside.reshape(nx, ny, nz)
