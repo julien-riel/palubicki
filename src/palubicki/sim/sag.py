@@ -6,11 +6,15 @@ topology stays untouched; only node positions move.
 
 For each internode (parent → child) walked in pre-order:
   1. Compute the bending angle:
-        bend = clamp(k * load_above(child) / max(diameter², eps), 0, max_bend)
-     load_above = wood volume of subtree at child (mass per unit length absorbed
-     into the gain k).
-  2. Choose the rotation axis: ``(internode_direction × gravity_dir).normalize``.
-     This is the horizontal axis lying in the (internode, gravity) plane, around
+        bend = clamp(k * load * sin(θ) / max(diameter², eps), 0, max_bend)
+     where ``load`` is the wood volume of the internode itself plus everything
+     in the child's subtree (the mass hanging off the proximal joint), and
+     ``sin(θ) = |direction × gravity_dir|`` is the perpendicular component of
+     gravity relative to the internode (a horizontal branch sees the full
+     moment; a vertical branch sees none). Mass per unit length is absorbed
+     into the gain ``k``.
+  2. Choose the rotation axis: ``(direction × gravity_dir).normalize``. This
+     is the horizontal axis lying in the (direction, gravity) plane, around
      which a positive rotation bends the internode toward gravity.
   3. Build the Rodrigues rotation matrix R for ``bend`` around that axis.
   4. Apply R to every descendant of the parent (the entire subtree past this
@@ -27,7 +31,7 @@ import math
 import numpy as np
 
 from palubicki.config import SagConfig
-from palubicki.sim.tree import BudState, Internode, Node, Tree
+from palubicki.sim.tree import Node, Tree
 
 
 def apply_sag(tree: Tree, cfg: SagConfig) -> None:
@@ -48,23 +52,14 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
     rigid_order = int(cfg.rigid_axis_order)
     k = float(cfg.k)
 
-    load_above = _compute_load_above(tree)
-
-    # Pre-order: parents are processed before children, so when we rotate a
-    # child's joint we use the already-bent parent position.
-    # We also need the axis_order of each internode. The internode's axis_order
-    # equals its child_node's "branching depth" — use the terminal_bud's
-    # axis_order if present, else propagate from parent.
-    iod_order: dict[int, int] = {}
+    load_below = _compute_load_below(tree)
 
     stack: list[tuple[Node, int]] = [(tree.root, 0)]
     while stack:
         parent, parent_order = stack.pop()
         for iod in parent.children_internodes:
             child = iod.child_node
-            # axis_order: laterals bump the order, main axis keeps it.
             child_order = parent_order if iod.is_main_axis else parent_order + 1
-            iod_order[id(iod)] = child_order
 
             if child_order < rigid_order:
                 stack.append((child, child_order))
@@ -77,19 +72,25 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
                 continue
             direction = old_vec / seg_len
 
-            # Rotation axis = direction × gravity (horizontal, in the
-            # (direction, gravity) plane). If direction is parallel to g
-            # (e.g. trunk pointing straight up with g=down), no sag possible.
-            axis = np.cross(direction, g)
-            axis_norm = float(np.linalg.norm(axis))
-            if axis_norm < 1e-9:
+            cross = np.cross(direction, g)
+            sin_theta = float(np.linalg.norm(cross))
+            if sin_theta < 1e-9:
                 stack.append((child, child_order))
                 continue
-            axis = axis / axis_norm
+            axis = cross / sin_theta
 
             diameter = max(float(iod.diameter), 1e-4)
-            load = float(load_above.get(id(child), 0.0))
-            bend = k * load / (diameter * diameter)
+            # Load = weight hanging off the joint at parent: the iod itself
+            # (uniformly distributed mass) plus everything below child. Without
+            # the iod's own weight, single-segment laterals and tip internodes
+            # never droop (load_below[tip] = 0).
+            r_iod = 0.5 * float(iod.diameter)
+            iod_vol = math.pi * r_iod * r_iod * float(iod.length)
+            load = iod_vol + float(load_below.get(id(child), 0.0))
+            # sin_theta scales the perpendicular gravity component: horizontal
+            # branches see the full bending moment, near-vertical branches see
+            # almost none (smooth transition to the parallel case above).
+            bend = k * load * sin_theta / (diameter * diameter)
             if bend > max_bend_rad:
                 bend = max_bend_rad
             if bend <= 0.0:
@@ -101,9 +102,11 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
             stack.append((child, child_order))
 
 
-def _compute_load_above(tree: Tree) -> dict[int, float]:
-    """Wood volume carried by each node's subtree (including the internode
-    leading to it). Keyed by id(node). Iterative post-order."""
+def _compute_load_below(tree: Tree) -> dict[int, float]:
+    """Wood volume in each node's subtree (sum of every internode growing out
+    of it, recursively). Excludes the iod that leads INTO the node — callers
+    that need that contribution add it inline. Keyed by id(node). Iterative
+    post-order."""
     order: list[Node] = []
     stack: list[Node] = [tree.root]
     while stack:

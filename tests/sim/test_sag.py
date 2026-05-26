@@ -91,6 +91,67 @@ def test_rigid_axis_order_protects_trunk():
     np.testing.assert_array_equal(tree.root.children_internodes[0].child_node.position, np.array([1.0, 0.0, 0.0]))
 
 
+def test_single_segment_lateral_droops():
+    """A single-segment lateral (one iod, no subtree below) must still droop
+    under its own weight. Previously the load excluded the iod itself, so
+    load_below[tip] = 0 and the segment didn't move at all."""
+    nodes = [Node(position=np.array([0.0, 0.0, 0.0])),
+             Node(position=np.array([0.0, 1.0, 0.0]))]
+    trunk = nodes[1]
+    lateral = Node(position=np.array([1.0, 1.0, 0.0]))
+    tree = Tree(root=nodes[0])
+    # Trunk iod (main axis, order 0 — rigid).
+    trunk_iod = Internode(parent_node=nodes[0], child_node=trunk, length=1.0,
+                          is_main_axis=True, diameter=0.10)
+    nodes[0].children_internodes.append(trunk_iod)
+    trunk.parent_internode = trunk_iod
+    tree.all_internodes.append(trunk_iod)
+    # Single-segment horizontal lateral (order 1).
+    lat_iod = Internode(parent_node=trunk, child_node=lateral, length=1.0,
+                        is_main_axis=False, diameter=0.05)
+    trunk.children_internodes.append(lat_iod)
+    lateral.parent_internode = lat_iod
+    tree.all_internodes.append(lat_iod)
+
+    apply_sag(tree, SagConfig(enabled=True, k=10.0, max_bend_deg=30.0,
+                              rigid_axis_order=1))
+    # Lateral tip must have moved downward — the iod's own weight is the load.
+    assert lateral.position[1] < 0.99
+
+
+def test_near_vertical_branch_sags_less_than_horizontal():
+    """Bend scales by sin(angle between direction and gravity). A branch tilted
+    only 10° off vertical should sag dramatically less than a horizontal one
+    with the same load and diameter."""
+    # Use k small enough that neither case hits the max-bend cap (otherwise
+    # both would bend by the same capped angle and the sin(θ) scaling becomes
+    # invisible).
+    horiz = _chain_tree(
+        [np.array([0.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0])],
+        [0.05],
+    )
+    apply_sag(horiz, SagConfig(enabled=True, k=0.5, max_bend_deg=45.0,
+                               rigid_axis_order=0))
+    horiz_drop = -float(horiz.root.children_internodes[0].child_node.position[1])
+
+    # Nearly vertical: 10° from vertical → sin(10°) ≈ 0.174 of horizontal.
+    near_vert_dir = np.array([math.sin(math.radians(10.0)),
+                              math.cos(math.radians(10.0)), 0.0])
+    near = _chain_tree(
+        [np.array([0.0, 0.0, 0.0]), near_vert_dir.copy()],
+        [0.05],
+    )
+    apply_sag(near, SagConfig(enabled=True, k=0.5, max_bend_deg=45.0,
+                              rigid_axis_order=0))
+    near_tip = near.root.children_internodes[0].child_node.position
+    near_drop = float(near_vert_dir[1] - near_tip[1])
+
+    assert horiz_drop > 0.0
+    assert near_drop > 0.0
+    # Strict: vertical-ish branch should drop much less than horizontal.
+    assert near_drop < horiz_drop * 0.5
+
+
 def test_max_bend_caps_thin_tip_runaway():
     """A tiny-diameter internode with huge load would otherwise bend wildly; max_bend caps it."""
     positions = [
