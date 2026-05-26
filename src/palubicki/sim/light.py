@@ -110,6 +110,50 @@ class LightGrid:
                 continue
             self.lai[cell] += leaf_lai
 
+    def rebuild_from_forest(
+        self,
+        forest,
+        cfg: LightConfig,
+        *,
+        r_tip: float | None = None,
+        exponent: float | None = None,
+    ) -> None:
+        """Full rebuild for a forest. Zero LAI → inject leaves+internodes per tree →
+        apply obstacle mask (lai[mask] = LAI_OPAQUE)."""
+        from palubicki.sim.obstacles import LAI_OPAQUE
+
+        self.lai.fill(0.0)
+        cell_volume = float(np.prod(self.cell_size))
+        if cell_volume <= 0:
+            if forest.obstacle_voxel_mask is not None:
+                self.lai[forest.obstacle_voxel_mask] = np.float32(LAI_OPAQUE)
+            return
+
+        leaf_lai = cfg.leaf_area / cell_volume
+        sub_step = float(np.min(self.cell_size))
+
+        for tree in forest.trees:
+            if r_tip is not None and exponent is not None:
+                compute_radii(tree, r_tip=r_tip, exponent=exponent)
+            stack = [tree.root]
+            while stack:
+                node = stack.pop()
+                for child_iod in node.children_internodes:
+                    stack.append(child_iod.child_node)
+                    self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
+                bud = node.terminal_bud
+                if bud is None or bud.state == BudState.DEAD:
+                    continue
+                if node.children_internodes:
+                    continue
+                cell = self.world_to_cell(bud.position)
+                if cell is None:
+                    continue
+                self.lai[cell] += leaf_lai
+
+        if forest.obstacle_voxel_mask is not None:
+            self.lai[forest.obstacle_voxel_mask] = np.float32(LAI_OPAQUE)
+
     def sample_transmission(self, p: np.ndarray, direction: np.ndarray, *, k: float) -> float:
         """Ray-march Beer-Lambert from p along direction. Returns T = exp(-Σ k·LAI·step)."""
         d_norm = float(np.linalg.norm(direction))

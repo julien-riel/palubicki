@@ -417,3 +417,92 @@ def test_sample_hemisphere_gradient_points_to_open_side():
     # The bud sits at x=5 which is at the boundary; rays toward +x see less LAI.
     # Gradient.x should be positive (toward open side).
     assert grad[0] > 0.0
+
+
+def test_rebuild_from_forest_two_trees_lai_sums():
+    """LAI from a forest of 2 trees = sum of per-tree LAI (when injected at the
+    same cells; we make this trivial by giving each tree a single leaf at a
+    distinct cell)."""
+    from palubicki.config import (
+        EnvelopeConfig, ForestConfig, ForestSeed, LightConfig,
+    )
+    from palubicki.sim.forest import build_forest
+    from palubicki.sim.light import LightGrid
+    from palubicki.sim.tree import Bud, BudState, Node, Tree
+
+    # Build a forest manually: 2 trees, each with a single terminal-bud leaf
+    # at a known position.
+    env = EnvelopeConfig(rx=1, ry=1, rz=1)
+    light_cfg = LightConfig(
+        enabled=True, grid_origin=(0, 0, 0), grid_size=(2, 2, 2),
+        grid_resolution=(2, 2, 2), leaf_area=0.04, internode_area_scale=0.0,
+    )
+    grid = LightGrid.from_config(light_cfg, env)
+
+    # Two trees, each at a separate position, both contributing one leaf
+    root_a = Node(position=np.array([0.5, 0.5, 0.5]))
+    bud_a = Bud(position=root_a.position.copy(), direction=np.array([0, 1, 0]),
+                axis_order=0, parent_node=root_a)
+    root_a.terminal_bud = bud_a
+    tree_a = Tree(root=root_a, active_buds=[bud_a])
+
+    root_b = Node(position=np.array([1.5, 0.5, 0.5]))
+    bud_b = Bud(position=root_b.position.copy(), direction=np.array([0, 1, 0]),
+                axis_order=0, parent_node=root_b)
+    root_b.terminal_bud = bud_b
+    tree_b = Tree(root=root_b, active_buds=[bud_b])
+
+    from palubicki.sim.forest import Forest
+    forest = Forest(
+        trees=[tree_a, tree_b],
+        seeds=[],
+        obstacles=[],
+        per_tree_cfgs=[],
+        markers=None,   # type: ignore[arg-type]
+    )
+
+    grid.rebuild_from_forest(forest, light_cfg, r_tip=0.005, exponent=2.49)
+
+    cell_volume = float(np.prod(grid.cell_size))
+    expected_lai = light_cfg.leaf_area / cell_volume
+    # Cell (0,0,0) holds tree_a's leaf; cell (1,0,0) holds tree_b's leaf
+    assert grid.lai[0, 0, 0] == np.float32(expected_lai)
+    assert grid.lai[1, 0, 0] == np.float32(expected_lai)
+
+
+def test_rebuild_from_forest_applies_obstacle_mask():
+    from palubicki.config import (
+        EnvelopeConfig, ForestConfig, ForestSeed, LightConfig, ObstacleAABB,
+    )
+    from palubicki.sim.forest import build_forest
+    from palubicki.sim.light import LightGrid
+    from palubicki.sim.obstacles import LAI_OPAQUE
+
+    env = EnvelopeConfig()
+    light_cfg = LightConfig(
+        enabled=True, grid_origin=(0, 0, 0), grid_size=(4, 4, 4),
+        grid_resolution=(4, 4, 4),
+    )
+    grid = LightGrid.from_config(light_cfg, env)
+
+    # Build a minimal forest with an obstacle and a precomputed mask
+    from palubicki.sim.obstacles import AABBObstacle
+    obstacle = AABBObstacle(ObstacleAABB(min=(0.0, 0.0, 0.0), max=(2.0, 2.0, 2.0)))
+    mask = obstacle.voxelize(grid)
+    assert mask.sum() > 0
+
+    from palubicki.sim.forest import Forest
+    forest = Forest(
+        trees=[],
+        seeds=[],
+        obstacles=[obstacle],
+        per_tree_cfgs=[],
+        markers=None,   # type: ignore[arg-type]
+        obstacle_voxel_mask=mask,
+    )
+
+    grid.rebuild_from_forest(forest, light_cfg, r_tip=0.005, exponent=2.49)
+
+    # Cells in mask should be LAI_OPAQUE; others zero
+    assert (grid.lai[mask] == np.float32(LAI_OPAQUE)).all()
+    assert (grid.lai[~mask] == np.float32(0.0)).all()
