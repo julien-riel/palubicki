@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from palubicki.config import Config
-from palubicki.geom._leaf_texture import default_leaf_png
+from palubicki.geom._textures import default_leaf_png
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.radii import compute_radii
