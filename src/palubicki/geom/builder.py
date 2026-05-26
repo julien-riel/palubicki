@@ -40,7 +40,14 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             alpha_cutoff=0.5,
             double_sided=True,
         )
-        leaf_prim = build_leaves_primitive(tree, leaf_size=cfg.geom.leaf_size, material=leaf_mat)
+        leaf_prim = build_leaves_primitive(
+            tree,
+            leaf_size=cfg.geom.leaf_size,
+            material=leaf_mat,
+            cluster_count=cfg.geom.leaf_cluster_count,
+            aspect=cfg.geom.leaf_aspect,
+            splay_deg=cfg.geom.leaf_splay_deg,
+        )
         primitives.append(leaf_prim)
 
     return Mesh(primitives=primitives)
