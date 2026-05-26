@@ -116,3 +116,14 @@ def test_shade_clamps_to_color():
     light_dir = (0, -1, 0)
     shaded = _shade(normals, colors, light_dir)
     assert shaded.max() <= 0.5 + 1e-5
+
+
+def test_shade_normalizes_non_unit_light_dir():
+    """_shade must normalize light_dir internally so that a non-unit vector
+    yields the same result as its unit counterpart."""
+    from palubicki.render.renderer import _shade
+    normals = np.array([[0, 1, 0]], dtype=np.float32)
+    colors = np.array([[1, 1, 1]], dtype=np.float32)
+    unit_result = _shade(normals, colors, (0, -1, 0))
+    nonunit_result = _shade(normals, colors, (0, -5, 0))
+    np.testing.assert_allclose(unit_result, nonunit_result, atol=1e-5)
