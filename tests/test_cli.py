@@ -146,3 +146,11 @@ def test_generate_species_creates_valid_glb(tmp_path, species):
 def test_species_unknown_exits_nonzero(tmp_path):
     res = _run("generate", "--species", "redwood", "-o", str(tmp_path / "x.glb"))
     assert res.returncode != 0
+
+
+def test_dump_defaults_species_oak_prints_preset_yaml():
+    res = _run("dump-defaults", "--species", "oak")
+    assert res.returncode == 0
+    data = yaml.safe_load(res.stdout)
+    assert data["envelope"]["shape"] == "half_ellipsoid"
+    assert data["geom"]["bark_texture"] == "proc:oak_bark"
