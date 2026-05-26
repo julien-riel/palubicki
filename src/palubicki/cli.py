@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_dump_config(args)
     if args.command == "forest":
         return _cmd_forest(args)
+    if args.command == "preview":
+        return _cmd_preview(args)
 
     parser.print_help()
     return 1
@@ -88,7 +90,54 @@ def _build_parser() -> argparse.ArgumentParser:
     fst.add_argument("--validate", action="store_true")
     fst.add_argument("--save-config", type=Path, default=None)
 
+    pv = sub.add_parser("preview", help="Render a .glb to a diagnostic PNG")
+    pv.add_argument("glb_path", type=Path)
+    pv.add_argument("-o", "--output", type=Path, required=True)
+    pv.add_argument("--size", type=_parse_size, default=(800, 800),
+                    help="Target image size as WxH (default 800x800)")
+    pv.add_argument("--elevation", type=float, default=20.0,
+                    help="Camera elevation in degrees (default 20)")
+    pv.add_argument("--azimuth", type=float, default=35.0,
+                    help="Camera azimuth in degrees (default 35)")
+    pv.add_argument("--distance", type=float, default=None,
+                    help="Camera distance (default: auto-fit)")
+    pv.add_argument("--bg", type=_parse_bg, default=(1.0, 1.0, 1.0, 1.0),
+                    help="Background: white | black | transparent (default white)")
+    pv.add_argument("--no-leaves", action="store_true",
+                    help="Filter out green-dominant primitives (leaves)")
+
     return parser
+
+
+def _parse_size(value: str) -> tuple[int, int]:
+    """Parse 'WxH' → (W, H). Raises argparse.ArgumentTypeError on garbage."""
+    parts = value.lower().split("x")
+    if len(parts) != 2 or not all(parts):
+        raise argparse.ArgumentTypeError(f"invalid --size {value!r}: expected WxH")
+    try:
+        w, h = int(parts[0]), int(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid --size {value!r}: not integers")
+    if w <= 0 or h <= 0:
+        raise argparse.ArgumentTypeError(f"--size must be positive, got {value!r}")
+    return (w, h)
+
+
+_BG_PRESETS = {
+    "white": (1.0, 1.0, 1.0, 1.0),
+    "black": (0.0, 0.0, 0.0, 1.0),
+    "transparent": (1.0, 1.0, 1.0, 0.0),
+}
+
+
+def _parse_bg(value: str) -> tuple[float, float, float, float]:
+    """Parse a --bg preset name → RGBA tuple."""
+    try:
+        return _BG_PRESETS[value]
+    except KeyError:
+        raise argparse.ArgumentTypeError(
+            f"invalid --bg {value!r}: choose from {sorted(_BG_PRESETS)}"
+        )
 
 
 def _cmd_generate(args) -> int:
@@ -212,6 +261,37 @@ def _cmd_forest(args) -> int:
         n_nodes = len(loaded.nodes)
         print(f"validated: {n_nodes} nodes", file=sys.stderr)
 
+    return 0
+
+
+def _cmd_preview(args) -> int:
+    try:
+        from palubicki.render import Camera, RenderError, render_glb, save_png
+    except ImportError:
+        print(
+            "preview error: render extra not installed. "
+            "Run: pip install -e '.[render]'",
+            file=sys.stderr,
+        )
+        return 2
+
+    cam = Camera(
+        elevation_deg=args.elevation,
+        azimuth_deg=args.azimuth,
+        distance=args.distance,
+    )
+    try:
+        img = render_glb(
+            args.glb_path,
+            size=args.size,
+            camera=cam,
+            bg=args.bg,
+            drop_leaves=args.no_leaves,
+        )
+        save_png(img, args.output)
+    except RenderError as e:
+        print(f"preview error: {e}", file=sys.stderr)
+        return 1
     return 0
 
 

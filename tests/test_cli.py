@@ -154,3 +154,56 @@ def test_dump_defaults_species_oak_prints_preset_yaml():
     data = yaml.safe_load(res.stdout)
     assert data["envelope"]["shape"] == "half_ellipsoid"
     assert data["geom"]["bark_texture"] == "proc:oak_bark"
+
+
+def test_preview_smoke(tmp_path):
+    """End-to-end: generate a .glb, then preview it to a PNG."""
+    from palubicki.cli import main
+    glb = tmp_path / "tree.glb"
+    rc = main([
+        "generate", "-o", str(glb),
+        "--seed", "7",
+        "--envelope", "ellipsoid",
+        "--envelope-radii", "0.5", "1.0", "0.5",
+        "--marker-count", "200",
+        "--iterations", "4",
+    ])
+    assert rc == 0
+    assert glb.exists()
+
+    png = tmp_path / "tree.png"
+    rc = main(["preview", str(glb), "-o", str(png), "--size", "200x200"])
+    assert rc == 0
+    assert png.exists()
+    assert png.stat().st_size > 1_000
+
+
+def test_preview_invalid_glb(tmp_path, capsys):
+    from palubicki.cli import main
+    rc = main(["preview", str(tmp_path / "missing.glb"),
+               "-o", str(tmp_path / "x.png")])
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "preview error" in err and "could not load" in err
+
+
+def test_preview_parses_size_flag(tmp_path):
+    from palubicki.cli import _parse_size
+    assert _parse_size("1200x900") == (1200, 900)
+    assert _parse_size("800x800") == (800, 800)
+
+
+def test_preview_size_flag_rejects_garbage():
+    from palubicki.cli import _parse_size
+    import argparse
+    with pytest.raises(argparse.ArgumentTypeError):
+        _parse_size("not-a-size")
+    with pytest.raises(argparse.ArgumentTypeError):
+        _parse_size("800x")
+
+
+def test_preview_parses_bg_flag():
+    from palubicki.cli import _parse_bg
+    assert _parse_bg("white") == (1.0, 1.0, 1.0, 1.0)
+    assert _parse_bg("black") == (0.0, 0.0, 0.0, 1.0)
+    assert _parse_bg("transparent") == (1.0, 1.0, 1.0, 0.0)
