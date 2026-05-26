@@ -118,6 +118,7 @@ class ObstacleMesh:
 class ForestSeed:
     position: tuple[float, float, float]
     seed: int | None = None
+    species: str | None = None
     overrides: dict = field(default_factory=dict)
 
 
@@ -334,7 +335,7 @@ def _load_obstacle(d: dict):
 def _load_forest_seed(d: dict) -> "ForestSeed":
     if not isinstance(d, dict):
         raise ConfigError(f"forest seed must be a dict, got {type(d).__name__}")
-    allowed = {"position", "seed", "overrides"}
+    allowed = {"position", "seed", "species", "overrides"}
     unknown = set(d) - allowed
     if unknown:
         raise ConfigError(f"unknown keys in forest seed: {sorted(unknown)}")
@@ -343,6 +344,7 @@ def _load_forest_seed(d: dict) -> "ForestSeed":
     return ForestSeed(
         position=tuple(d["position"]),
         seed=d.get("seed"),
+        species=d.get("species"),
         overrides=dict(d.get("overrides") or {}),
     )
 
