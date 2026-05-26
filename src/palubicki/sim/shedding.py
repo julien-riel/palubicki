@@ -2,47 +2,52 @@
 from __future__ import annotations
 
 from palubicki.config import SheddingConfig
+from palubicki.sim.bh import compute_v_subtree
 from palubicki.sim.tree import Bud, BudState, Node, Tree
 
 
-def record_qualities(tree: Tree, *, quality: dict[Bud, int]) -> None:
-    """Push subtree quality (sum of bud Q in subtree) onto each internode's history."""
-    _push(tree.root, quality)
+def record_qualities(
+    tree: Tree,
+    *,
+    quality: dict[Bud, int] | None = None,
+    v_subtree: dict[int, float] | None = None,
+) -> None:
+    """Push subtree quality (sum of bud Q in subtree) onto each internode's history.
 
-
-def _push(root: Node, quality: dict[Bud, int]) -> int:
-    """Iterative post-order: compute subtree quality and push onto parent internode."""
-    # Build post-order traversal (children before parents)
-    order: list[Node] = []
-    stack: list[Node] = [root]
-    while stack:
-        node = stack.pop()
-        order.append(node)
-        for iod in node.children_internodes:
-            stack.append(iod.child_node)
-    # order is reverse-DFS (pre-order reversed = post-order)
-    subtree_q: dict[int, int] = {}
-    for node in reversed(order):
-        total = 0
-        for bud in _node_buds(node):
-            total += quality.get(bud, 0)
-        for iod in node.children_internodes:
-            total += subtree_q.get(id(iod.child_node), 0)
-        subtree_q[id(node)] = total
-        if node.parent_internode is not None:
-            node.parent_internode.push_quality(float(total))
-    return subtree_q.get(id(root), 0)
+    Pass either ``quality`` (will compute subtree quality internally) or ``v_subtree``
+    (precomputed by ``bh.compute_v_subtree``) — the latter avoids a redundant traversal
+    when ``allocate`` already produced it.
+    """
+    if v_subtree is None:
+        if quality is None:
+            raise ValueError("record_qualities requires either quality or v_subtree")
+        v_subtree = compute_v_subtree(tree, quality)
+    for iod in tree.all_internodes:
+        iod.push_quality(float(v_subtree.get(id(iod.child_node), 0.0)))
 
 
 def shed_low_quality(tree: Tree, *, cfg: SheddingConfig) -> None:
     if not cfg.enabled:
         return
     # Walk root-down; if an internode's average quality is below threshold AND its history is full,
-    # remove its subtree.
-    _walk_and_shed(tree.root, tree, cfg)
+    # remove its subtree. Dead buds/internodes are collected in identity-keyed sets, then
+    # tree.active_buds and tree.all_internodes are filtered once at the end (O(N) instead of
+    # O(N²) when many internodes are shed in the same iteration).
+    dead_bud_ids: set[int] = set()
+    dead_iod_ids: set[int] = set()
+    _walk_and_shed(tree.root, cfg, dead_bud_ids, dead_iod_ids)
+    if dead_bud_ids:
+        tree.active_buds = [b for b in tree.active_buds if id(b) not in dead_bud_ids]
+    if dead_iod_ids:
+        tree.all_internodes = [i for i in tree.all_internodes if id(i) not in dead_iod_ids]
 
 
-def _walk_and_shed(root: Node, tree: Tree, cfg: SheddingConfig) -> None:
+def _walk_and_shed(
+    root: Node,
+    cfg: SheddingConfig,
+    dead_bud_ids: set[int],
+    dead_iod_ids: set[int],
+) -> None:
     """Iterative pre-order walk: shed low-quality subtrees."""
     stack: list[Node] = [root]
     while stack:
@@ -50,26 +55,24 @@ def _walk_and_shed(root: Node, tree: Tree, cfg: SheddingConfig) -> None:
         # iterate over a copy: we may mutate children_internodes
         for iod in list(node.children_internodes):
             if len(iod.quality_history) >= cfg.window and iod.average_quality() < cfg.quality_threshold:
-                _kill_subtree(iod.child_node, tree)
-                # Identity-based filtering (faster than list.remove and unaffected
-                # by any future __eq__ behavior on Internode/Node).
+                _kill_subtree(iod.child_node, dead_bud_ids, dead_iod_ids)
                 node.children_internodes = [i for i in node.children_internodes if i is not iod]
-                tree.all_internodes = [i for i in tree.all_internodes if i is not iod]
+                dead_iod_ids.add(id(iod))
             else:
                 stack.append(iod.child_node)
 
 
-def _kill_subtree(root: Node, tree: Tree) -> None:
-    """Iterative DFS: mark all buds DEAD and remove descendant internodes."""
+def _kill_subtree(root: Node, dead_bud_ids: set[int], dead_iod_ids: set[int]) -> None:
+    """Iterative DFS: mark all buds DEAD, collect identities of buds and internodes to remove."""
     stack: list[Node] = [root]
     while stack:
         node = stack.pop()
         for bud in _node_buds(node):
             bud.state = BudState.DEAD
-            tree.active_buds[:] = [b for b in tree.active_buds if b is not bud]
+            dead_bud_ids.add(id(bud))
         for iod in node.children_internodes:
             stack.append(iod.child_node)
-            tree.all_internodes[:] = [i for i in tree.all_internodes if i is not iod]
+            dead_iod_ids.add(id(iod))
 
 
 def _node_buds(node: Node) -> list[Bud]:

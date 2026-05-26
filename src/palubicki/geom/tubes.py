@@ -115,7 +115,7 @@ def _emit_chain_tube(
     canonical = np.array([1.0, 0.0, 0.0]) if abs(t0[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     right = canonical - np.dot(canonical, t0) * t0
     right = right / np.linalg.norm(right)
-    up = np.cross(t0, right)
+    up = _cross3(t0, right)
 
     start_vertex = len(positions)
     cum_length = 0.0
@@ -200,7 +200,7 @@ def _transport_frame(
     dot = float(np.clip(np.dot(old_t, new_t), -1.0, 1.0))
     if dot > 0.999999:
         return right, up
-    axis = np.cross(old_t, new_t)
+    axis = _cross3(old_t, new_t)
     n = np.linalg.norm(axis)
     if n < 1e-12:
         return right, up
@@ -213,4 +213,14 @@ def _transport_frame(
 
 def _rotate_vec(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
     cos_a = math.cos(angle); sin_a = math.sin(angle)
-    return (v * cos_a + np.cross(axis, v) * sin_a + axis * np.dot(axis, v) * (1 - cos_a))
+    return (v * cos_a + _cross3(axis, v) * sin_a + axis * np.dot(axis, v) * (1 - cos_a))
+
+
+def _cross3(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    # np.cross has ~25 µs overhead per call for 3-vectors due to axis handling.
+    # Inlined math drops that to ~1 µs, dominating the chain-tube build.
+    return np.array([
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ])

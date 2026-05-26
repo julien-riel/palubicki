@@ -172,15 +172,59 @@ class LightGrid:
         # Directions in world frame
         dirs = x_d[:, None] * u + y_d[:, None] * v + z_d[:, None] * w   # (n_rays, 3)
 
-        transmissions = np.empty(n_rays)
-        for i in range(n_rays):
-            transmissions[i] = self.sample_transmission(p, dirs[i], k=k)
+        transmissions = self._sample_transmission_batch(p, dirs, k=k)
 
         light_factor = float(np.mean(transmissions))
         weighted = (transmissions[:, None] * dirs).sum(axis=0)
         grad_norm = float(np.linalg.norm(weighted))
         gradient = weighted / grad_norm if grad_norm > 1e-12 else np.zeros(3)
         return light_factor, gradient
+
+    def _sample_transmission_batch(
+        self, p: np.ndarray, dirs: np.ndarray, *, k: float,
+    ) -> np.ndarray:
+        """Vectorised Beer-Lambert across rays. Bit-exact with sample_transmission per ray:
+        same float32→float64 cast on LAI, same per-ray accumulation order (step 0, 1, ...),
+        same ``(k * lai) * step_len`` multiplication order."""
+        n_rays = dirs.shape[0]
+        # Filter out zero-length directions (matches sample_transmission's 1.0 return).
+        d_norms = np.linalg.norm(dirs, axis=1)
+        out = np.ones(n_rays, dtype=np.float64)
+        active = d_norms >= 1e-12
+        if not active.any():
+            return out
+        dirs_n = np.zeros_like(dirs)
+        dirs_n[active] = dirs[active] / d_norms[active, None]
+
+        step_len = float(np.min(self.cell_size))
+        grid_diag = float(np.linalg.norm(self.cell_size * np.array(self.resolution)))
+        max_steps = int(np.ceil(grid_diag / step_len)) + 2
+
+        nx, ny, nz = self.resolution
+        n_active = int(active.sum())
+        positions = (p.astype(np.float64) + 0.5 * step_len * dirs_n[active]).copy()  # (n_active, 3)
+        step_vec = dirs_n[active] * step_len
+        optical_depth = np.zeros(n_active, dtype=np.float64)
+
+        cell_size = self.cell_size
+        origin = self.origin
+        lai = self.lai
+        for _ in range(max_steps):
+            local = positions - origin
+            cells = np.floor(local / cell_size).astype(np.intp)
+            in_grid = (
+                (cells[:, 0] >= 0) & (cells[:, 0] < nx) &
+                (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
+                (cells[:, 2] >= 0) & (cells[:, 2] < nz)
+            )
+            if in_grid.any():
+                vc = cells[in_grid]
+                lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
+                optical_depth[in_grid] += (k * lai_vals) * step_len
+            positions += step_vec
+
+        out[active] = np.exp(-optical_depth)
+        return out
 
     def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""

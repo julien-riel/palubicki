@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 from palubicki.config import Config
-from palubicki.sim.bh import allocate
+from palubicki.sim.bh import allocate, compute_v_subtree
 from palubicki.sim.envelope import sample_markers
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
@@ -70,11 +70,13 @@ def simulate(cfg: Config) -> Tree:
         else:
             quality = res.quality
 
+        v_subtree = compute_v_subtree(tree, quality)
         n_by_bud = allocate(
             tree, quality=quality,
             alpha=cfg.sim.alpha_basipetal, lambda_apical=cfg.sim.lambda_apical,
+            v_subtree=v_subtree,
         )
-        record_qualities(tree, quality=quality)
+        record_qualities(tree, v_subtree=v_subtree)
 
         new_node_positions: list[np.ndarray] = []
         new_active: list[Bud] = []

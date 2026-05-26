@@ -11,18 +11,28 @@ def allocate(
     quality: dict[Bud, int],
     alpha: float,
     lambda_apical: float,
+    v_subtree: dict[int, float] | None = None,
 ) -> dict[Bud, int]:
-    """Borchert-Honda two-pass allocation. Returns floor(v_b) per bud."""
-    # Basipetal pass: v_subtree per node id = sum(v_subtree per child) + sum(Q per bud at this node)
-    # Use id(node) as key because Node is a mutable dataclass (unhashable).
-    v_subtree: dict[int, float] = {}
-    _compute_v_subtree(tree.root, quality, v_subtree)
+    """Borchert-Honda two-pass allocation. Returns floor(v_b) per bud.
+
+    If ``v_subtree`` is provided (precomputed by ``compute_v_subtree``), the basipetal
+    pass is skipped — useful when the caller also feeds shedding from the same dict.
+    """
+    if v_subtree is None:
+        v_subtree = compute_v_subtree(tree, quality)
     v_total = alpha * v_subtree[id(tree.root)]
 
     # Acropetal pass: distribute v_total downward
     n_by_bud: dict[Bud, int] = {b: 0 for b in tree.active_buds}
     _distribute(tree.root, v_total, quality, v_subtree, lambda_apical, n_by_bud)
     return n_by_bud
+
+
+def compute_v_subtree(tree: Tree, quality: dict[Bud, int]) -> dict[int, float]:
+    """Basipetal sum of bud quality per subtree, keyed by ``id(node)``."""
+    out: dict[int, float] = {}
+    _compute_v_subtree(tree.root, quality, out)
+    return out
 
 
 def _compute_v_subtree(root: Node, quality: dict[Bud, int], out: dict[int, float]) -> float:
