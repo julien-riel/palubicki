@@ -97,7 +97,7 @@ If your tree looks too dense or too sparse:
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
-- `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + cross-quad leaves. Outputs a neutral `Mesh`.
+- `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + parametric leaf clusters (1..N cross-quads per bud). Outputs a neutral `Mesh`.
 - `src/palubicki/export/` — `Mesh` → `.glb`. Core glTF 2.0, no extensions, max viewer compatibility.
 - `src/palubicki/cli.py` — orchestrates.
 

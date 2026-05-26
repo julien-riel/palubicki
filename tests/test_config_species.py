@@ -35,8 +35,7 @@ def test_deep_merge_does_not_recurse_when_base_is_not_dict():
 
 def test_list_species_returns_sorted_names():
     names = _list_species()
-    # In Task 7, the configs/species/ package is empty (Task 8 adds the YAMLs).
-    # The function must work without crashing on the empty package.
+    # Must not crash on missing/empty package — defensive degradation.
     assert isinstance(names, list)
     assert all(isinstance(n, str) for n in names)
 
