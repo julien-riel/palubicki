@@ -67,3 +67,52 @@ def test_flatten_normalizes_non_unit_input_normals():
     )
     _, norms, _ = _flatten(Mesh(primitives=[p]))
     assert np.linalg.norm(norms[0]) == pytest.approx(1.0, abs=1e-5)
+
+
+def test_shade_facing_light_yields_full_intensity():
+    from palubicki.render.renderer import _shade
+    # Normal pointing toward (negated) light → max intensity
+    normals = np.array([[0, 1, 0]], dtype=np.float32)
+    colors = np.array([[1, 1, 1]], dtype=np.float32)
+    light_dir = (0, -1, 0)  # downward → -L = (0, 1, 0), dot=1
+    shaded = _shade(normals, colors, light_dir)
+    np.testing.assert_allclose(shaded, [[1, 1, 1]], atol=1e-5)
+
+
+def test_shade_perpendicular_to_light_yields_ambient():
+    from palubicki.render.renderer import _shade
+    # Normal perpendicular to light → only ambient (0.25)
+    normals = np.array([[1, 0, 0]], dtype=np.float32)
+    colors = np.array([[1, 1, 1]], dtype=np.float32)
+    light_dir = (0, -1, 0)
+    shaded = _shade(normals, colors, light_dir)
+    np.testing.assert_allclose(shaded, [[0.25, 0.25, 0.25]], atol=1e-5)
+
+
+def test_shade_back_facing_is_double_sided():
+    """Normals pointing AWAY from light still light up — abs() implies
+    double-sided behavior, correct for leaf quads."""
+    from palubicki.render.renderer import _shade
+    # Front-facing normal
+    front = _shade(
+        np.array([[0, 1, 0]], dtype=np.float32),
+        np.array([[1, 1, 1]], dtype=np.float32),
+        (0, -1, 0),
+    )
+    # Same surface, flipped normal
+    back = _shade(
+        np.array([[0, -1, 0]], dtype=np.float32),
+        np.array([[1, 1, 1]], dtype=np.float32),
+        (0, -1, 0),
+    )
+    np.testing.assert_allclose(front, back, atol=1e-5)
+
+
+def test_shade_clamps_to_color():
+    from palubicki.render.renderer import _shade
+    # Base color is 0.5 — output cannot exceed 0.5 per channel.
+    normals = np.array([[0, 1, 0]], dtype=np.float32)
+    colors = np.array([[0.5, 0.5, 0.5]], dtype=np.float32)
+    light_dir = (0, -1, 0)
+    shaded = _shade(normals, colors, light_dir)
+    assert shaded.max() <= 0.5 + 1e-5

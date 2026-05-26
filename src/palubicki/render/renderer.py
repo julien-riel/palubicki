@@ -36,3 +36,22 @@ def _flatten(mesh: Mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         return empty, np.zeros((0, 3), dtype=np.float32), np.zeros((0, 3), dtype=np.float32)
 
     return np.concatenate(tris), np.concatenate(norms), np.concatenate(cols)
+
+
+def _shade(
+    normals: np.ndarray,
+    face_colors: np.ndarray,
+    light_dir: tuple[float, float, float],
+) -> np.ndarray:
+    """Flat Lambert shading with implicit double-sided faces.
+
+    intensity = abs(n · -L)        # abs() = both sides of leaf quads light up
+    factor    = ambient + (1 - ambient) * intensity
+    output    = clip(color * factor, 0, 1)
+    """
+    L = np.asarray(light_dir, dtype=np.float32)
+    L /= np.linalg.norm(L).clip(1e-9)
+    intensity = np.abs(normals @ -L).clip(0, 1)
+    ambient = 0.25
+    factor = ambient + (1.0 - ambient) * intensity
+    return (face_colors * factor[:, None]).clip(0, 1)
