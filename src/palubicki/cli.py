@@ -185,6 +185,9 @@ def _cmd_forest(args) -> int:
     except ExportError as e:
         print(f"export error: {e}", file=sys.stderr)
         return 1
+    except (ValueError, OSError, ImportError) as e:
+        print(f"forest error: {type(e).__name__}: {e}", file=sys.stderr)
+        return 1
 
     if args.save_config is not None:
         with open(args.save_config, "w") as f:

@@ -101,3 +101,27 @@ def test_cli_forest_help_returns_zero():
         capture_output=True,
     )
     assert result.returncode == 0
+
+
+def test_cli_forest_missing_mesh_returns_clean_error(tmp_path, capsys):
+    """A scene YAML pointing to a missing mesh file → clean error, no traceback."""
+    from palubicki.cli import main
+    yaml_path = tmp_path / "scene.yaml"
+    yaml_path.write_text("""
+envelope:
+  marker_count: 500
+sim:
+  max_iterations: 2
+forest:
+  obstacles:
+    - kind: mesh
+      path: /nonexistent/path/missing.obj
+""")
+    code = main([
+        "forest",
+        "-o", str(tmp_path / "out.glb"),
+        "--config", str(yaml_path),
+    ])
+    assert code == 1
+    captured = capsys.readouterr()
+    assert "forest error" in captured.err
