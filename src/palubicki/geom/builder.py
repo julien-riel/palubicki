@@ -14,12 +14,13 @@ from palubicki.sim.tree import Tree
 def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     compute_radii(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
 
+    bark_png = _load_bark_texture(cfg.geom.bark_texture)
     bark_mat = Material(
         name="bark",
         base_color=(*cfg.geom.bark_color, 1.0),
         metallic=0.0,
         roughness=0.9,
-        base_color_texture_png=None,
+        base_color_texture_png=bark_png,
         alpha_mode="OPAQUE",
         alpha_cutoff=0.5,
         double_sided=False,
@@ -45,7 +46,13 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     return Mesh(primitives=primitives)
 
 
+def _load_bark_texture(path: Path | None) -> bytes | None:
+    if path is None:
+        return None
+    return Path(path).read_bytes()
+
+
 def _load_leaf_texture(path: Path | None) -> bytes:
     if path is None:
         return default_leaf_png()
-    return path.read_bytes()
+    return Path(path).read_bytes()

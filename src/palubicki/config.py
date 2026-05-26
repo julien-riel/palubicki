@@ -64,6 +64,7 @@ class GeomConfig:
     leaf_size: float = 0.06
     leaf_texture: Path | None = None
     bark_color: tuple[float, float, float] = (0.35, 0.22, 0.12)
+    bark_texture: Path | None = None
     enable_leaves: bool = True
 
 
