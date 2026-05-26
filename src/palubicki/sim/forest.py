@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from palubicki.config import Config, ConfigError, EnvelopeConfig, ForestSeed
+from palubicki.config import Config, ConfigError, EnvelopeConfig, ForestSeed, _SECTION_TYPES, _load_packaged_species
 
 if TYPE_CHECKING:
     from palubicki.sim.markers import MarkerCloud
@@ -22,16 +22,13 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
     """Return a new Config: cfg with species preset (if any) + seed_entry.overrides
     applied (dotted keys) and envelope.center translated to seed_entry.position."""
     if seed_entry.species is not None:
-        from palubicki.config import _load_packaged_species, _SECTION_TYPES
-        from dataclasses import fields as _fields
-
         preset = _load_packaged_species(seed_entry.species)
         new_sections: dict = {}
         for section_name, type_ in _SECTION_TYPES.items():
             cur_section = getattr(cfg, section_name)
-            cur_dict = {f.name: getattr(cur_section, f.name) for f in _fields(type_)}
+            cur_dict = {f.name: getattr(cur_section, f.name) for f in fields(type_)}
             preset_section = preset.get(section_name, {}) or {}
-            allowed = {f.name for f in _fields(type_)}
+            allowed = {f.name for f in fields(type_)}
             unknown = set(preset_section) - allowed
             if unknown:
                 raise ConfigError(
