@@ -56,3 +56,32 @@ def test_end_to_end_per_envelope_light_enabled(tmp_path, shape):
     loaded = pygltflib.GLTF2().load(str(cfg.output))
     assert len(loaded.meshes) == 1
     assert loaded.meshes[0].primitives  # at least one primitive
+
+
+@pytest.mark.slow
+def test_smoke_forest_two_trees_with_obstacle(tmp_path):
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+    from palubicki.export.gltf import write_glb_forest
+
+    cfg = Config(
+        envelope=EnvelopeConfig(marker_count=1000),
+        sim=SimConfig(max_iterations=5),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "smoke.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(
+                ForestSeed(position=(0.0, 0.0, 0.0)),
+                ForestSeed(position=(5.0, 0.0, 0.0)),
+            ),
+            obstacles=(ObstacleAABB(min=(2.0, 0.0, -1.0), max=(3.0, 1.5, 1.0)),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    write_glb_forest(forest, cfg, cfg.output, asset_meta={"seed": 42})
+    assert cfg.output.exists()
+    assert cfg.output.stat().st_size > 0
