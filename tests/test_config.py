@@ -178,3 +178,34 @@ def test_obstacle_mesh_defaults():
     assert o.path == Path("foo.obj")
     assert o.translate == (0.0, 0.0, 0.0)
     assert o.scale == 1.0
+
+
+def test_forest_seed_defaults():
+    from palubicki.config import ForestSeed
+    s = ForestSeed(position=(1.0, 0.0, 2.0))
+    assert s.position == (1.0, 0.0, 2.0)
+    assert s.seed is None
+    assert s.overrides == {}
+
+
+def test_forest_config_defaults():
+    from palubicki.config import ForestConfig
+    f = ForestConfig()
+    assert f.seeds == ()
+    assert f.obstacles == ()
+    assert f.export_obstacles_geometry is True
+
+
+def test_config_default_forest_is_empty():
+    from palubicki.config import (
+        Config, EnvelopeConfig, SimConfig, TropismConfig, PhyllotaxyConfig,
+        SheddingConfig, GeomConfig, LightConfig, ForestConfig,
+    )
+    from pathlib import Path
+    c = Config(
+        envelope=EnvelopeConfig(), sim=SimConfig(), tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(), shedding=SheddingConfig(), geom=GeomConfig(),
+        light=LightConfig(), output=Path("/tmp/x.glb"),
+    )
+    assert c.forest.seeds == ()
+    assert c.forest.obstacles == ()

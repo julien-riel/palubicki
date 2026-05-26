@@ -111,6 +111,20 @@ class ObstacleMesh:
 
 
 @dataclass(frozen=True)
+class ForestSeed:
+    position: tuple[float, float, float]
+    seed: int | None = None
+    overrides: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ForestConfig:
+    seeds: tuple = ()
+    obstacles: tuple = ()
+    export_obstacles_geometry: bool = True
+
+
+@dataclass(frozen=True)
 class Config:
     envelope: EnvelopeConfig
     sim: SimConfig
@@ -119,6 +133,7 @@ class Config:
     shedding: SheddingConfig
     geom: GeomConfig
     light: LightConfig = field(default_factory=LightConfig)
+    forest: ForestConfig = field(default_factory=ForestConfig)
     seed: int = 0
     output: Path = field(default_factory=lambda: Path("tree.glb"))
     log_level: str = "INFO"
