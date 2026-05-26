@@ -129,7 +129,16 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 )
                 new_pos = current_bud.position + d * cfg.sim.internode_length
 
-                # NOTE: obstacle blocking is added in Task 17.
+                # V3: obstacle blocking
+                if forest.obstacles:
+                    from palubicki.sim.obstacles import segment_blocked, any_contains
+                    if segment_blocked(current_bud.position, new_pos, forest.obstacles):
+                        current_bud.state = BudState.DORMANT
+                        new_active.append(current_bud)
+                        break
+                    if any_contains(new_pos, forest.obstacles):
+                        current_bud.state = BudState.DEAD
+                        break
 
                 new_node = Node(position=new_pos)
                 iod = Internode(

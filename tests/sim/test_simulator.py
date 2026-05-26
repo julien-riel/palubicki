@@ -331,3 +331,65 @@ def test_simulate_forest_reproducible(tmp_path):
         assert len(t1.all_internodes) == len(t2.all_internodes)
         for i1, i2 in zip(t1.all_internodes, t2.all_internodes):
             np.testing.assert_allclose(i1.child_node.position, i2.child_node.position)
+
+
+def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
+    """A wall right above the root → the trunk bud becomes DORMANT after 1 step (cannot grow)."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+    from palubicki.sim.tree import BudState
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+        sim=SimConfig(max_iterations=4, internode_length=0.5),
+        tropism=TropismConfig(w_gravity=0.0),   # don't fight gravity, just go up
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),  # disable shedding for clarity
+        geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(ForestSeed(position=(0.0, 0.0, 0.0)),),
+            # Wall covering y ∈ [0.1, 0.4], i.e. blocks any segment going up from y=0
+            obstacles=(ObstacleAABB(min=(-5, 0.1, -5), max=(5, 0.4, 5)),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    # The trunk can't grow upward — the bud should be DORMANT and the tree should
+    # have at most 0 internodes from upward growth (laterals may still grow if any).
+    upward_internodes = sum(
+        1 for iod in forest.trees[0].all_internodes
+        if (iod.child_node.position[1] - iod.parent_node.position[1]) > 0.05
+    )
+    assert upward_internodes == 0
+
+
+def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
+    """A bud growing into an obstacle (point-inside test, not just segment) → DEAD."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleSphere, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+        sim=SimConfig(max_iterations=6, internode_length=0.3),
+        tropism=TropismConfig(w_gravity=0.0),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(ForestSeed(position=(0.0, 0.0, 0.0)),),
+            # Big sphere centered far above the tree — buds reaching it get killed
+            obstacles=(ObstacleSphere(center=(0.0, 5.0, 0.0), radius=0.5),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    # No internode endpoint should lie inside the sphere
+    sphere_center = np.array([0.0, 5.0, 0.0])
+    for iod in forest.trees[0].all_internodes:
+        dist = np.linalg.norm(iod.child_node.position - sphere_center)
+        assert dist > 0.5, f"internode endpoint {iod.child_node.position} is inside the obstacle"
