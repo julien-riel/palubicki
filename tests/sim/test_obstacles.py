@@ -51,3 +51,36 @@ def test_aabb_aabb_returns_min_max():
     amin, amax = o.aabb()
     assert tuple(amin) == (0.0, 0.0, 0.0)
     assert tuple(amax) == (1.0, 2.0, 3.0)
+
+
+from palubicki.config import ObstacleSphere
+from palubicki.sim.obstacles import SphereObstacle
+
+
+def test_sphere_contains():
+    o = SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0))
+    pts = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.1, 0.0, 0.0], [-0.5, 0.5, 0.5]])
+    out = o.contains(pts)
+    assert out.tolist() == [True, True, False, True]
+
+
+def test_sphere_segment_traverse():
+    o = SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0))
+    assert o.segment_intersects(np.array([-2.0, 0.0, 0.0]), np.array([2.0, 0.0, 0.0])) is True
+
+
+def test_sphere_segment_endpoint_inside():
+    o = SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0))
+    assert o.segment_intersects(np.array([2.0, 0.0, 0.0]), np.array([0.5, 0.0, 0.0])) is True
+
+
+def test_sphere_segment_miss():
+    o = SphereObstacle(ObstacleSphere(center=(0, 0, 0), radius=1.0))
+    assert o.segment_intersects(np.array([2.0, 2.0, 0.0]), np.array([3.0, 2.0, 0.0])) is False
+
+
+def test_sphere_aabb():
+    o = SphereObstacle(ObstacleSphere(center=(5.0, 1.0, -2.0), radius=2.0))
+    amin, amax = o.aabb()
+    assert tuple(amin) == (3.0, -1.0, -4.0)
+    assert tuple(amax) == (7.0, 3.0, 0.0)
