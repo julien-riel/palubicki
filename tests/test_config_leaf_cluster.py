@@ -1,6 +1,9 @@
 import pytest
 
-from palubicki.config import ConfigError, GeomConfig
+from palubicki.config import (
+    Config, ConfigError, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
+    SheddingConfig, SimConfig, TropismConfig,
+)
 
 
 def test_leaf_cluster_defaults_are_v1_compat():
@@ -18,10 +21,6 @@ def test_leaf_cluster_count_zero_invalid_at_config_validation():
 
 
 def test_full_config_rejects_zero_cluster_count(tmp_path):
-    from palubicki.config import (
-        Config, EnvelopeConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
-    )
     with pytest.raises(ConfigError, match="leaf_cluster_count"):
         Config(
             envelope=EnvelopeConfig(),
@@ -35,10 +34,6 @@ def test_full_config_rejects_zero_cluster_count(tmp_path):
 
 
 def test_full_config_rejects_aspect_out_of_range(tmp_path):
-    from palubicki.config import (
-        Config, EnvelopeConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
-    )
     with pytest.raises(ConfigError, match="leaf_aspect"):
         Config(
             envelope=EnvelopeConfig(),
@@ -52,10 +47,6 @@ def test_full_config_rejects_aspect_out_of_range(tmp_path):
 
 
 def test_full_config_rejects_splay_out_of_range(tmp_path):
-    from palubicki.config import (
-        Config, EnvelopeConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
-    )
     with pytest.raises(ConfigError, match="leaf_splay_deg"):
         Config(
             envelope=EnvelopeConfig(),
