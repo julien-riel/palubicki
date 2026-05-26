@@ -146,6 +146,103 @@ def _add_material(
     return len(materials) - 1
 
 
+def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> None:
+    """Write a multi-tree glTF scene: one node per tree + optional 'obstacles' node."""
+    from palubicki.geom.builder import build_mesh
+    from palubicki.geom.obstacle_geom import build_obstacle_primitive
+
+    # Build per-tree palubicki meshes
+    tree_meshes: list[tuple[str, Mesh]] = []
+    for i, tree in enumerate(forest.trees):
+        per_tree_cfg = forest.per_tree_cfgs[i] if i < len(forest.per_tree_cfgs) else cfg
+        tree_meshes.append((f"tree_{i}", build_mesh(tree, per_tree_cfg)))
+
+    # Build obstacle primitive (optional)
+    obstacle_primitive = None
+    if cfg.forest.export_obstacles_geometry and forest.obstacles:
+        obstacle_mat = Material(
+            name="obstacle",
+            base_color=(0.5, 0.5, 0.55, 0.3),
+            metallic=0.0,
+            roughness=0.9,
+            base_color_texture_png=None,
+            alpha_mode="BLEND",
+            alpha_cutoff=0.5,
+            double_sided=True,
+        )
+        obstacle_primitive = build_obstacle_primitive(forest.obstacles, obstacle_mat)
+
+    # Sanity: there must be at least one non-empty mesh (trees or obstacles)
+    has_geometry = any(
+        any(p.positions.shape[0] > 0 for p in m.primitives) for _, m in tree_meshes
+    ) or (obstacle_primitive is not None and obstacle_primitive.positions.shape[0] > 0)
+    if not has_geometry:
+        raise ExportError("empty forest - no trees produced geometry and no obstacles to export")
+
+    gltf = pygltflib.GLTF2()
+    gltf.asset = pygltflib.Asset(
+        version="2.0",
+        generator="palubicki",
+        extras=dict(asset_meta) if asset_meta else None,
+    )
+
+    buffer_data = bytearray()
+    buffer_views: list[pygltflib.BufferView] = []
+    accessors: list[pygltflib.Accessor] = []
+    materials: list[pygltflib.Material] = []
+    textures: list[pygltflib.Texture] = []
+    images: list[pygltflib.Image] = []
+    samplers: list[pygltflib.Sampler] = []
+
+    gltf_meshes: list[pygltflib.Mesh] = []
+    gltf_nodes: list[pygltflib.Node] = []
+
+    def _emit_mesh(name: str, primitives_iter) -> None:
+        gltf_prims: list[pygltflib.Primitive] = []
+        for prim in primitives_iter:
+            if prim is None or prim.positions.shape[0] == 0:
+                continue
+            pos_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.positions,
+                                    _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=True)
+            nor_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.normals,
+                                    _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
+            uv_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.uvs,
+                                   _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+            idx_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.indices,
+                                    _COMPONENT_UINT, _TYPE_SCALAR, _TARGET_ELEMENT_ARRAY, with_minmax=False)
+            mat_idx = _add_material(prim.material, buffer_data, buffer_views,
+                                    materials, textures, images, samplers)
+            gltf_prims.append(pygltflib.Primitive(
+                attributes=pygltflib.Attributes(POSITION=pos_acc, NORMAL=nor_acc, TEXCOORD_0=uv_acc),
+                indices=idx_acc,
+                material=mat_idx,
+            ))
+        if not gltf_prims:
+            return
+        gltf_meshes.append(pygltflib.Mesh(primitives=gltf_prims))
+        gltf_nodes.append(pygltflib.Node(name=name, mesh=len(gltf_meshes) - 1))
+
+    for name, mesh in tree_meshes:
+        _emit_mesh(name, mesh.primitives)
+
+    if obstacle_primitive is not None:
+        _emit_mesh("obstacles", [obstacle_primitive])
+
+    gltf.meshes = gltf_meshes
+    gltf.nodes = gltf_nodes
+    gltf.scenes = [pygltflib.Scene(nodes=list(range(len(gltf_nodes))))]
+    gltf.scene = 0
+    gltf.bufferViews = buffer_views
+    gltf.accessors = accessors
+    gltf.materials = materials
+    gltf.textures = textures
+    gltf.images = images
+    gltf.samplers = samplers
+    gltf.buffers = [pygltflib.Buffer(byteLength=len(buffer_data))]
+    gltf.set_binary_blob(bytes(buffer_data))
+    gltf.save_binary(str(output_path))
+
+
 def _add_texture(
     png_bytes: bytes,
     buffer_data: bytearray,

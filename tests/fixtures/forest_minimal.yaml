@@ -1,0 +1,18 @@
+envelope:
+  shape: ellipsoid
+  rx: 1.5
+  ry: 2.0
+  rz: 1.5
+  marker_count: 1000
+sim:
+  max_iterations: 4
+seed: 42
+forest:
+  seeds:
+    - position: [0.0, 0.0, 0.0]
+    - position: [5.0, 0.0, 0.0]
+  obstacles:
+    - kind: aabb
+      min: [2.0, 0.0, -1.0]
+      max: [3.0, 1.5, 1.0]
+  export_obstacles_geometry: true

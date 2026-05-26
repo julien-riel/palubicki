@@ -238,3 +238,158 @@ def test_simulator_light_reproducible():
     t1 = simulate(Config(**base))
     t2 = simulate(Config(**base))
     assert pos_hash(t1) == pos_hash(t2)
+
+
+def test_simulate_v2_bit_exact_after_refactor(tmp_path):
+    """After refactor: simulate(cfg) with empty forest must produce the same Tree as
+    a hash-pinned baseline. The baseline is recomputed once and saved in the test."""
+    import hashlib
+    import json
+    from palubicki.config import (
+        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
+        SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=3, ry=5, rz=3, shape="ellipsoid", marker_count=5000),
+        sim=SimConfig(max_iterations=10),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(),
+        geom=GeomConfig(),
+        light=LightConfig(),
+        output=tmp_path / "x.glb",
+        seed=42,
+    )
+    tree = simulate(cfg)
+    positions = []
+    stack = [tree.root]
+    while stack:
+        node = stack.pop()
+        positions.append(tuple(node.position.tolist()))
+        for iod in node.children_internodes:
+            stack.append(iod.child_node)
+    digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
+    # This hash is pinned by running ONCE against the V2 code, before refactor.
+    # If the hash changes, the refactor broke bit-exactness — investigate.
+    EXPECTED = "aeac979ef2bafa69b40d74bfdda47c07afdaa7178b94163f85973b66b91a2c9c"
+    assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
+    # Side-effect: print so we can copy the value if needed
+    print(f"V2 hash: {digest}")
+
+
+def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
+    """Two trees far apart (envelopes disjoint) → each tree grows independently."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=3000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(seeds=(
+            ForestSeed(position=(0.0, 0.0, 0.0)),
+            ForestSeed(position=(20.0, 0.0, 0.0)),
+        )),
+    )
+    forest = simulate_forest(cfg)
+    assert len(forest.trees) == 2
+    assert len(forest.trees[0].all_internodes) > 0
+    assert len(forest.trees[1].all_internodes) > 0
+
+
+def test_simulate_forest_reproducible(tmp_path):
+    """Two runs with the same cfg produce identical trees."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+
+    def make_cfg():
+        return Config(
+            envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+            sim=SimConfig(max_iterations=6),
+            tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+            shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+            output=tmp_path / "x.glb", seed=99,
+            forest=ForestConfig(seeds=(
+                ForestSeed(position=(0.0, 0.0, 0.0)),
+                ForestSeed(position=(5.0, 0.0, 0.0)),
+            )),
+        )
+
+    f1 = simulate_forest(make_cfg())
+    f2 = simulate_forest(make_cfg())
+    for t1, t2 in zip(f1.trees, f2.trees):
+        assert len(t1.all_internodes) == len(t2.all_internodes)
+        for i1, i2 in zip(t1.all_internodes, t2.all_internodes):
+            np.testing.assert_allclose(i1.child_node.position, i2.child_node.position)
+
+
+def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
+    """A wall right above the root → the trunk bud becomes DORMANT after 1 step (cannot grow)."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+    from palubicki.sim.tree import BudState
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+        sim=SimConfig(max_iterations=4, internode_length=0.5),
+        tropism=TropismConfig(w_gravity=0.0),   # don't fight gravity, just go up
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),  # disable shedding for clarity
+        geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(ForestSeed(position=(0.0, 0.0, 0.0)),),
+            # Wall covering y ∈ [0.1, 0.4], i.e. blocks any segment going up from y=0
+            obstacles=(ObstacleAABB(min=(-5, 0.1, -5), max=(5, 0.4, 5)),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    # The trunk can't grow upward — the bud should be DORMANT and the tree should
+    # have at most 0 internodes from upward growth (laterals may still grow if any).
+    upward_internodes = sum(
+        1 for iod in forest.trees[0].all_internodes
+        if (iod.child_node.position[1] - iod.parent_node.position[1]) > 0.05
+    )
+    assert upward_internodes == 0
+
+
+def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
+    """A bud growing into an obstacle (point-inside test, not just segment) → DEAD."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
+        ObstacleSphere, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate_forest
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
+        sim=SimConfig(max_iterations=6, internode_length=0.3),
+        tropism=TropismConfig(w_gravity=0.0),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(), light=LightConfig(),
+        output=tmp_path / "x.glb", seed=42,
+        forest=ForestConfig(
+            seeds=(ForestSeed(position=(0.0, 0.0, 0.0)),),
+            # Big sphere centered far above the tree — buds reaching it get killed
+            obstacles=(ObstacleSphere(center=(0.0, 5.0, 0.0), radius=0.5),),
+        ),
+    )
+    forest = simulate_forest(cfg)
+    # No internode endpoint should lie inside the sphere
+    sphere_center = np.array([0.0, 5.0, 0.0])
+    for iod in forest.trees[0].all_internodes:
+        dist = np.linalg.norm(iod.child_node.position - sphere_center)
+        assert dist > 0.5, f"internode endpoint {iod.child_node.position} is inside the obstacle"

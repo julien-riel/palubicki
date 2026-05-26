@@ -13,6 +13,8 @@ dependencies = [
     "pygltflib>=1.16",
     "Pillow>=10.0",
     "pyyaml>=6.0",
+    "trimesh>=4.0",
+    "rtree>=1.0",
 ]
 
 [project.optional-dependencies]

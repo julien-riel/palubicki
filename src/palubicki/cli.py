@@ -28,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_dump_defaults(args)
     if args.command == "dump-config":
         return _cmd_dump_config(args)
+    if args.command == "forest":
+        return _cmd_forest(args)
 
     parser.print_help()
     return 1
@@ -69,6 +71,14 @@ def _build_parser() -> argparse.ArgumentParser:
 
     dc = sub.add_parser("dump-config", help="Extract config embedded in a .glb")
     dc.add_argument("glb_path", type=Path)
+
+    fst = sub.add_parser("forest", help="Generate a multi-tree forest with optional obstacles and write .glb")
+    fst.add_argument("-o", "--output", type=Path, required=True)
+    fst.add_argument("--config", type=Path, required=True)
+    fst.add_argument("--seed", type=int, default=None, help="Override cfg.seed")
+    fst.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"], default="INFO")
+    fst.add_argument("--validate", action="store_true")
+    fst.add_argument("--save-config", type=Path, default=None)
 
     return parser
 
@@ -146,6 +156,52 @@ def _cmd_generate(args) -> int:
     return 0
 
 
+def _cmd_forest(args) -> int:
+    logging.basicConfig(level=getattr(logging, args.log_level.replace("WARN", "WARNING")),
+                        format="%(message)s")
+
+    overrides: dict = {}
+    if args.seed is not None:
+        overrides["seed"] = args.seed
+
+    try:
+        cfg = load_config(yaml_path=args.config, cli_overrides=overrides, output=args.output)
+    except ConfigError as e:
+        print(f"config error: {e}", file=sys.stderr)
+        return 2
+
+    try:
+        from palubicki.sim.simulator import simulate_forest
+        from palubicki.export.gltf import write_glb_forest
+
+        forest = simulate_forest(cfg)
+        asset_meta = {
+            "seed": cfg.seed,
+            "n_trees": len(forest.trees),
+            "n_obstacles": len(forest.obstacles),
+            "config": _config_to_dict(cfg),
+        }
+        write_glb_forest(forest, cfg, cfg.output, asset_meta=asset_meta)
+    except ExportError as e:
+        print(f"export error: {e}", file=sys.stderr)
+        return 1
+    except (ValueError, OSError, ImportError) as e:
+        print(f"forest error: {type(e).__name__}: {e}", file=sys.stderr)
+        return 1
+
+    if args.save_config is not None:
+        with open(args.save_config, "w") as f:
+            yaml.safe_dump(_config_to_dict(cfg), f, sort_keys=False)
+
+    if args.validate:
+        import pygltflib
+        loaded = pygltflib.GLTF2().load(str(cfg.output))
+        n_nodes = len(loaded.nodes)
+        print(f"validated: {n_nodes} nodes", file=sys.stderr)
+
+    return 0
+
+
 def _cmd_dump_defaults(_args) -> int:
     default = Config(
         envelope=EnvelopeConfig(),
@@ -187,7 +243,11 @@ def _scalar(v):
     if isinstance(v, Path):
         return str(v)
     if isinstance(v, tuple):
-        return list(v)
+        return [_scalar(x) if not isinstance(x, (int, float, str)) else x for x in v]
+    if is_dataclass(v):
+        return {f.name: _scalar(getattr(v, f.name)) for f in fields(v)}
+    if isinstance(v, dict):
+        return {k: _scalar(val) for k, val in v.items()}
     return v
 
 
