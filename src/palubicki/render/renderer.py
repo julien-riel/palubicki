@@ -4,6 +4,7 @@ from __future__ import annotations
 import io
 import logging
 import time
+from pathlib import Path
 
 import numpy as np
 
@@ -174,3 +175,20 @@ def render_mesh(
         (time.perf_counter() - t0) * 1000,
     )
     return img
+
+
+def render_glb(
+    glb_path: Path,
+    *,
+    size: tuple[int, int] = (800, 800),
+    camera: Camera | None = None,
+    bg: tuple[float, float, float, float] = (1.0, 1.0, 1.0, 1.0),
+    light_dir: tuple[float, float, float] = (-0.3, -1.0, -0.5),
+    drop_leaves: bool = False,
+) -> np.ndarray:
+    """Load a .glb and render it to an (H, W, 4) uint8 ndarray."""
+    from palubicki.render.io import _glb_to_mesh
+    mesh = _glb_to_mesh(Path(glb_path), drop_leaves=drop_leaves)
+    return render_mesh(
+        mesh, size=size, camera=camera, bg=bg, light_dir=light_dir,
+    )
