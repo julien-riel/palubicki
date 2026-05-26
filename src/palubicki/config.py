@@ -65,6 +65,9 @@ class GeomConfig:
     leaf_texture: Path | None = None
     bark_color: tuple[float, float, float] = (0.35, 0.22, 0.12)
     bark_texture: Path | None = None
+    leaf_cluster_count: int = 1
+    leaf_aspect: float = 1.0
+    leaf_splay_deg: float = 0.0
     enable_leaves: bool = True
 
 
@@ -169,6 +172,12 @@ class Config:
             raise ConfigError(f"geom.r_tip must be > 0, got {g.r_tip}")
         if g.leaf_size <= 0:
             raise ConfigError(f"geom.leaf_size must be > 0, got {g.leaf_size}")
+        if g.leaf_cluster_count < 1:
+            raise ConfigError(f"geom.leaf_cluster_count must be >= 1, got {g.leaf_cluster_count}")
+        if not (0.0 < g.leaf_aspect <= 4.0):
+            raise ConfigError(f"geom.leaf_aspect must be in (0, 4], got {g.leaf_aspect}")
+        if not (0.0 <= g.leaf_splay_deg <= 90.0):
+            raise ConfigError(f"geom.leaf_splay_deg must be in [0, 90], got {g.leaf_splay_deg}")
 
         light = self.light
         if light.n_rays <= 0:
