@@ -55,11 +55,19 @@ def test_light_enabled_raises_centroid():
     shaded by the canopy and shed, while upper growth is favoured. The mean y
     position of internode endpoints should be higher with light enabled.
 
-    Tuned params: k_absorption=0.3, leaf_area=0.08 — strong enough to produce
-    a clear centroid shift (0.59 → ~1.25) without completely stripping the tree.
+    Re-tuned for SimConfig.n_substeps_max=1 regime: the per-bud cap means light_factor
+    no longer scales internode count per iteration, only the dormancy gate (Q*light <1).
+    Stronger absorption (k=2.5) is needed so shaded buds reliably cross below the cap,
+    and more iterations (30) let the upward bias accumulate. Phototropism weight stays
+    moderate (0.3) — very strong photo (>0.5) lets shaded laterals chase lateral
+    light gaps and lowers the centroid instead of raising it.
+    Observed shift: 0.40 → 0.67 (delta ~+0.27).
     """
-    tree_off = simulate(_base_cfg(light=LightConfig(enabled=False)))
-    tree_on = simulate(_base_cfg(light=LightConfig(enabled=True, k_absorption=0.3, leaf_area=0.08)))
+    tree_off = simulate(_base_cfg(sim=SimConfig(max_iterations=30), light=LightConfig(enabled=False)))
+    tree_on = simulate(_base_cfg(
+        sim=SimConfig(max_iterations=30),
+        light=LightConfig(enabled=True, k_absorption=2.5, leaf_area=0.2),
+    ))
     centroid_y_off = np.mean([iod.child_node.position[1] for iod in tree_off.all_internodes])
     centroid_y_on = np.mean([iod.child_node.position[1] for iod in tree_on.all_internodes])
     assert centroid_y_on > centroid_y_off

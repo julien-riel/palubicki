@@ -35,6 +35,14 @@ class SimConfig:
     # DORMANT instead of folding back. -0.2 ≈ allow 100° before bending; raise
     # toward 0.0 to be strict, lower toward -1.0 to disable.
     cos_min_perception: float = -0.2
+    # Hard cap on internodes a single bud can extend in one iteration.
+    # Default 1 matches the original Palubicki BHse: each iteration re-evaluates
+    # perception, light, and competition; each apical bud either extends by one
+    # internode or stays dormant. Higher values let vigorous buds outpace others
+    # but also exhaust nearby markers faster (n internodes worth of growth +
+    # r_kill in a single year), and re-introduce the "wineglass" fold-back when
+    # the trunk shoots through the envelope in one iteration.
+    n_substeps_max: int = 1
 
 
 @dataclass(frozen=True)

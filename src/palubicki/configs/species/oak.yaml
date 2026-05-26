@@ -6,10 +6,13 @@ envelope:
   rz: 5.0
   marker_count: 25000
 sim:
-  internode_length: 0.12
-  lambda_apical: 0.50
+  internode_length: 0.18
+  # Oak: moderate apical dominance. 0.75 keeps the leader winning while the
+  # canopy has only a few laterals; once the lateral subtree gets very large
+  # the trunk apex starves and clean-bole formation happens naturally.
+  lambda_apical: 0.75
   alpha_basipetal: 2.2
-  max_iterations: 35
+  max_iterations: 45
 tropism:
   # Oak: strong orthotropic trunk, primary branches go more horizontal.
   w_orthotropy: 0.25
@@ -33,11 +36,13 @@ sag:
   rigid_axis_order: 1
 geom:
   ring_sides: 10
-  pipe_exponent: 2.55
+  pipe_exponent: 2.3
+  r_tip: 0.008
   bark_color: [0.32, 0.22, 0.14]
   bark_texture: "proc:oak_bark"
   leaf_texture: "proc:oak_leaf"
-  leaf_size: 0.10
-  leaf_cluster_count: 1
+  leaf_size: 0.14
+  leaf_cluster_count: 3
   leaf_aspect: 1.0
-  leaf_splay_deg: 0
+  leaf_splay_deg: 25
+  foliage_depth: 4

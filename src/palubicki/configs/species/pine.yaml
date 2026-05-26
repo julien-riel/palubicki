@@ -28,11 +28,13 @@ light:
   k_absorption: 0.65
 geom:
   ring_sides: 8
-  pipe_exponent: 2.45
+  pipe_exponent: 2.3
+  r_tip: 0.007
   bark_color: [0.45, 0.25, 0.18]
   bark_texture: "proc:pine_bark"
   leaf_texture: "proc:pine_needle"
-  leaf_size: 0.08
+  leaf_size: 0.11
   leaf_cluster_count: 5
   leaf_aspect: 0.12
   leaf_splay_deg: 25
+  foliage_depth: 3

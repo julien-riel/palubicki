@@ -117,6 +117,12 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
             alpha=cfg.sim.alpha_basipetal, lambda_apical=cfg.sim.lambda_apical,
             v_subtree=v_subtree,
         )
+        # Paper BHse: 1 internode per bud per iteration. Cap any allocation
+        # surplus; the leftover is implicitly "lost" rather than letting one
+        # bud avalanche through the envelope in a single year.
+        cap = int(cfg.sim.n_substeps_max)
+        if cap >= 1:
+            n_by_bud = {b: min(n, cap) for b, n in n_by_bud.items()}
         record_qualities(tree, v_subtree=v_subtree)
 
         # Step-major substep loop. The original code was bud-major (each bud's n substeps

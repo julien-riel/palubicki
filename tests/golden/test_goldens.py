@@ -148,10 +148,10 @@ def test_golden_forest_v3(tmp_path):
             for iod in node.children_internodes:
                 stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True, default=list).encode()).hexdigest()
-    # Re-pinned after the step-major substep batching refactor in _iteration_step
-    # (inner substep loop now interleaves state.node_index across chains within each
-    # substep level, and batched substep perceive() introduces cross-bud competition).
-    EXPECTED = "6346a2d095400a8092de9f3c838ced296c3f9467e0606ee2ac747fd3b21b7e6a"
+    # Re-pinned after SimConfig.n_substeps_max=1 enforced paper BHse (1 internode
+    # per bud per iteration). Tree topology now grows incrementally year by year
+    # instead of avalanching in iter 1.
+    EXPECTED = "4ec0d5aba0421e2605248902977d16731883e2d6b5c5886b0211b5b0888c5198"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")

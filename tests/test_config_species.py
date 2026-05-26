@@ -59,7 +59,7 @@ def test_load_preset_oak(tmp_path):
     cfg = load_config(yaml_path=None, cli_overrides={},
                       output=tmp_path / "x.glb", species="oak")
     assert cfg.envelope.shape == "half_ellipsoid"
-    assert cfg.geom.leaf_cluster_count == 1
+    assert cfg.geom.leaf_cluster_count == 3
     # bark_texture may be stored as Path or str depending on dataclass field coercion
     assert str(cfg.geom.bark_texture) == "proc:oak_bark"
 
@@ -81,7 +81,7 @@ def test_load_preset_birch(tmp_path):
     assert cfg.tropism.w_orthotropy == pytest.approx(0.35)
     assert cfg.tropism.w_gravitropism == pytest.approx(0.05)
     assert cfg.sag.enabled is True
-    assert cfg.sag.k == pytest.approx(0.04)
+    assert cfg.sag.k == pytest.approx(0.015)
 
 
 def test_user_yaml_overrides_preset(tmp_path):
@@ -91,7 +91,7 @@ def test_user_yaml_overrides_preset(tmp_path):
                       output=tmp_path / "x.glb", species="oak")
     assert cfg.tropism.w_orthotropy == pytest.approx(0.99)
     assert cfg.envelope.shape == "half_ellipsoid"
-    assert cfg.geom.leaf_cluster_count == 1
+    assert cfg.geom.leaf_cluster_count == 3
 
 
 def test_cli_override_wins_over_user_yaml(tmp_path):
