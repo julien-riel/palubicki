@@ -39,9 +39,33 @@ def test_leaf_png_is_rgba_with_alpha(gen):
 
 @pytest.mark.parametrize("gen", BARK_GENS + LEAF_GENS + [default_leaf_png])
 def test_texture_is_deterministic(gen):
+    """Same generator in the same process returns identical bytes."""
     a = gen(64)
     b = gen(64)
     assert a == b
+
+
+_EXPECTED_FIRST_BYTES = {
+    "oak_bark": None,
+    "pine_bark": None,
+    "birch_bark": None,
+    "oak_leaf": None,
+    "pine_needle": None,
+    "birch_leaf": None,
+}
+
+
+@pytest.mark.parametrize("name", list(_EXPECTED_FIRST_BYTES.keys()))
+def test_texture_cross_process_stable(name):
+    """Sentinel: the first 32 bytes of each generator's 64-px PNG must be stable.
+    We pin them inline (since they only change if the generator algorithm changes).
+    PYTHONHASHSEED randomization MUST NOT affect output."""
+    import subprocess, sys
+    code = f"from palubicki.geom._textures import _PROC_TEXTURES; import sys; sys.stdout.buffer.write(_PROC_TEXTURES[{name!r}](64)[:32])"
+    # Run with PYTHONHASHSEED=0 and PYTHONHASHSEED=random to confirm identical output
+    out1 = subprocess.run([sys.executable, "-c", code], capture_output=True, env={"PYTHONHASHSEED": "0", "PATH": ""}, check=True).stdout
+    out2 = subprocess.run([sys.executable, "-c", code], capture_output=True, env={"PYTHONHASHSEED": "random", "PATH": ""}, check=True).stdout
+    assert out1 == out2, f"{name}: bytes differ across PYTHONHASHSEED values (hash-randomization leak)"
 
 
 def test_proc_textures_registry_has_six_entries():

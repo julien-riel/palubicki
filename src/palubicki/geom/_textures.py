@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import math
 import random
@@ -26,8 +27,11 @@ def default_leaf_png(size: int = 128) -> bytes:
 
 
 def _seeded_rng(label: str) -> random.Random:
-    """Deterministic Random keyed by texture label — guarantees reproducibility."""
-    return random.Random(hash(label) & 0xFFFFFFFF)
+    """Deterministic Random keyed by texture label — guarantees reproducibility
+    across processes (Python's built-in hash() is randomized via PYTHONHASHSEED)."""
+    digest = hashlib.md5(label.encode("utf-8")).digest()
+    seed = int.from_bytes(digest[:8], "big")
+    return random.Random(seed)
 
 
 # ---------- BARK ----------
