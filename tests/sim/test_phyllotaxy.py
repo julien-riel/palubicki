@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from palubicki.config import PhyllotaxyConfig
-from palubicki.sim.phyllotaxy import lateral_bud_directions
+from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions
 
 
 def test_alternate_yields_one_direction():
@@ -137,3 +137,65 @@ def test_branch_angle_by_order_single_element_same_for_all_orders():
     cos0 = float(np.dot(d0, growth))
     cos5 = float(np.dot(d5, growth))
     assert abs(cos0 - cos5) < 1e-9
+
+
+def test_reserve_directions_count():
+    cfg = PhyllotaxyConfig(mode="alternate", branch_angle_by_order=(45.0,), dormant_reserve_count=3)
+    dirs = reserve_bud_directions(
+        np.array([0.0, 1.0, 0.0]), cfg,
+        node_index=0, seed=0, count=3,
+    )
+    assert dirs.shape == (3, 3)
+    for d in dirs:
+        assert abs(np.linalg.norm(d) - 1.0) < 1e-7
+
+
+def test_reserve_directions_count_zero_returns_empty():
+    cfg = PhyllotaxyConfig(mode="alternate", branch_angle_by_order=(45.0,))
+    dirs = reserve_bud_directions(
+        np.array([0.0, 1.0, 0.0]), cfg,
+        node_index=0, seed=0, count=0,
+    )
+    assert dirs.shape == (0, 3)
+
+
+def test_reserve_directions_opposite_to_laterals():
+    """Reserves point to the opposite azimuth half-plane from laterals."""
+    cfg = PhyllotaxyConfig(
+        mode="alternate", branch_angle_by_order=(45.0,), divergence_angle_deg=0.0,
+        dormant_reserve_count=1,
+    )
+    growth = np.array([0.0, 1.0, 0.0])
+    lateral = lateral_bud_directions(growth, cfg, node_index=0, seed=0, axis_order=0)[0]
+    reserve = reserve_bud_directions(growth, cfg, node_index=0, seed=0, count=1)[0]
+    # Project onto plane perpendicular to growth.
+    lat_perp = lateral - np.dot(lateral, growth) * growth
+    res_perp = reserve - np.dot(reserve, growth) * growth
+    lat_perp = lat_perp / np.linalg.norm(lat_perp)
+    res_perp = res_perp / np.linalg.norm(res_perp)
+    # Approximately opposite azimuth (cos ≈ -1, jitter aside).
+    assert float(np.dot(lat_perp, res_perp)) < -0.9
+
+
+def test_reserve_branch_angle_tighter_than_laterals():
+    """Reserves emerge at a tighter angle (closer to growth axis)."""
+    cfg = PhyllotaxyConfig(
+        mode="alternate", branch_angle_by_order=(60.0,),
+        dormant_reserve_count=1,
+    )
+    growth = np.array([0.0, 1.0, 0.0])
+    lateral = lateral_bud_directions(growth, cfg, node_index=0, seed=0, axis_order=0)[0]
+    reserve = reserve_bud_directions(growth, cfg, node_index=0, seed=0, count=1)[0]
+    # Tighter = larger dot product with growth direction.
+    assert float(np.dot(reserve, growth)) > float(np.dot(lateral, growth))
+
+
+def test_reserve_directions_deterministic():
+    cfg = PhyllotaxyConfig(
+        mode="alternate", branch_angle_by_order=(45.0,),
+        divergence_jitter_deg=5.0, branch_angle_jitter_deg=5.0,
+        dormant_reserve_count=2,
+    )
+    d_a = reserve_bud_directions(np.array([0, 1, 0]), cfg, node_index=7, seed=42, count=2)
+    d_b = reserve_bud_directions(np.array([0, 1, 0]), cfg, node_index=7, seed=42, count=2)
+    np.testing.assert_array_equal(d_a, d_b)
