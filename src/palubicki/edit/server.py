@@ -1,12 +1,18 @@
 """FastAPI app for the browser-based tree parameter editor."""
 from __future__ import annotations
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+import asyncio
+from pathlib import Path
 
-from palubicki.config import Config, ConfigError, _load_packaged_species
-from palubicki.edit.config_io import config_to_dict_for_ui
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, Response
+
+from palubicki.config import Config, ConfigError, _load_packaged_species, load_config
+from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_for_ui
 from palubicki.edit.schema import build_schema
+from palubicki.export.gltf import ExportError, write_glb_to_bytes
+from palubicki.geom.builder import build_mesh
+from palubicki.sim.simulator import simulate
 
 
 def create_app(initial_config: Config) -> FastAPI:
@@ -28,5 +34,29 @@ def create_app(initial_config: Config) -> FastAPI:
         except ConfigError as e:
             return JSONResponse(status_code=400, content={"error": str(e)})
         return JSONResponse(content=data)
+
+    @app.post("/api/generate")
+    async def post_generate(request: Request):
+        payload = await request.json()
+        try:
+            cfg = load_config(
+                yaml_path=None,
+                cli_overrides=config_dict_to_overrides(payload),
+                output=Path("tree.glb"),
+            )
+        except ConfigError as e:
+            return JSONResponse(status_code=400, content={"error": str(e)})
+        try:
+            tree = await asyncio.to_thread(simulate, cfg)
+            mesh = build_mesh(tree, cfg)
+            data = write_glb_to_bytes(mesh, asset_meta={"seed": cfg.seed})
+        except ExportError as e:
+            return JSONResponse(status_code=400, content={"error": str(e)})
+        except Exception as e:  # noqa: BLE001
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"{type(e).__name__}: {e}"},
+            )
+        return Response(content=data, media_type="model/gltf-binary")
 
     return app

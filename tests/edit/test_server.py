@@ -53,3 +53,27 @@ def test_post_species_unknown_returns_400(client):
     r = client.post("/api/species/notarealspecies")
     assert r.status_code == 400
     assert "error" in r.json()
+
+
+def _tiny_config_dict():
+    return {
+        "envelope": {"shape": "ellipsoid", "rx": 1.0, "ry": 2.0, "rz": 1.0, "marker_count": 200},
+        "sim": {"max_iterations": 3},
+        "seed": 1,
+    }
+
+
+def test_post_generate_returns_glb(client):
+    r = client.post("/api/generate", json=_tiny_config_dict())
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "model/gltf-binary"
+    body = r.content
+    assert body[:4] == b"glTF"
+
+
+def test_post_generate_invalid_config_returns_400(client):
+    bad = _tiny_config_dict()
+    bad["envelope"]["rx"] = -1.0
+    r = client.post("/api/generate", json=bad)
+    assert r.status_code == 400
+    assert "error" in r.json()
