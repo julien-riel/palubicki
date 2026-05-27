@@ -73,3 +73,35 @@ def test_species_matches_list_species():
     from palubicki.config import _list_species
     s = build_schema()
     assert s["species"] == _list_species()
+
+
+def test_envelope_section_exposes_expected_fields():
+    s = build_schema()
+    env = next(sec for sec in s["sections"] if sec["name"] == "envelope")
+    names = [f["name"] for f in env["fields"]]
+    assert names == ["shape", "rx", "ry", "rz", "marker_count"]
+
+
+def test_sim_section_exposes_expected_fields():
+    s = build_schema()
+    sim = next(sec for sec in s["sections"] if sec["name"] == "sim")
+    names = [f["name"] for f in sim["fields"]]
+    assert "max_iterations" in names
+    assert "lambda_apical" in names
+    assert "r_perception" in names
+    assert "r_kill" in names
+    assert "internode_length" in names
+
+
+def test_top_level_seed_exposed():
+    s = build_schema()
+    names = [f["name"] for f in s["top_level"]]
+    assert "seed" in names
+
+
+def test_shape_is_enum():
+    s = build_schema()
+    env = next(sec for sec in s["sections"] if sec["name"] == "envelope")
+    shape = next(f for f in env["fields"] if f["name"] == "shape")
+    assert shape["type"] == "enum"
+    assert set(shape["choices"]) == {"sphere", "ellipsoid", "cone", "half_ellipsoid"}

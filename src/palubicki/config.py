@@ -12,29 +12,32 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class EnvelopeConfig:
-    shape: Literal["sphere", "ellipsoid", "cone", "half_ellipsoid"] = "ellipsoid"
-    rx: float = 1.0
-    ry: float = 1.0
-    rz: float = 1.0
-    center: tuple[float, float, float] = (0.0, 0.0, 0.0)
-    marker_count: int = 20_000
+    shape: Literal["sphere", "ellipsoid", "cone", "half_ellipsoid"] = field(
+        default="ellipsoid",
+        metadata={"ui": {"label": "Shape"}},
+    )
+    rx: float = field(default=1.0, metadata={"ui": {"min": 0.5, "max": 20.0, "step": 0.1}})
+    ry: float = field(default=1.0, metadata={"ui": {"min": 0.5, "max": 20.0, "step": 0.1}})
+    rz: float = field(default=1.0, metadata={"ui": {"min": 0.5, "max": 20.0, "step": 0.1}})
+    center: tuple[float, float, float] = (0.0, 0.0, 0.0)  # not exposed in UI
+    marker_count: int = field(default=20_000, metadata={"ui": {"min": 500, "max": 100_000, "step": 500}})
 
 
 @dataclass(frozen=True)
 class SimConfig:
-    r_perception: float = 0.6
-    theta_perception_deg: float = 90.0
-    r_kill: float = 0.15
-    internode_length: float = 0.1
-    alpha_basipetal: float = 2.0
-    lambda_apical: float = 0.55
-    max_iterations: int = 30
-    re_perceive_per_substep: bool = True
+    r_perception: float = field(default=0.6, metadata={"ui": {"min": 0.1, "max": 3.0, "step": 0.05}})
+    theta_perception_deg: float = field(default=90.0, metadata={"ui": {"min": 10.0, "max": 180.0, "step": 5.0}})
+    r_kill: float = field(default=0.15, metadata={"ui": {"min": 0.01, "max": 1.0, "step": 0.01}})
+    internode_length: float = field(default=0.1, metadata={"ui": {"min": 0.02, "max": 0.5, "step": 0.01}})
+    alpha_basipetal: float = field(default=2.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    lambda_apical: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}})
+    max_iterations: int = field(default=30, metadata={"ui": {"min": 1, "max": 80, "step": 1}})
+    re_perceive_per_substep: bool = field(default=True, metadata={"ui": {"label": "Re-perceive per substep"}})
     # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
     # is sitting at the envelope boundary (markers only behind/below). It goes
     # DORMANT instead of folding back. -0.2 ≈ allow 100° before bending; raise
     # toward 0.0 to be strict, lower toward -1.0 to disable.
-    cos_min_perception: float = -0.2
+    cos_min_perception: float = field(default=-0.2, metadata={"ui": {"min": -1.0, "max": 1.0, "step": 0.05}})
     # Hard cap on internodes a single bud can extend in one iteration.
     # Default 1 matches the original Palubicki BHse: each iteration re-evaluates
     # perception, light, and competition; each apical bud either extends by one
@@ -42,41 +45,43 @@ class SimConfig:
     # but also exhaust nearby markers faster (n internodes worth of growth +
     # r_kill in a single year), and re-introduce the "wineglass" fold-back when
     # the trunk shoots through the envelope in one iteration.
-    n_substeps_max: int = 1
+    n_substeps_max: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
 
 
 @dataclass(frozen=True)
 class TropismConfig:
-    w_perception: float = 1.0
+    w_perception: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     # Orthotropy: tendency to grow UPWARD (+Y). What the previous code called
     # "w_gravity" was actually orthotropy. Old YAML keys "w_gravity" still load
     # via _load_tropism_compat (config loader).
-    w_orthotropy: float = 0.3
+    w_orthotropy: float = field(default=0.3, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     # True gravitropism: tendency to grow DOWNWARD (-Y). For weeping/drooping
     # species (birch pendula, weeping willow). Default 0 keeps prior behavior.
-    w_gravitropism: float = 0.0
-    w_phototropism: float = 0.0
-    w_direction_inertia: float = 0.4
-    photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
+    w_gravitropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    w_phototropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    w_direction_inertia: float = field(default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)  # not exposed; vec3 stays defaulted
     # Fix #2: per-axis-order decay. Each tropism weight at order k is multiplied
     # by axis_decay**k. With 0.7: trunk gets full w, primaries 0.7 w, secondaries
     # 0.49 w. Set to 1.0 to disable (uniform across orders).
-    axis_decay: float = 1.0
+    axis_decay: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}})
 
 
 @dataclass(frozen=True)
 class PhyllotaxyConfig:
-    mode: Literal["alternate", "opposite", "whorled"] = "alternate"
-    whorl_count: int = 3
-    divergence_angle_deg: float = 137.5
-    branch_angle_deg: float = 45.0
+    mode: Literal["alternate", "opposite", "whorled"] = field(
+        default="alternate", metadata={"ui": {"label": "Mode"}}
+    )
+    whorl_count: int = field(default=3, metadata={"ui": {"min": 2, "max": 8, "step": 1}})
+    divergence_angle_deg: float = field(default=137.5, metadata={"ui": {"min": 0.0, "max": 360.0, "step": 0.5}})
+    branch_angle_deg: float = field(default=45.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}})
 
 
 @dataclass(frozen=True)
 class SheddingConfig:
-    quality_threshold: float = 0.0
-    window: int = 5
-    enabled: bool = True
+    quality_threshold: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
+    window: int = field(default=5, metadata={"ui": {"min": 1, "max": 20, "step": 1}})
+    enabled: bool = field(default=True, metadata={"ui": {"label": "Enabled"}})
 
 
 @dataclass(frozen=True)
@@ -89,49 +94,49 @@ class SagConfig:
     at the internode's proximal joint; all descendants follow rigidly. Resulting
     shape: tips droop more than mid-branches, the trunk barely moves.
     """
-    enabled: bool = False
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
     # Global gain on the per-internode bend angle (rad). 0.01 produces visible
     # but moderate droop on default oak; 0.05 yields pronounced weep on birch.
-    k: float = 0.01
+    k: float = field(default=0.01, metadata={"ui": {"min": 0.0, "max": 0.2, "step": 0.005}})
     # Hard cap (deg) per single internode to avoid pathological hairpins near tips
     # where diameter² → 0.
-    max_bend_deg: float = 8.0
+    max_bend_deg: float = field(default=8.0, metadata={"ui": {"min": 0.0, "max": 45.0, "step": 0.5}})
     # Sag direction (typically straight down).
     direction: tuple[float, float, float] = (0.0, -1.0, 0.0)
     # Internodes whose ``axis_order`` is less than this stay rigid. 1 = trunk
     # doesn't sag (typical); 0 = even trunk can sag (extreme weep).
-    rigid_axis_order: int = 1
+    rigid_axis_order: int = field(default=1, metadata={"ui": {"min": 0, "max": 4, "step": 1}})
 
 
 @dataclass(frozen=True)
 class GeomConfig:
-    ring_sides: int = 8
-    r_tip: float = 0.005
-    pipe_exponent: float = 2.49
-    leaf_size: float = 0.06
+    ring_sides: int = field(default=8, metadata={"ui": {"min": 3, "max": 32, "step": 1}})
+    r_tip: float = field(default=0.005, metadata={"ui": {"min": 0.001, "max": 0.05, "step": 0.001}})
+    pipe_exponent: float = field(default=2.49, metadata={"ui": {"min": 1.0, "max": 4.0, "step": 0.01}})
+    leaf_size: float = field(default=0.06, metadata={"ui": {"min": 0.01, "max": 0.5, "step": 0.01}})
     leaf_texture: Path | None = None
     bark_color: tuple[float, float, float] = (0.35, 0.22, 0.12)
     bark_texture: Path | None = None
-    leaf_cluster_count: int = 1
-    leaf_aspect: float = 1.0
-    leaf_splay_deg: float = 0.0
-    enable_leaves: bool = True
+    leaf_cluster_count: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
+    leaf_aspect: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 4.0, "step": 0.05}})
+    leaf_splay_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}})
+    enable_leaves: bool = field(default=True, metadata={"ui": {"label": "Enable leaves"}})
     # Fix #4: emit leaves on internodes within ``foliage_depth`` steps of the
     # nearest terminal apex. 1 = legacy (apex only). 3–4 = realistic young
     # shoot coverage. Larger values approach evergreen full-foliage density.
-    foliage_depth: int = 1
+    foliage_depth: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
 
 
 @dataclass(frozen=True)
 class LightConfig:
-    enabled: bool = False
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
     grid_origin: tuple[float, float, float] | None = None
     grid_size: tuple[float, float, float] | None = None
     grid_resolution: tuple[int, int, int] = (64, 64, 64)
-    k_absorption: float = 0.5
-    leaf_area: float = 0.04
-    internode_area_scale: float = 1.0
-    n_rays: int = 16
+    k_absorption: float = field(default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    leaf_area: float = field(default=0.04, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}})
+    internode_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    n_rays: int = field(default=16, metadata={"ui": {"min": 4, "max": 64, "step": 4}})
     light_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
 
 
@@ -191,7 +196,7 @@ class Config:
     light: LightConfig = field(default_factory=LightConfig)
     forest: ForestConfig = field(default_factory=ForestConfig)
     sag: SagConfig = field(default_factory=SagConfig)
-    seed: int = 0
+    seed: int = field(default=0, metadata={"ui": {"min": 0, "max": 2**31 - 1, "step": 1}})
     output: Path = field(default_factory=lambda: Path("tree.glb"))
     log_level: str = "INFO"
 
