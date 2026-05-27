@@ -2,7 +2,7 @@ import numpy as np
 
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material
-from palubicki.sim.tree import Bud, BudState, Node, Tree
+from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
 
 
 def _mat():
@@ -48,3 +48,87 @@ def test_indices_within_bounds():
     tree = _tree_with_n_terminal_buds(2)
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
     assert prim.indices.max() < prim.positions.shape[0]
+
+
+def _tree_one_apex_with_internode(light_factor: float):
+    """Build a 2-node tree with one internode of the requested light_factor
+    and one terminal bud on the child node."""
+    root = Node(position=np.zeros(3))
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(
+        parent_node=root, child_node=child, length=1.0,
+        is_main_axis=True, light_factor=light_factor,
+    )
+    root.children_internodes.append(iod)
+    child.parent_internode = iod
+    bud = Bud(
+        position=child.position.copy(),
+        direction=np.array([0.0, 1.0, 0.0]),
+        axis_order=0, parent_node=child, state=BudState.ACTIVE,
+    )
+    child.terminal_bud = bud
+    tree = Tree(root=root)
+    tree.active_buds.append(bud)
+    tree.all_internodes.append(iod)
+    return tree
+
+
+def _leaf_extent(prim):
+    """Return the (x, y, z) bounding box diagonal of the leaf primitive."""
+    pos = prim.positions
+    return float(np.linalg.norm(pos.max(axis=0) - pos.min(axis=0)))
+
+
+def test_leaf_size_unchanged_when_k_zero():
+    """k=0 → leaf extent is identical regardless of light_factor."""
+    t_sun = _tree_one_apex_with_internode(light_factor=1.0)
+    t_shade = _tree_one_apex_with_internode(light_factor=0.2)
+    p_sun = build_leaves_primitive(t_sun, leaf_size=0.1, material=_mat(),
+                                   sun_shade_k=0.0)
+    p_shade = build_leaves_primitive(t_shade, leaf_size=0.1, material=_mat(),
+                                     sun_shade_k=0.0)
+    assert abs(_leaf_extent(p_sun) - _leaf_extent(p_shade)) < 1e-6
+
+
+def test_leaf_size_scales_with_shadow():
+    """k=1, light_factor=0.5 → leaf size ~1.5x the full-sun leaf."""
+    t_sun = _tree_one_apex_with_internode(light_factor=1.0)
+    t_shade = _tree_one_apex_with_internode(light_factor=0.5)
+    p_sun = build_leaves_primitive(t_sun, leaf_size=0.1, material=_mat(),
+                                   sun_shade_k=1.0)
+    p_shade = build_leaves_primitive(t_shade, leaf_size=0.1, material=_mat(),
+                                     sun_shade_k=1.0)
+    e_sun = _leaf_extent(p_sun)
+    e_shade = _leaf_extent(p_shade)
+    assert e_shade > e_sun * 1.3, f"expected shade > 1.3x sun, got {e_shade}/{e_sun}"
+
+
+def test_leaf_size_clamped_high():
+    """k=5, light_factor=0 → eff_size clamped at 2*leaf_size, not exploded."""
+    t_shade = _tree_one_apex_with_internode(light_factor=0.0)
+    t_sun = _tree_one_apex_with_internode(light_factor=1.0)
+    p_shade = build_leaves_primitive(t_shade, leaf_size=0.1, material=_mat(),
+                                     sun_shade_k=5.0)
+    p_sun = build_leaves_primitive(t_sun, leaf_size=0.1, material=_mat(),
+                                   sun_shade_k=5.0)
+    ratio = _leaf_extent(p_shade) / _leaf_extent(p_sun)
+    # Clamp says shade ≤ 2 * leaf_size, sun = leaf_size → ratio ≤ 2.0 + tolerance.
+    assert ratio <= 2.0 + 1e-6
+
+
+def test_leaf_size_clamped_low():
+    """If somehow eff_size would dip below 0.5*leaf_size, it is clamped up.
+    With k=5, light_factor=1.0 the formula yields exactly leaf_size, so we
+    construct a synthetic regression: light_factor > 1 (shouldn't happen in
+    practice but the clamp must still hold)."""
+    t = _tree_one_apex_with_internode(light_factor=2.0)
+    p = build_leaves_primitive(t, leaf_size=0.1, material=_mat(), sun_shade_k=5.0)
+    # eff_size raw = 0.1 * (1 + 5 * (1 - 2)) = 0.1 * -4 = -0.4 → clamped to 0.05
+    # Resulting extent must be at least the half-size quad diagonal.
+    assert _leaf_extent(p) > 0.0  # i.e. not collapsed to zero
+    # And not bigger than the half-clamp would allow (with petiole offset, etc.)
+    # The reference (k=0, lf=1) quad has extent E0; the clamped-low quad must
+    # have extent ≥ 0.5*E0.
+    t_ref = _tree_one_apex_with_internode(light_factor=1.0)
+    p_ref = build_leaves_primitive(t_ref, leaf_size=0.1, material=_mat(), sun_shade_k=0.0)
+    assert _leaf_extent(p) >= 0.5 * _leaf_extent(p_ref) - 1e-6

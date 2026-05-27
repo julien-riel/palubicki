@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 from palubicki.geom.mesh import Material, Primitive
-from palubicki.sim.tree import BudState, Node, Tree
+from palubicki.sim.tree import BudState, Internode, Node, Tree
 
 
 def build_leaves_primitive(
@@ -17,12 +17,19 @@ def build_leaves_primitive(
     aspect: float = 1.0,
     splay_deg: float = 0.0,
     foliage_depth: int = 1,
+    sun_shade_k: float = 0.0,
 ) -> Primitive:
     """Emit `cluster_count` cross-quads (8 verts each) at each foliage site.
 
     A foliage site is any node within ``foliage_depth`` internode-steps of the
     nearest terminal apex. With foliage_depth=1 this collapses back to
     "apex only" (legacy behavior).
+
+    When ``sun_shade_k > 0`` and the source internode is known, leaf quad
+    edge length scales as
+        eff_size = leaf_size * (1 + sun_shade_k * (1 - internode.light_factor))
+    clamped to [0.5*leaf_size, 2.0*leaf_size]. Sites with no source internode
+    (root apex) use light_factor=1.0 → eff_size=leaf_size.
     """
     sites = _collect_foliage_sites(tree, foliage_depth)
 
@@ -44,12 +51,21 @@ def build_leaves_primitive(
     indices = np.empty((n * idx_per_site,), dtype=np.uint32)
 
     splay_rad = math.radians(splay_deg)
+    min_size = 0.5 * leaf_size
+    max_size = 2.0 * leaf_size
 
-    for i, (center, direction) in enumerate(sites):
+    for i, (center, direction, source_iod) in enumerate(sites):
+        lf = source_iod.light_factor if source_iod is not None else 1.0
+        if sun_shade_k > 0.0:
+            eff_size = leaf_size * (1.0 + sun_shade_k * (1.0 - lf))
+            eff_size = max(min_size, min(max_size, eff_size))
+        else:
+            eff_size = leaf_size
+
         v_start = i * verts_per_site
         i_start = i * idx_per_site
         _emit_leaf_cluster(
-            center, direction, leaf_size, cluster_count, aspect, splay_rad,
+            center, direction, eff_size, cluster_count, aspect, splay_rad,
             positions[v_start : v_start + verts_per_site],
             normals[v_start : v_start + verts_per_site],
             uvs[v_start : v_start + verts_per_site],
@@ -59,8 +75,10 @@ def build_leaves_primitive(
     return Primitive(positions=positions, normals=normals, uvs=uvs, indices=indices, material=material)
 
 
-def _collect_foliage_sites(tree: Tree, foliage_depth: int) -> list[tuple[np.ndarray, np.ndarray]]:
-    """Return list of (position, direction) for foliage placement.
+def _collect_foliage_sites(
+    tree: Tree, foliage_depth: int
+) -> list[tuple[np.ndarray, np.ndarray, "Internode | None"]]:
+    """Return list of (position, direction, source_internode) for foliage placement.
 
     Algorithm:
       1. Apex set = active terminal buds (no children internodes), matching the
@@ -68,16 +86,17 @@ def _collect_foliage_sites(tree: Tree, foliage_depth: int) -> list[tuple[np.ndar
       2. For depth > 1, walk each apex backward through ``parent_internode`` up to
          (depth-1) extra steps. Already-visited nodes are skipped.
 
-    Direction at each site: parent-internode tangent if available; otherwise the
-    apex bud's growth direction.
+    ``source_internode`` is the internode whose tangent gave the site its
+    direction. ``None`` for an apex bud whose parent node has no incoming
+    internode (root case) — those sites use a default light_factor of 1.0.
+
+    Direction at each site: parent-internode tangent if available; otherwise
+    the apex bud's growth direction.
     """
     if foliage_depth < 1:
         return []
 
-    # Depth-1 layer: one site per surviving apex bud (preserves the legacy
-    # per-bud count so canopy density stays the same — multiple buds at the
-    # same node intentionally emit fanned-out clusters).
-    sites: list[tuple[np.ndarray, np.ndarray]] = []
+    sites: list[tuple[np.ndarray, np.ndarray, "Internode | None"]] = []
     apex_nodes: list[Node] = []
     for bud in tree.active_buds:
         if bud.state == BudState.DEAD:
@@ -88,14 +107,13 @@ def _collect_foliage_sites(tree: Tree, foliage_depth: int) -> list[tuple[np.ndar
         sites.append((
             np.asarray(bud.position, dtype=np.float64),
             np.asarray(bud.direction, dtype=np.float64),
+            node.parent_internode,
         ))
         apex_nodes.append(node)
 
     if foliage_depth <= 1:
         return sites
 
-    # Depths 2..foliage_depth: walk back through parent_internode chains from each
-    # apex node. Visit unique ancestor nodes (no double-emission when chains share).
     visited: set[int] = set(id(n) for n in apex_nodes)
     for apex in apex_nodes:
         current = apex
@@ -112,7 +130,11 @@ def _collect_foliage_sites(tree: Tree, foliage_depth: int) -> list[tuple[np.ndar
                 direction = seg / seg_norm if seg_norm > 1e-12 else np.array([0.0, 1.0, 0.0])
             else:
                 direction = np.array([0.0, 1.0, 0.0])
-            sites.append((np.asarray(current.position, dtype=np.float64), direction))
+            sites.append((
+                np.asarray(current.position, dtype=np.float64),
+                direction,
+                current.parent_internode,
+            ))
     return sites
 
 
