@@ -129,3 +129,14 @@ def test_static_style_css_served(client):
     r = client.get("/static/style.css")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/css")
+
+
+def test_app_js_served(client):
+    r = client.get("/static/app.js")
+    assert r.status_code == 200
+    body = r.text
+    # Sanity: core functions must be present
+    assert "function init" in body or "async function init" in body
+    assert "renderSidebar" in body
+    assert "renderField" in body
+    assert "regenerate" in body
