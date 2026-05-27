@@ -186,3 +186,73 @@ Les trois leviers les plus rentables :
 2. Jitter stochastique sur phyllotaxie et longueur d'internode.
 3. Plagiotropisme par poids comme tropisme à part entière (remplaçant le
    sag post-process).
+
+---
+
+## 6. Phyllotaxie : branches vs feuilles individuelles
+
+Distinction importante quand on parle de "support des modes alternate /
+opposite / whorled" :
+
+### Pour les branches (lateral buds) : OUI, supporté
+
+Les trois modes sont implémentés dans
+`src/palubicki/sim/phyllotaxy.py:21-28` :
+
+```python
+if cfg.mode == "alternate":   k = 1
+elif cfg.mode == "opposite":  k = 2
+elif cfg.mode == "whorled":   k = max(1, cfg.whorl_count)
+```
+
+Configuré via YAML :
+
+```yaml
+phyllotaxy:
+  mode: whorled        # ou alternate / opposite
+  whorl_count: 5
+  divergence_angle_deg: 137.5
+  branch_angle_deg: 75
+```
+
+État des presets :
+- `pine.yaml` : `whorled` (verticilles) — correct biologiquement.
+- `oak.yaml`, `birch.yaml` : `alternate`.
+- **Aucun preset n'utilise `opposite`** — il manque une espèce de référence
+  (érable, frêne, lilas, marronnier auraient besoin de ce mode).
+
+### Pour les feuilles individuelles : NON, simplifié
+
+`src/palubicki/geom/leaves.py:48-58` place les feuilles **aux sites de
+feuillage** uniquement (bourgeons terminaux + `foliage_depth` nœuds en
+arrière), avec `cluster_count` quads croisés disposés en **éventail
+azimutal** autour de la direction de croissance
+(`_emit_leaf_cluster`, l.119-145).
+
+Conséquences :
+- Le mode `alternate` du bouleau ne produit pas une alternance feuille-
+  par-feuille le long du rameau — il produit un branchement alterné, et
+  les feuilles sont des bouquets à l'extrémité.
+- Pas de notion de pétiole, de lame (blade) orientée, ou d'insertion
+  réelle au nœud individuel.
+- Pas de feuilles distribuées le long des internodes — seulement aux
+  sites de feuillage.
+
+### Suggestion : phyllotaxie au niveau feuille
+
+Pour vraiment supporter le schéma ci-dessus à l'échelle de la feuille
+individuelle, il faudrait que `leaves.py` :
+
+1. Place des feuilles à **chaque nœud** des derniers internodes (pas
+   juste à l'apex), avec le même `mode` et `divergence_angle_deg` que la
+   phyllotaxie des branches.
+2. Le `cluster_count` deviendrait alors dérivé du mode : 1 pour
+   alternate, 2 pour opposite, `whorl_count` pour whorled — au lieu d'un
+   paramètre libre.
+3. Modèle pétiole simple : un petit offset du nœud le long d'un vecteur
+   radial perpendiculaire à l'axe, avec la lame orientée selon la
+   lumière ou perpendiculaire à l'axe.
+
+Effort estimé : ~150 lignes dans `leaves.py` + 2-3 paramètres en config.
+Effet visuel important pour les rameaux feuillus en gros plan, plus
+faible en silhouette de couronne.
