@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from palubicki.config import SheddingConfig
 from palubicki.sim.bh import compute_v_subtree
+from palubicki.sim.reiteration import activate_reserves_on_shed
 from palubicki.sim.tree import Bud, BudState, Node, Tree
 
 
@@ -29,17 +30,16 @@ def record_qualities(
 def shed_low_quality(tree: Tree, *, cfg: SheddingConfig) -> None:
     if not cfg.enabled:
         return
-    # Walk root-down; if an internode's average quality is below threshold AND its history is full,
-    # remove its subtree. Dead buds/internodes are collected in identity-keyed sets, then
-    # tree.active_buds and tree.all_internodes are filtered once at the end (O(N) instead of
-    # O(N²) when many internodes are shed in the same iteration).
     dead_bud_ids: set[int] = set()
     dead_iod_ids: set[int] = set()
-    _walk_and_shed(tree.root, cfg, dead_bud_ids, dead_iod_ids)
+    activated_buds: list[Bud] = []
+    _walk_and_shed(tree.root, cfg, dead_bud_ids, dead_iod_ids, activated_buds)
     if dead_bud_ids:
         tree.active_buds = [b for b in tree.active_buds if id(b) not in dead_bud_ids]
     if dead_iod_ids:
         tree.all_internodes = [i for i in tree.all_internodes if id(i) not in dead_iod_ids]
+    if activated_buds:
+        tree.active_buds.extend(activated_buds)
 
 
 def _walk_and_shed(
@@ -47,17 +47,27 @@ def _walk_and_shed(
     cfg: SheddingConfig,
     dead_bud_ids: set[int],
     dead_iod_ids: set[int],
+    activated_buds: list[Bud],
 ) -> None:
-    """Iterative pre-order walk: shed low-quality subtrees."""
+    """Iterative pre-order walk: shed low-quality subtrees, activate reserves."""
     stack: list[Node] = [root]
     while stack:
         node = stack.pop()
-        # iterate over a copy: we may mutate children_internodes
         for iod in list(node.children_internodes):
-            if len(iod.quality_history) >= cfg.window and iod.average_quality() < cfg.quality_threshold:
+            if (
+                len(iod.quality_history) >= cfg.window
+                and iod.average_quality() < cfg.quality_threshold
+            ):
                 _kill_subtree(iod.child_node, dead_bud_ids, dead_iod_ids)
-                node.children_internodes = [i for i in node.children_internodes if i is not iod]
+                node.children_internodes = [
+                    i for i in node.children_internodes if i is not iod
+                ]
                 dead_iod_ids.add(id(iod))
+                # Phase 2B: wake up reserves on the parent of the shed branch.
+                activated = activate_reserves_on_shed(
+                    node, n_to_activate=cfg.reactivation_count
+                )
+                activated_buds.extend(activated)
             else:
                 stack.append(iod.child_node)
 

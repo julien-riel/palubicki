@@ -88,3 +88,77 @@ def test_shed_middle_sibling_no_crash():
     assert buds[1].state == BudState.DEAD
     assert buds[0].state == BudState.ACTIVE
     assert buds[2].state == BudState.ACTIVE
+
+
+def test_shed_activates_reserves_when_branch_shed():
+    """When an internode is shed, one RESERVE bud on its parent node should
+    be activated and appear in tree.active_buds."""
+    from palubicki.sim.tree import BudState
+
+    root = Node(position=np.zeros(3))
+    # Attach two children: one healthy, one starved.
+    for i, q in enumerate([5, 0]):
+        child = Node(position=np.array([float(i), 1.0, 0.0]))
+        iod = Internode(parent_node=root, child_node=child, length=1.0,
+                        is_main_axis=(i == 0), window=3)
+        root.children_internodes.append(iod)
+        child.parent_internode = iod
+        bud = Bud(position=child.position, direction=np.array([0, 1, 0]),
+                  axis_order=0, parent_node=child)
+        child.terminal_bud = bud
+    # Add 2 RESERVE buds on the root so reiteration has something to draw on.
+    reserves = []
+    for _ in range(2):
+        rb = Bud(position=np.zeros(3), direction=np.array([1.0, 0.0, 0.0]),
+                 axis_order=1, parent_node=root, state=BudState.ACTIVE)
+        # Manually set RESERVE state (the helper for sim emission isn't used here).
+        rb.state = BudState.RESERVE
+        root.dormant_reserve_buds.append(rb)
+        reserves.append(rb)
+
+    buds = [root.children_internodes[i].child_node.terminal_bud for i in range(2)]
+    tree = Tree(root=root, active_buds=list(buds),
+                all_internodes=[c.parent_internode for c in
+                                [root.children_internodes[0].child_node,
+                                 root.children_internodes[1].child_node]])
+    quality = {buds[0]: 5, buds[1]: 0}
+    for _ in range(5):
+        record_qualities(tree, quality=quality)
+
+    cfg = SheddingConfig(quality_threshold=0.5, window=3, enabled=True, reactivation_count=1)
+    shed_low_quality(tree, cfg=cfg)
+
+    # The starved child was shed; one reserve became ACTIVE and joined active_buds.
+    assert len(root.dormant_reserve_buds) == 1
+    activated = [b for b in root.lateral_buds if b.state is BudState.ACTIVE]
+    assert len(activated) == 1
+    assert activated[0] in tree.active_buds
+
+
+def test_shed_reactivation_count_zero_no_activation():
+    from palubicki.sim.tree import BudState
+
+    root = Node(position=np.zeros(3))
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=root, child_node=child, length=1.0,
+                    is_main_axis=True, window=3)
+    root.children_internodes.append(iod)
+    child.parent_internode = iod
+    bud = Bud(position=child.position, direction=np.array([0, 1, 0]),
+              axis_order=0, parent_node=child)
+    child.terminal_bud = bud
+    rb = Bud(position=np.zeros(3), direction=np.array([1.0, 0.0, 0.0]),
+             axis_order=1, parent_node=root, state=BudState.RESERVE)
+    root.dormant_reserve_buds.append(rb)
+
+    tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
+    for _ in range(5):
+        record_qualities(tree, quality={bud: 0})
+
+    cfg = SheddingConfig(quality_threshold=0.5, window=3, enabled=True, reactivation_count=0)
+    shed_low_quality(tree, cfg=cfg)
+
+    # Reserve untouched.
+    assert len(root.dormant_reserve_buds) == 1
+    assert rb.state is BudState.RESERVE
+    assert rb not in tree.active_buds
