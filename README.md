@@ -179,6 +179,20 @@ Species defaults:
 | pine    | 0.12                      | 0               | 0                  |
 | birch   | 0.20                      | 1               | 1                  |
 
+### Phase 2C — decussate phyllotaxy + sun/shade leaves
+
+- **Decussate phyllotaxy** (`phyllotaxy.mode: decussate`): each node alternates
+  lateral-pair azimuth by 90° around the parent axis. Use
+  `divergence_angle_deg: 0.0` for canonical decussation (maple, ash, dogwood);
+  non-zero values create a decussate spiral.
+- **Sun/shade leaf heterophylly** (`geom.leaf_sun_shade_k`): per-leaf size is
+  scaled by `(1 + k * (1 - light_factor))`, clamped to `[0.5×, 2×]`. The
+  `Internode.light_factor` is captured at creation; leaves of shaded internodes
+  grow larger to capture more photons.
+- **New species preset**: `maple.yaml` combines decussate phyllotaxy, sun/shade
+  leaves (k=0.6), sympodial branching, and reiteration. Oak and birch use
+  k=1.0 and k=0.4 respectively; pine stays at k=0 (needles don't show plasticity).
+
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
@@ -208,7 +222,7 @@ pytest --cov            # coverage report
 - **Phase 1** (livré) : main-vs-lateral tropisms + gaussian jitter on phyllotaxy + stochastic internode length.
 - **Phase 2A** (livré) : sympodial branching mode, `branch_angle_by_order`, explicit plagiotropism term.
 - **Phase 2B** (livré) : bud life cycle (shade mortality, reiteration via dormant reserves).
-- **Phase 2C** : decussate phyllotaxy + sun/shade leaves.
+- **Phase 2C** (livré) : decussate phyllotaxy + sun/shade leaves + maple species preset.
 - **Phase 2D** : progressive elongation + dynamic secondary growth.
 
 See `docs/superpowers/roadmap/`.
