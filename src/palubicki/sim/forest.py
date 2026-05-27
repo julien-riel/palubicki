@@ -8,7 +8,7 @@ import numpy as np
 
 from palubicki.config import (
     Config, ConfigError, EnvelopeConfig, ForestSeed,
-    _SECTION_TYPES, _apply_section_aliases, _load_packaged_species,
+    _SECTION_TYPES, _load_packaged_species,
 )
 
 if TYPE_CHECKING:
@@ -30,9 +30,7 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
         for section_name, type_ in _SECTION_TYPES.items():
             cur_section = getattr(cfg, section_name)
             cur_dict = {f.name: getattr(cur_section, f.name) for f in fields(type_)}
-            preset_section = _apply_section_aliases(
-                section_name, preset.get(section_name, {}) or {}
-            )
+            preset_section = preset.get(section_name, {}) or {}
             allowed = {f.name for f in fields(type_)}
             unknown = set(preset_section) - allowed
             if unknown:
