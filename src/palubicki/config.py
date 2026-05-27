@@ -92,11 +92,18 @@ class PhyllotaxyConfig:
     )
     whorl_count: int = field(default=3, metadata={"ui": {"min": 2, "max": 8, "step": 1}})
     divergence_angle_deg: float = field(default=137.5, metadata={"ui": {"min": 0.0, "max": 360.0, "step": 0.5}})
-    branch_angle_deg: float = field(default=45.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}})
+    # Insertion angle (deg) by axis_order. branch_angle_by_order[k] is the
+    # angle of laterals emitted by a bud whose axis_order is k. If k exceeds
+    # len(list)-1, the value is clamped to the last entry. Must have at least
+    # one element. Example oak: (60.0, 40.0, 30.0, 25.0).
+    branch_angle_by_order: tuple[float, ...] = field(
+        default=(45.0,),
+        metadata={"ui": {"label": "Branch angles by order"}},
+    )
     # Gaussian jitter (σ in degrees) on the azimuthal divergence between
-    # successive lateral buds. 4-6° matches realistic biological variability.
+    # successive lateral buds. 4-6deg matches realistic biological variability.
     divergence_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 30.0, "step": 0.5}})
-    # Gaussian jitter on the branch insertion angle. Clamped to [0°, 90°].
+    # Gaussian jitter on the branch insertion angle. Clamped to [0deg, 90deg].
     branch_angle_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
 
 
@@ -276,6 +283,15 @@ class Config:
             raise ConfigError(
                 f"phyllotaxy.branch_angle_jitter_deg must be >= 0, got {p.branch_angle_jitter_deg}"
             )
+        if not p.branch_angle_by_order:
+            raise ConfigError(
+                "phyllotaxy.branch_angle_by_order must have at least one element"
+            )
+        for i, a in enumerate(p.branch_angle_by_order):
+            if not (0.0 <= a <= 90.0):
+                raise ConfigError(
+                    f"phyllotaxy.branch_angle_by_order[{i}] must be in [0, 90], got {a}"
+                )
 
         g = self.geom
         if not (1.0 <= g.pipe_exponent <= 4.0):
@@ -359,6 +375,13 @@ def load_config(
         unknown = set(sec_data) - allowed
         if unknown:
             raise ConfigError(f"unknown keys in section '{name}': {sorted(unknown)}")
+        if name == "phyllotaxy" and "branch_angle_by_order" in sec_data:
+            v = sec_data["branch_angle_by_order"]
+            if not isinstance(v, (list, tuple)):
+                raise ConfigError(
+                    f"phyllotaxy.branch_angle_by_order must be a list, got {type(v).__name__}"
+                )
+            sec_data = {**sec_data, "branch_angle_by_order": tuple(float(x) for x in v)}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:

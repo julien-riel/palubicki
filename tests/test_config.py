@@ -277,3 +277,37 @@ def test_sympodial_n_consecutive_steps_zero_raises(tmp_path):
             sim=SimConfig(sympodial=SympodialConfig(n_consecutive_steps=0)),
             output=tmp_path / "out.glb",
         )
+
+
+def test_phyllotaxy_branch_angle_by_order_default():
+    from palubicki.config import PhyllotaxyConfig
+    p = PhyllotaxyConfig()
+    assert p.branch_angle_by_order == (45.0,)
+    assert not hasattr(p, "branch_angle_deg")
+
+
+def test_phyllotaxy_branch_angle_by_order_empty_raises(tmp_path):
+    from palubicki.config import PhyllotaxyConfig
+    with pytest.raises(ConfigError, match="at least one element"):
+        _make_config(
+            phyllotaxy=PhyllotaxyConfig(branch_angle_by_order=()),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_phyllotaxy_branch_angle_by_order_out_of_range_raises(tmp_path):
+    from palubicki.config import PhyllotaxyConfig
+    with pytest.raises(ConfigError, match=r"branch_angle_by_order\[0\]"):
+        _make_config(
+            phyllotaxy=PhyllotaxyConfig(branch_angle_by_order=(120.0,)),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_phyllotaxy_branch_angle_by_order_negative_raises(tmp_path):
+    from palubicki.config import PhyllotaxyConfig
+    with pytest.raises(ConfigError, match=r"branch_angle_by_order\[1\]"):
+        _make_config(
+            phyllotaxy=PhyllotaxyConfig(branch_angle_by_order=(45.0, -5.0)),
+            output=tmp_path / "out.glb",
+        )
