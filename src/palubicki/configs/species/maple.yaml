@@ -1,0 +1,66 @@
+# Acer campestre — decussate, sympodial, reiterating, sun/shade leaves
+envelope:
+  shape: ellipsoid
+  rx: 4.0
+  ry: 5.5
+  rz: 4.0
+  marker_count: 22000
+sim:
+  internode_length: 0.16
+  internode_length_jitter: 0.10
+  lambda_apical: 0.80
+  alpha_basipetal: 2.1
+  max_iterations: 42
+  sympodial:
+    enabled: true
+    q_threshold: 1.3
+    n_consecutive_steps: 3
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.18
+    n_consecutive_steps: 3
+tropism:
+  w_perception: 1.0
+  w_orthotropy_main: 0.32
+  w_orthotropy_lateral: 0.04
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.0
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 0.28
+  w_phototropism: 0.30
+  w_direction_inertia: 0.5
+  axis_decay: 0.85
+phyllotaxy:
+  mode: decussate
+  divergence_angle_deg: 0.0
+  whorl_count: 2
+  branch_angle_by_order: [55.0, 38.0, 28.0, 22.0]
+  divergence_jitter_deg: 4.0
+  branch_angle_jitter_deg: 4.0
+  dormant_reserve_count: 2
+shedding:
+  quality_threshold: 0.12
+  window: 5
+  enabled: true
+  reactivation_count: 1
+sag:
+  enabled: true
+  k: 0.006
+  max_bend_deg: 4.0
+  rigid_axis_order: 1
+light:
+  enabled: true
+  k_absorption: 0.55
+geom:
+  ring_sides: 10
+  pipe_exponent: 2.40
+  r_tip: 0.007
+  bark_color: [0.40, 0.28, 0.18]
+  bark_texture: "proc:oak_bark"
+  leaf_texture: "proc:oak_leaf"
+  leaf_size: 0.12
+  leaf_aspect: 1.1
+  leaf_cluster_count: 2
+  leaf_splay_deg: 30.0
+  foliage_depth: 4
+  leaf_sun_shade_k: 0.6
