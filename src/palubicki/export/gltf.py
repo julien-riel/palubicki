@@ -23,7 +23,7 @@ _TARGET_ARRAY = 34962           # ARRAY_BUFFER
 _TARGET_ELEMENT_ARRAY = 34963   # ELEMENT_ARRAY_BUFFER
 
 
-def write_glb(mesh: Mesh, output_path: Path, *, asset_meta: dict) -> None:
+def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
     if not mesh.primitives or all(p.positions.shape[0] == 0 for p in mesh.primitives):
         raise ExportError("empty mesh - simulation produced no geometry")
 
@@ -79,7 +79,12 @@ def write_glb(mesh: Mesh, output_path: Path, *, asset_meta: dict) -> None:
     gltf.samplers = samplers
     gltf.buffers = [pygltflib.Buffer(byteLength=len(buffer_data))]
     gltf.set_binary_blob(bytes(buffer_data))
-    gltf.save_binary(str(output_path))
+    return b"".join(gltf.save_to_bytes())
+
+
+def write_glb(mesh: Mesh, output_path: Path, *, asset_meta: dict) -> None:
+    data = write_glb_to_bytes(mesh, asset_meta=asset_meta)
+    Path(output_path).write_bytes(data)
 
 
 def _pad4(data: bytearray) -> None:
