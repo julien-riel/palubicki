@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import yaml
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -58,5 +59,23 @@ def create_app(initial_config: Config) -> FastAPI:
                 content={"error": f"{type(e).__name__}: {e}"},
             )
         return Response(content=data, media_type="model/gltf-binary")
+
+    @app.post("/api/save-yaml")
+    async def post_save_yaml(request: Request):
+        payload = await request.json()
+        try:
+            cfg = load_config(
+                yaml_path=None,
+                cli_overrides=config_dict_to_overrides(payload),
+                output=Path("tree.glb"),
+            )
+        except ConfigError as e:
+            return JSONResponse(status_code=400, content={"error": str(e)})
+        text = yaml.safe_dump(config_to_dict_for_ui(cfg), sort_keys=False)
+        return Response(
+            content=text,
+            media_type="application/x-yaml",
+            headers={"Content-Disposition": 'attachment; filename="tree.yaml"'},
+        )
 
     return app

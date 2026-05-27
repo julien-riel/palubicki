@@ -77,3 +77,21 @@ def test_post_generate_invalid_config_returns_400(client):
     r = client.post("/api/generate", json=bad)
     assert r.status_code == 400
     assert "error" in r.json()
+
+
+def test_post_save_yaml_returns_loadable_yaml(client, tmp_path):
+    import yaml as _yaml
+    r = client.post("/api/save-yaml", json=_tiny_config_dict())
+    assert r.status_code == 200
+    body = r.text
+    parsed = _yaml.safe_load(body)
+    assert parsed["envelope"]["marker_count"] == 200
+
+    # Should round-trip through load_config
+    from palubicki.edit.config_io import config_dict_to_overrides
+    cfg = load_config(
+        yaml_path=None,
+        cli_overrides=config_dict_to_overrides(parsed),
+        output=tmp_path / "tree.glb",
+    )
+    assert cfg.envelope.marker_count == 200
