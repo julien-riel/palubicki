@@ -3,6 +3,17 @@ from __future__ import annotations
 from palubicki.sim.tree import Internode, Node, Tree
 
 
+def update_diameters_incremental(tree: Tree, r_tip: float, exponent: float) -> None:
+    """Recompute pipe-model diameters for all internodes in-place.
+
+    Idempotent: calling multiple times on an unchanged tree yields identical
+    diameters. Intended for per-iteration calls inside the simulator loop.
+    Positional arguments match the existing ``compute_radii`` style so callers
+    can use either form.
+    """
+    compute_radii(tree, r_tip=r_tip, exponent=exponent)
+
+
 def compute_radii(tree: Tree, *, r_tip: float, exponent: float) -> None:
     """Fill `internode.diameter` in-place using pipe model r^n = sum(r_child^n).
 

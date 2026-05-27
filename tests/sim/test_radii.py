@@ -1,6 +1,6 @@
 import numpy as np
 
-from palubicki.sim.radii import compute_radii
+from palubicki.sim.radii import compute_radii, update_diameters_incremental
 from palubicki.sim.tree import Internode, Node, Tree
 
 
@@ -36,3 +36,24 @@ def test_compute_radii_pipe_model_two_children():
     assert iod_mid_right.diameter == 0.2
     expected_parent_radius = (0.1**2 + 0.1**2) ** 0.5
     assert abs(iod_root_mid.diameter - 2.0 * expected_parent_radius) < 1e-9
+
+
+def test_update_diameters_incremental_idempotent():
+    """Calling update_diameters_incremental twice on the same unchanged tree
+    yields bit-identical diameters."""
+    root = Node(position=np.zeros(3))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    left = Node(position=np.array([-1.0, 2.0, 0.0]))
+    right = Node(position=np.array([1.0, 2.0, 0.0]))
+    iod_root_mid = Internode(parent_node=root, child_node=mid, length=1.0, is_main_axis=True)
+    iod_mid_left = Internode(parent_node=mid, child_node=left, length=1.0, is_main_axis=False)
+    iod_mid_right = Internode(parent_node=mid, child_node=right, length=1.0, is_main_axis=True)
+    root.children_internodes.append(iod_root_mid)
+    mid.children_internodes.extend([iod_mid_left, iod_mid_right])
+    tree = Tree(root=root, all_internodes=[iod_root_mid, iod_mid_left, iod_mid_right])
+
+    update_diameters_incremental(tree, r_tip=0.005, exponent=2.49)
+    first = [iod.diameter for iod in tree.all_internodes]
+    update_diameters_incremental(tree, r_tip=0.005, exponent=2.49)
+    second = [iod.diameter for iod in tree.all_internodes]
+    assert first == second
