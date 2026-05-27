@@ -66,7 +66,7 @@ def test_oak_laterals_tilt_toward_horizontal(tmp_path):
     assert len(angles) >= 5, f"need >=5 first-order laterals, got {len(angles)}"
     mean_angle = float(np.mean(angles))
     median_angle = float(np.median(angles))
-    # Plagiotropism (w_plagiotropism_lateral=0.70 in oak.yaml) should pull
+    # Plagiotropism (w_plagiotropism_lateral=0.60 in oak.yaml) should pull
     # first-order laterals toward the horizontal.  Thresholds are generous
     # enough to accommodate stochastic variation across random seeds:
     # observed mean ~29-35 deg, median ~28-31 deg.
