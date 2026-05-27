@@ -107,3 +107,25 @@ def test_get_root_returns_html(client):
 def test_get_static_path_404_for_missing(client):
     r = client.get("/static/nonexistent.js")
     assert r.status_code == 404
+
+
+def test_index_html_links_static_assets(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    text = r.text
+    # Verify the vendored scripts and app entry are referenced
+    assert "/static/style.css" in text
+    assert "/static/vendor/three.min.js" in text
+    assert "/static/vendor/GLTFLoader.js" in text
+    assert "/static/vendor/OrbitControls.js" in text
+    assert "/static/app.js" in text
+    # Key DOM ids the JS will hook into
+    for el_id in ("sections-root", "regenerate-btn", "viewer-canvas",
+                  "species-select", "spinner", "toast-container"):
+        assert f'id="{el_id}"' in text
+
+
+def test_static_style_css_served(client):
+    r = client.get("/static/style.css")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/css")
