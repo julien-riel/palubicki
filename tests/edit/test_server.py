@@ -41,12 +41,26 @@ def test_get_initial_returns_valid_config(client, tmp_path):
     assert cfg.envelope.shape in ("sphere", "ellipsoid", "cone", "half_ellipsoid")
 
 
-def test_post_species_oak_returns_preset_dict(client):
+def test_post_species_oak_returns_full_merged_config(client):
     r = client.post("/api/species/oak")
     assert r.status_code == 200
     body = r.json()
-    # Preset YAML for oak contains an "envelope" section
-    assert "envelope" in body or "sim" in body or "geom" in body
+    # Response is defaults + preset merged: all sections must be present
+    # so the frontend can replace state.values wholesale.
+    for section in ("envelope", "sim", "tropism", "phyllotaxy", "shedding",
+                    "geom", "light", "sag"):
+        assert section in body, f"missing section: {section}"
+
+
+def test_post_species_switch_does_not_carry_over_previous_species(client):
+    # Pine has no sag override, so requesting pine after oak must NOT return
+    # oak's sag settings — it should be pristine defaults + pine's overrides.
+    oak = client.post("/api/species/oak").json()
+    pine = client.post("/api/species/pine").json()
+    # Defaults for sag are enabled=False, k=0.01 (per config.SagConfig).
+    assert pine["sag"]["enabled"] is False
+    # And oak's leaf settings must not leak into pine.
+    assert pine["geom"]["leaf_aspect"] != oak["geom"]["leaf_aspect"]
 
 
 def test_post_species_unknown_returns_400(client):

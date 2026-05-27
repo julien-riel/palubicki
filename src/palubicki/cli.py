@@ -113,6 +113,8 @@ def _build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--species",
                     choices=species_choices if species_choices else None,
                     default=None)
+    ed.add_argument("--seed", type=int, default=None,
+                    help="Initial seed (overrides --config / --species).")
     ed.add_argument("--port", type=int, default=8765)
     ed.add_argument("--no-browser", action="store_true")
 
@@ -357,10 +359,13 @@ def _cmd_edit(args) -> int:
         )
         return 2
 
+    overrides: dict = {}
+    if args.seed is not None:
+        overrides["seed"] = args.seed
     try:
         cfg = load_config(
             yaml_path=args.config,
-            cli_overrides={},
+            cli_overrides=overrides,
             output=Path("tree.glb"),
             species=args.species,
         )

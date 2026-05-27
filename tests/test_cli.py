@@ -244,7 +244,7 @@ def test_edit_help_lists_flags(capsys):
         main(["edit", "--help"])
     out = capsys.readouterr().out
     assert exc.value.code == 0
-    for flag in ("--config", "--species", "--port", "--no-browser"):
+    for flag in ("--config", "--species", "--seed", "--port", "--no-browser"):
         assert flag in out
 
 

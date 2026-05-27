@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import time
 from pathlib import Path
 
 import yaml
@@ -15,6 +17,8 @@ from palubicki.edit.schema import build_schema
 from palubicki.export.gltf import ExportError, write_glb_to_bytes
 from palubicki.geom.builder import build_mesh
 from palubicki.sim.simulator import simulate
+
+logger = logging.getLogger("palubicki.edit")
 
 
 def create_app(initial_config: Config) -> FastAPI:
@@ -32,10 +36,15 @@ def create_app(initial_config: Config) -> FastAPI:
     @app.post("/api/species/{name}")
     def post_species(name: str) -> JSONResponse:
         try:
-            data = _load_packaged_species(name)
+            cfg = load_config(
+                yaml_path=None,
+                cli_overrides={},
+                output=Path("tree.glb"),
+                species=name,
+            )
         except ConfigError as e:
             return JSONResponse(status_code=400, content={"error": str(e)})
-        return JSONResponse(content=data)
+        return JSONResponse(content=config_to_dict_for_ui(cfg))
 
     @app.post("/api/generate")
     async def post_generate(request: Request):
@@ -47,18 +56,25 @@ def create_app(initial_config: Config) -> FastAPI:
                 output=Path("tree.glb"),
             )
         except ConfigError as e:
+            logger.warning("generate: config error: %s", e)
             return JSONResponse(status_code=400, content={"error": str(e)})
+        t0 = time.perf_counter()
         try:
             tree = await asyncio.to_thread(simulate, cfg)
             mesh = build_mesh(tree, cfg)
             data = write_glb_to_bytes(mesh, asset_meta={"seed": cfg.seed})
         except ExportError as e:
+            logger.warning("generate: export error: %s", e)
             return JSONResponse(status_code=400, content={"error": str(e)})
         except Exception as e:  # noqa: BLE001
+            logger.exception("generate: unexpected error")
             return JSONResponse(
                 status_code=500,
                 content={"error": f"{type(e).__name__}: {e}"},
             )
+        n_tris = sum(p.indices.shape[0] // 3 for p in mesh.primitives)
+        logger.info("generate: %.2fs, %d triangles, %d bytes",
+                    time.perf_counter() - t0, n_tris, len(data))
         return Response(content=data, media_type="model/gltf-binary")
 
     @app.post("/api/save-yaml")

@@ -124,10 +124,10 @@ function renderSpecies() {
     const name = sel.value;
     if (!name) return;
     try {
-      const preset = await fetchJSON(`/api/species/${name}`, { method: "POST" });
-      // Merge preset over current values (preset keys override).
-      mergeInto(state.values, preset);
-      // Re-render to reflect new values.
+      // Backend returns defaults + preset already merged — match CLI semantics
+      // (`palubicki generate --species X` starts from defaults, not from the prior preset).
+      const merged = await fetchJSON(`/api/species/${name}`, { method: "POST" });
+      state.values = merged;
       renderSidebar();
     } catch (err) {
       showToast("Preset error: " + err.message);
