@@ -152,3 +152,13 @@ def test_app_js_has_viewer_logic(client):
     assert "disposeChildren" in body
     assert "fitCameraToObject" in body
     assert "replaceTree" in body
+
+
+def test_app_js_has_export_and_toggle_handlers(client):
+    r = client.get("/static/app.js")
+    body = r.text
+    for sym in ("exportGlb", "exportYaml", "toggleLeaves", "toggleWireframe"):
+        assert sym in body
+    # Action handlers must be wired to the DOM ids:
+    for el_id in ("export-glb-btn", "export-yaml-btn", "toggle-leaves-btn", "toggle-wireframe-btn"):
+        assert el_id in body

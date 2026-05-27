@@ -148,6 +148,66 @@ function mergeInto(target, source) {
 
 function attachActions() {
   document.getElementById("regenerate-btn").addEventListener("click", regenerate);
+  document.getElementById("export-glb-btn").addEventListener("click", exportGlb);
+  document.getElementById("export-yaml-btn").addEventListener("click", exportYaml);
+  document.getElementById("toggle-leaves-btn").addEventListener("click", toggleLeaves);
+  document.getElementById("toggle-wireframe-btn").addEventListener("click", toggleWireframe);
+}
+
+function exportGlb() {
+  if (!state.lastGlbBytes) return;
+  const blob = new Blob([state.lastGlbBytes], { type: "model/gltf-binary" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = "tree.glb";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportYaml() {
+  try {
+    const r = await fetch("/api/save-yaml", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state.values),
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); if (j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    const text = await r.text();
+    const blob = new Blob([text], { type: "application/x-yaml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "tree.yaml";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showToast("YAML export failed: " + err.message);
+  }
+}
+
+let leavesHidden = false;
+function toggleLeaves() {
+  leavesHidden = !leavesHidden;
+  viewer.treeRoot.traverse((obj) => {
+    if (obj.isMesh && obj.material) {
+      const matName = (obj.material.name || "").toLowerCase();
+      if (matName.includes("leaf")) obj.visible = !leavesHidden;
+    }
+  });
+}
+
+let wireframe = false;
+function toggleWireframe() {
+  wireframe = !wireframe;
+  viewer.treeRoot.traverse((obj) => {
+    if (obj.isMesh && obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) m.wireframe = wireframe;
+    }
+  });
 }
 
 function initViewer() {
