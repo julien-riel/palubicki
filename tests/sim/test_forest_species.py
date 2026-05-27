@@ -32,7 +32,7 @@ def test_per_tree_config_applies_oak_preset(tmp_path):
     derived = per_tree_config(cfg, seed_entry, tree_index=0)
     assert derived.envelope.shape == "half_ellipsoid"
     assert derived.envelope.rx == pytest.approx(5.0)
-    assert derived.phyllotaxy.branch_angle_deg == pytest.approx(60.0)
+    assert derived.phyllotaxy.branch_angle_by_order == (60.0, 40.0, 30.0, 25.0)
     assert derived.envelope.center == (0.0, 0.0, 0.0)
 
 
