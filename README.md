@@ -138,6 +138,21 @@ If your tree looks too dense or too sparse:
 - **Too sparse / single stem:** lower `shedding.quality_threshold` to 0 (or disable with `--no-shed`), and consider lowering `r_kill` so markers persist longer.
 - **Branches escaping the envelope:** keep `re_perceive_per_substep=True` (the default) — disable only via `--no-resample` for performance, accepting visual spikes.
 
+### Phase 2A — branching architecture
+
+- **Sympodial mode** (`sim.sympodial.enabled: true`): when an apical bud's
+  quality stays below `q_threshold` for `n_consecutive_steps` consecutive
+  iterations, the best-Q sibling lateral takes over as the new leader (oak,
+  maple, lime). Disable for monopodial species (pine, birch).
+- **Branch angle by order** (`phyllotaxy.branch_angle_by_order`): replaces
+  the legacy scalar `branch_angle_deg`. The list indexes the insertion angle
+  by axis order — e.g. `[60.0, 40.0, 30.0, 25.0]` opens primary laterals
+  wide and tightens distal ramification.
+- **Explicit plagiotropism** (`tropism.w_plagiotropism_main/_lateral`):
+  projects the current direction onto the horizontal plane. Use on laterals
+  to splay branches flat without polluting the gravity tuning (pendula
+  species can stack gravitropism + plagiotropism independently).
+
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
@@ -163,7 +178,12 @@ pytest --cov            # coverage report
 
 - **V2** : voxel light shadowing (BHls).
 - **V3** : obstacles + multi-tree forest simulation.
-- ~~**V4** : species presets (oak, pine, birch) — livré~~. Apple, willow, weeping ash reportés (saule en particulier nécessite un tropisme de poids non implémenté).
+- ~~**V4** : species presets (oak, pine, birch) — livré~~.
+- **Phase 1** (livré) : main-vs-lateral tropisms + gaussian jitter on phyllotaxy + stochastic internode length.
+- **Phase 2A** (livré) : sympodial branching mode, `branch_angle_by_order`, explicit plagiotropism term.
+- **Phase 2B** : bud life cycle (shade mortality, reiteration).
+- **Phase 2C** : decussate phyllotaxy + sun/shade leaves.
+- **Phase 2D** : progressive elongation + dynamic secondary growth.
 
 See `docs/superpowers/roadmap/`.
 
