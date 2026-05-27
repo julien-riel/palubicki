@@ -58,3 +58,20 @@ def test_node_default_dormant_reserve_buds_is_empty_list():
     other = Node(position=np.zeros(3))
     node.dormant_reserve_buds.append("sentinel")
     assert other.dormant_reserve_buds == []
+
+
+def test_internode_default_light_factor_one():
+    p = Node(position=np.zeros(3))
+    c = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=p, child_node=c, length=1.0, is_main_axis=True)
+    assert iod.light_factor == 1.0
+
+
+def test_internode_accepts_explicit_light_factor():
+    p = Node(position=np.zeros(3))
+    c = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(
+        parent_node=p, child_node=c, length=1.0,
+        is_main_axis=True, light_factor=0.42,
+    )
+    assert iod.light_factor == 0.42
