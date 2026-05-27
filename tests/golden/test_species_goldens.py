@@ -29,7 +29,7 @@ def _hash_buffers(glb_path: Path) -> str:
     return sha.hexdigest()
 
 
-@pytest.mark.parametrize("species", ["oak", "pine", "birch"])
+@pytest.mark.parametrize("species", ["oak", "pine", "birch", "maple"])
 def test_species_golden(tmp_path, update_goldens, species):
     out = tmp_path / f"{species}.glb"
     rc = main([
