@@ -14,7 +14,7 @@ from palubicki.sim.bh import allocate, compute_v_subtree
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
-from palubicki.sim.phyllotaxy import lateral_bud_directions
+from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
@@ -230,9 +230,10 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 )
                 new_node.terminal_bud = terminal
 
+                node_idx = state.node_index
                 lateral_dirs = lateral_bud_directions(
                     d, cfg.phyllotaxy,
-                    node_index=state.node_index,
+                    node_index=node_idx,
                     seed=cfg.seed,
                     axis_order=cur.axis_order,
                 )
@@ -243,6 +244,22 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                         axis_order=cur.axis_order + 1, parent_node=new_node,
                     )
                     new_node.lateral_buds.append(lat)
+
+                # Phase 2B: emit RESERVE buds (not added to active_buds).
+                if cfg.phyllotaxy.dormant_reserve_count > 0:
+                    reserve_dirs = reserve_bud_directions(
+                        d, cfg.phyllotaxy,
+                        node_index=node_idx,
+                        seed=cfg.seed,
+                        count=cfg.phyllotaxy.dormant_reserve_count,
+                    )
+                    for rd in reserve_dirs:
+                        rbud = Bud(
+                            position=new_pos.copy(), direction=rd,
+                            axis_order=cur.axis_order + 1, parent_node=new_node,
+                            state=BudState.RESERVE,
+                        )
+                        new_node.dormant_reserve_buds.append(rbud)
 
                 new_active.extend(new_node.lateral_buds)
                 cur.state = BudState.DEAD

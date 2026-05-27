@@ -458,3 +458,73 @@ def test_internode_length_jitter_deterministic_with_seed():
     import statistics
     assert len(a) > 5
     assert abs(statistics.mean(a) - 0.1) < 0.05
+
+
+def test_simulator_emits_dormant_reserves_when_configured(tmp_path):
+    """When phyllotaxy.dormant_reserve_count > 0, every new node carries
+    that many RESERVE buds in node.dormant_reserve_buds."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
+        SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+    from palubicki.sim.tree import BudState
+
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=8),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(mode="alternate", dormant_reserve_count=2),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        light=LightConfig(),
+        output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+
+    # Walk all nodes, count reserves.
+    seen_nodes = 0
+    total_reserves = 0
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        seen_nodes += 1
+        for r in n.dormant_reserve_buds:
+            assert r.state is BudState.RESERVE
+        # Root has no parent emission, so it should have 0 reserves; others should have 2.
+        if n is not tree.root:
+            assert len(n.dormant_reserve_buds) == 2, (
+                f"expected 2 reserves on emitted node, got {len(n.dormant_reserve_buds)}"
+            )
+        total_reserves += len(n.dormant_reserve_buds)
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+
+    assert seen_nodes > 1
+    assert total_reserves > 0
+
+
+def test_simulator_no_reserves_when_count_zero(tmp_path):
+    from palubicki.config import (
+        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
+        SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(max_iterations=5),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(mode="alternate", dormant_reserve_count=0),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        light=LightConfig(),
+        output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        assert n.dormant_reserve_buds == []
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
