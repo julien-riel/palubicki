@@ -173,3 +173,34 @@ def test_vertical_chain_geometric_pin():
     assert prim.indices[75:78].tolist() == [20, 2, 1]
     assert prim.indices[78:81].tolist() == [20, 3, 2]
     assert prim.indices[81:84].tolist() == [20, 4, 3]
+
+
+def test_build_bark_primitive_reads_sag_offset():
+    """When a node has a non-zero sag_offset, the tube vertices should reflect
+    the bent position (position + sag_offset), not the raw topological position."""
+    import numpy as np
+    from palubicki.geom.mesh import Material
+    from palubicki.geom.tubes import build_bark_primitive
+    from palubicki.sim.tree import Internode, Node, Tree
+
+    root = Node(position=np.zeros(3))
+    tip = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0,
+                    is_main_axis=True, diameter=0.10)
+    root.children_internodes.append(iod)
+    tip.parent_internode = iod
+    tree = Tree(root=root, all_internodes=[iod])
+
+    mat = Material(name="bark", base_color=(0.3, 0.2, 0.1, 1.0),
+                   metallic=0.0, roughness=1.0, base_color_texture_png=None,
+                   alpha_mode="OPAQUE", alpha_cutoff=0.5, double_sided=False)
+    prim_baseline = build_bark_primitive(tree, ring_sides=6, material=mat)
+    baseline_max_y = float(prim_baseline.positions[:, 1].max())
+
+    # Apply a downward sag_offset of -0.5 to the tip and rebuild.
+    tip.sag_offset = np.array([0.0, -0.5, 0.0])
+    prim_bent = build_bark_primitive(tree, ring_sides=6, material=mat)
+    bent_max_y = float(prim_bent.positions[:, 1].max())
+
+    # The tube tip should have moved downward.
+    assert bent_max_y < baseline_max_y - 0.3

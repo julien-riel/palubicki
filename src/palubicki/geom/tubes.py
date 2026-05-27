@@ -137,7 +137,9 @@ def _emit_chain_tube(
 
     columns = ring_sides + 1  # seam duplicated for clean UVs
 
-    node_positions = np.asarray([n.position for n in chain.nodes], dtype=np.float64)  # (N, 3)
+    node_positions = np.asarray(
+        [n.position + n.sag_offset for n in chain.nodes], dtype=np.float64
+    )  # (N, 3)  — bent positions; sag_offset is np.zeros(3) when sag disabled
     radii_arr = np.asarray(chain.radii, dtype=np.float64)  # (N,)
 
     tangents = _compute_tangents(node_positions)  # (N, 3)
@@ -209,7 +211,7 @@ def _emit_root_cap(
     When the trunk chain had < 2 nodes, no ring exists; the center vertex is still
     emitted (legacy behavior) but no triangles are issued.
     """
-    center = chain.nodes[0].position.astype(np.float64)
+    center = (chain.nodes[0].position + chain.nodes[0].sag_offset).astype(np.float64)
     positions = center[None, :]                                       # (1, 3)
     normals = np.array([[0.0, -1.0, 0.0]], dtype=np.float64)          # (1, 3)
     uvs = np.array([[0.5, 0.5]], dtype=np.float32)                    # (1, 2)
