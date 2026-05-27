@@ -47,4 +47,5 @@ output/
 tests/golden/*.actual.glb
 
 # Claude Code local state
-.claude/
+.claude/worktrees
+.claude/**/*.lock
