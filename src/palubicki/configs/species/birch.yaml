@@ -60,3 +60,4 @@ geom:
   leaf_cluster_count: 3
   leaf_splay_deg: 20
   foliage_depth: 3
+  leaf_sun_shade_k: 0.4
