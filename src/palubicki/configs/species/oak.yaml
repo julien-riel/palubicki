@@ -22,7 +22,7 @@ tropism:
   w_gravitropism_main: 0.0
   w_gravitropism_lateral: 0.0
   w_plagiotropism_main: 0.0
-  w_plagiotropism_lateral: 0.30
+  w_plagiotropism_lateral: 0.60
   w_phototropism: 0.35
   w_direction_inertia: 0.5
   axis_decay: 0.85
