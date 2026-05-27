@@ -50,9 +50,9 @@ def test_unknown_species_raises(tmp_path):
         )
 
 
-def test_list_species_finds_three():
+def test_list_species_finds_four():
     names = _list_species()
-    assert set(names) == {"oak", "pine", "birch"}
+    assert set(names) == {"oak", "pine", "birch", "maple"}
 
 
 def test_load_preset_oak(tmp_path):
