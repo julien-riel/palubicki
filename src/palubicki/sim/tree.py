@@ -51,6 +51,8 @@ class Internode:
     diameter: float = 0.0
     window: int = 5
     light_factor: float = 1.0
+    birth_iteration: int = 0
+    length_target: float = 0.0
     quality_history: deque[float] = field(init=False)
 
     def __post_init__(self) -> None:
