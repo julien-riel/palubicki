@@ -51,19 +51,18 @@ class SimConfig:
 @dataclass(frozen=True)
 class TropismConfig:
     w_perception: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
-    # Orthotropy: tendency to grow UPWARD (+Y). What the previous code called
-    # "w_gravity" was actually orthotropy. Old YAML keys "w_gravity" still load
-    # via _load_tropism_compat (config loader).
-    w_orthotropy: float = field(default=0.3, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
-    # True gravitropism: tendency to grow DOWNWARD (-Y). For weeping/drooping
-    # species (birch pendula, weeping willow). Default 0 keeps prior behavior.
-    w_gravitropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    # Orthotropy = pull toward +Y. Distinct main-vs-lateral weights so axe principal
+    # can stay vertical while latéraux open horizontally (oak/birch) or stay
+    # near-horizontal (pine whorls).
+    w_orthotropy_main: float = field(default=0.3, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    w_orthotropy_lateral: float = field(default=0.1, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    # Gravitropism = pull toward -Y. Distinct main vs lateral so e.g. birch
+    # pendula can droop its laterals while the trunk stays vertical.
+    w_gravitropism_main: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    w_gravitropism_lateral: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_phototropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_direction_inertia: float = field(default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)  # not exposed; vec3 stays defaulted
-    # Fix #2: per-axis-order decay. Each tropism weight at order k is multiplied
-    # by axis_decay**k. With 0.7: trunk gets full w, primaries 0.7 w, secondaries
-    # 0.49 w. Set to 1.0 to disable (uniform across orders).
     axis_decay: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}})
 
 
@@ -221,6 +220,15 @@ class Config:
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
 
+        t = self.tropism
+        for fname in (
+            "w_orthotropy_main", "w_orthotropy_lateral",
+            "w_gravitropism_main", "w_gravitropism_lateral",
+        ):
+            v = getattr(t, fname)
+            if v < 0:
+                raise ConfigError(f"tropism.{fname} must be >= 0, got {v}")
+
         g = self.geom
         if not (1.0 <= g.pipe_exponent <= 4.0):
             raise ConfigError(f"geom.pipe_exponent must be in [1, 4], got {g.pipe_exponent}")
@@ -274,15 +282,6 @@ _SECTION_TYPES = {
 }
 
 
-def _apply_section_aliases(section_name: str, sec_data: dict) -> dict:
-    """Map legacy keys to renamed ones. Mutation-safe: returns a new dict."""
-    if section_name == "tropism" and "w_gravity" in sec_data and "w_orthotropy" not in sec_data:
-        out = dict(sec_data)
-        out["w_orthotropy"] = out.pop("w_gravity")
-        return out
-    return sec_data
-
-
 def load_config(
     *,
     yaml_path: Path | None,
@@ -307,7 +306,7 @@ def load_config(
     top_field_names = {f.name for f in fields(Config)}
 
     for name, type_ in _SECTION_TYPES.items():
-        sec_data = _apply_section_aliases(name, data.get(name, {}) or {})
+        sec_data = data.get(name, {}) or {}
         allowed = {f.name for f in fields(type_)}
         unknown = set(sec_data) - allowed
         if unknown:
