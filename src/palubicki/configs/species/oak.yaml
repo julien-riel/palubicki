@@ -36,14 +36,23 @@ shedding:
   quality_threshold: 0.15
   window: 5
   enabled: true
+light:
+  enabled: true
+  k_absorption: 0.55
 sag:
   enabled: true
   k: 0.005
   max_bend_deg: 4.0
   rigid_axis_order: 1
 geom:
+  ring_sides: 10
   pipe_exponent: 2.49
+  r_tip: 0.008
+  bark_color: [0.32, 0.22, 0.14]
+  bark_texture: "proc:oak_bark"
+  leaf_texture: "proc:oak_leaf"
   leaf_size: 0.14
   leaf_aspect: 1.0
   leaf_cluster_count: 3
+  leaf_splay_deg: 25
   foliage_depth: 4

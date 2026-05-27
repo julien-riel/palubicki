@@ -35,11 +35,20 @@ shedding:
   quality_threshold: 0.20
   window: 5
   enabled: true
+light:
+  enabled: true
+  k_absorption: 0.65
 sag:
   enabled: false
 geom:
+  ring_sides: 8
   pipe_exponent: 2.30
+  r_tip: 0.007
+  bark_color: [0.45, 0.25, 0.18]
+  bark_texture: "proc:pine_bark"
+  leaf_texture: "proc:pine_needle"
   leaf_size: 0.06
   leaf_aspect: 0.025
   leaf_cluster_count: 5
+  leaf_splay_deg: 25
   foliage_depth: 3

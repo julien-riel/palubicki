@@ -34,14 +34,23 @@ shedding:
   quality_threshold: 0.02
   window: 5
   enabled: true
+light:
+  enabled: true
+  k_absorption: 0.45
 sag:
   enabled: true
   k: 0.010
   max_bend_deg: 6.0
   rigid_axis_order: 1
 geom:
+  ring_sides: 8
   pipe_exponent: 2.25
+  r_tip: 0.006
+  bark_color: [0.85, 0.82, 0.75]
+  bark_texture: "proc:birch_bark"
+  leaf_texture: "proc:birch_leaf"
   leaf_size: 0.05
   leaf_aspect: 0.7
   leaf_cluster_count: 3
+  leaf_splay_deg: 20
   foliage_depth: 3
