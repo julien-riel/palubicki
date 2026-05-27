@@ -22,6 +22,7 @@ class Bud:
     parent_node: "Node"
     age: int = 0
     state: BudState = BudState.ACTIVE
+    low_quality_steps: int = 0
 
 
 @dataclass(eq=False)
