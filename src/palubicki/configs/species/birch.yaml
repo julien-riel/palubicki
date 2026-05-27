@@ -1,4 +1,4 @@
-# Betula pendula — élancé, branches fines, port pleureur
+# Betula pendula — monopodial pleureur, plagiotrope faible
 envelope:
   shape: ellipsoid
   rx: 2.5
@@ -8,47 +8,40 @@ envelope:
 sim:
   internode_length: 0.18
   internode_length_jitter: 0.15
-  # Birch has very strong apical dominance — single straight leader.
   lambda_apical: 0.95
   alpha_basipetal: 2.0
-  max_iterations: 45
+  max_iterations: 50
+  sympodial:
+    enabled: false
 tropism:
-  # Pendula: trunk strictly orthotropic, lateral axes get a real downward pull.
-  # This is the proper plagiotropism mechanism; the sag pass below is now a
-  # complementary touch, not the primary droop source.
+  w_perception: 1.0
   w_orthotropy_main: 0.40
-  w_orthotropy_lateral: 0.05      # weaker than gravi so net is DOWN
+  w_orthotropy_lateral: 0.05
   w_gravitropism_main: 0.0
-  w_gravitropism_lateral: 0.45    # strong pull — primary droop source
-  w_phototropism: 0.05            # minimal — phototropism (UP) otherwise overpowers gravi
-  w_direction_inertia: 0.25       # halved so laterals can re-curve down instead of locking in starting angle
-  axis_decay: 0.85
+  w_gravitropism_lateral: 0.45
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 0.10
+  w_phototropism: 0.10
+  w_direction_inertia: 0.5
+  axis_decay: 0.88
+phyllotaxy:
+  mode: alternate
+  divergence_angle_deg: 137.5
+  branch_angle_by_order: [45.0, 35.0, 30.0, 25.0]
+  divergence_jitter_deg: 5.0
+  branch_angle_jitter_deg: 4.0
+shedding:
+  quality_threshold: 0.02
+  window: 5
+  enabled: true
 sag:
   enabled: true
   k: 0.010
   max_bend_deg: 6.0
-  rigid_axis_order: 2
-phyllotaxy:
-  mode: alternate
-  divergence_angle_deg: 137.5
-  divergence_jitter_deg: 5.0
-  branch_angle_deg: 45
-  branch_angle_jitter_deg: 4.0
-shedding:
-  # Pendula self-shadows heavily; threshold must be very permissive.
-  quality_threshold: 0.02
-light:
-  enabled: true
-  k_absorption: 0.45
+  rigid_axis_order: 1
 geom:
-  ring_sides: 8
   pipe_exponent: 2.25
-  r_tip: 0.006
-  bark_color: [0.85, 0.82, 0.75]
-  bark_texture: "proc:birch_bark"
-  leaf_texture: "proc:birch_leaf"
   leaf_size: 0.05
-  leaf_cluster_count: 3
   leaf_aspect: 0.7
-  leaf_splay_deg: 20
+  leaf_cluster_count: 3
   foliage_depth: 3

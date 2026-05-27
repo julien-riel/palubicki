@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, ForestSeed,
+    Config, ConfigError, EnvelopeConfig, ForestSeed, SympodialConfig,
     _SECTION_TYPES, _load_packaged_species,
 )
 
@@ -38,6 +38,10 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
                     f"unknown keys in species preset section '{section_name}': {sorted(unknown)}"
                 )
             cur_dict.update(preset_section)
+            if section_name == "sim" and "sympodial" in cur_dict and isinstance(cur_dict["sympodial"], dict):
+                cur_dict["sympodial"] = SympodialConfig(**cur_dict["sympodial"])
+            if section_name == "phyllotaxy" and "branch_angle_by_order" in cur_dict and isinstance(cur_dict["branch_angle_by_order"], list):
+                cur_dict["branch_angle_by_order"] = tuple(float(x) for x in cur_dict["branch_angle_by_order"])
             new_sections[section_name] = type_(**cur_dict)
     else:
         new_sections = {s: getattr(cfg, s) for s in _SECTION_FIELDS}

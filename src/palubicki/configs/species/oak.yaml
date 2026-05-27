@@ -1,4 +1,4 @@
-# Quercus robur — dense, étalé, ramure tortueuse
+# Quercus robur — sympodial, étalé, plagiotrope modéré
 envelope:
   shape: half_ellipsoid
   rx: 5.0
@@ -8,44 +8,42 @@ envelope:
 sim:
   internode_length: 0.18
   internode_length_jitter: 0.12
-  # Oak: moderate apical dominance.
   lambda_apical: 0.75
   alpha_basipetal: 2.2
   max_iterations: 45
+  sympodial:
+    enabled: true
+    q_threshold: 1.5
+    n_consecutive_steps: 3
 tropism:
-  # Oak: strong orthotropic trunk, primary branches go more horizontal.
+  w_perception: 1.0
   w_orthotropy_main: 0.35
   w_orthotropy_lateral: 0.05
   w_gravitropism_main: 0.0
   w_gravitropism_lateral: 0.0
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 0.30
   w_phototropism: 0.35
   w_direction_inertia: 0.5
-  axis_decay: 0.65
+  axis_decay: 0.85
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5
-  divergence_jitter_deg: 6.0
-  branch_angle_deg: 60
-  branch_angle_jitter_deg: 5.0
+  branch_angle_by_order: [60.0, 40.0, 30.0, 25.0]
+  divergence_jitter_deg: 5.0
+  branch_angle_jitter_deg: 4.0
 shedding:
   quality_threshold: 0.15
-light:
+  window: 5
   enabled: true
-  k_absorption: 0.55
 sag:
   enabled: true
   k: 0.005
-  max_bend_deg: 5.0
+  max_bend_deg: 4.0
   rigid_axis_order: 1
 geom:
-  ring_sides: 10
-  pipe_exponent: 2.3
-  r_tip: 0.008
-  bark_color: [0.32, 0.22, 0.14]
-  bark_texture: "proc:oak_bark"
-  leaf_texture: "proc:oak_leaf"
+  pipe_exponent: 2.49
   leaf_size: 0.14
-  leaf_cluster_count: 3
   leaf_aspect: 1.0
-  leaf_splay_deg: 25
+  leaf_cluster_count: 3
   foliage_depth: 4

@@ -1,4 +1,4 @@
-# Pinus sylvestris — conifère conique, étages réguliers, apical dominant
+# Pinus sylvestris — monopodial strict, whorled, plagiotrope fort
 envelope:
   shape: cone
   rx: 2.5
@@ -7,40 +7,39 @@ envelope:
   marker_count: 18000
 sim:
   internode_length: 0.18
-  internode_length_jitter: 0.08
+  internode_length_jitter: 0.10
   lambda_apical: 0.85
-  alpha_basipetal: 1.8
-  max_iterations: 40
+  alpha_basipetal: 2.5
+  max_iterations: 50
+  sympodial:
+    enabled: false
 tropism:
-  # Conifer: strict apical dominance, near-horizontal whorl laterals.
+  w_perception: 1.0
   w_orthotropy_main: 0.30
-  w_orthotropy_lateral: 0.05
+  w_orthotropy_lateral: 0.0
   w_gravitropism_main: 0.0
   w_gravitropism_lateral: 0.02
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 0.40
   w_phototropism: 0.20
   w_direction_inertia: 0.8
-  axis_decay: 0.85
+  axis_decay: 0.9
 phyllotaxy:
   mode: whorled
   whorl_count: 5
-  divergence_angle_deg: 72
+  divergence_angle_deg: 72.0
+  branch_angle_by_order: [75.0, 60.0, 45.0, 35.0]
   divergence_jitter_deg: 3.0
-  branch_angle_deg: 75
-  branch_angle_jitter_deg: 4.0
+  branch_angle_jitter_deg: 3.0
 shedding:
   quality_threshold: 0.20
-light:
+  window: 5
   enabled: true
-  k_absorption: 0.65
+sag:
+  enabled: false
 geom:
-  ring_sides: 8
-  pipe_exponent: 2.3
-  r_tip: 0.007
-  bark_color: [0.45, 0.25, 0.18]
-  bark_texture: "proc:pine_bark"
-  leaf_texture: "proc:pine_needle"
+  pipe_exponent: 2.30
   leaf_size: 0.06
-  leaf_cluster_count: 5
   leaf_aspect: 0.025
-  leaf_splay_deg: 25
+  leaf_cluster_count: 5
   foliage_depth: 3

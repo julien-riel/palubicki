@@ -389,6 +389,8 @@ def load_config(
                     f"phyllotaxy.branch_angle_by_order must be a list, got {type(v).__name__}"
                 )
             sec_data = {**sec_data, "branch_angle_by_order": tuple(float(x) for x in v)}
+        if name == "sim" and "sympodial" in sec_data and isinstance(sec_data["sympodial"], dict):
+            sec_data = {**sec_data, "sympodial": SympodialConfig(**sec_data["sympodial"])}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:
