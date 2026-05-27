@@ -19,13 +19,15 @@ def lateral_bud_directions(
     node_index: int,
     *,
     seed: int,
+    axis_order: int,
 ) -> np.ndarray:
     """Return (K, 3) unit vectors for lateral bud directions at this node.
 
-    If ``cfg.divergence_jitter_deg`` or ``cfg.branch_angle_jitter_deg`` is > 0,
-    a gaussian perturbation is drawn from a per-(seed, node_index) RNG. The
-    branch angle is hard-clamped to [0°, 90°] after jitter to avoid inverted
-    or perpendicular-to-self branches.
+    The insertion angle is looked up from ``cfg.branch_angle_by_order`` using
+    ``axis_order`` (clamped to the last entry if it exceeds the list). Jitter
+    on divergence and branch angle is gaussian, deterministic per
+    (seed, node_index). The branch angle is hard-clamped to [0deg, 90deg]
+    after jitter.
     """
     g = np.asarray(growth_direction, dtype=np.float64)
     g = g / np.linalg.norm(g)
@@ -40,8 +42,10 @@ def lateral_bud_directions(
     else:
         raise ValueError(f"unknown phyllotaxy mode: {cfg.mode!r}")
 
+    angles = cfg.branch_angle_by_order
+    idx = min(int(axis_order), len(angles) - 1)
     base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
-    branch_angle = math.radians(cfg.branch_angle_deg)
+    branch_angle = math.radians(angles[idx])
 
     if cfg.divergence_jitter_deg > 0 or cfg.branch_angle_jitter_deg > 0:
         ss = np.random.SeedSequence([seed, _PHYLLO_SALT, node_index])
