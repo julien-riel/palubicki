@@ -6,7 +6,8 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from palubicki.config import Config, ConfigError, _load_packaged_species, load_config
 from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_for_ui
@@ -77,5 +78,12 @@ def create_app(initial_config: Config) -> FastAPI:
             media_type="application/x-yaml",
             headers={"Content-Disposition": 'attachment; filename="tree.yaml"'},
         )
+
+    static_dir = Path(__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    @app.get("/")
+    def get_root() -> FileResponse:
+        return FileResponse(str(static_dir / "index.html"))
 
     return app

@@ -95,3 +95,15 @@ def test_post_save_yaml_returns_loadable_yaml(client, tmp_path):
         output=tmp_path / "tree.glb",
     )
     assert cfg.envelope.marker_count == 200
+
+
+def test_get_root_returns_html(client):
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert "<html" in r.text.lower()
+
+
+def test_get_static_path_404_for_missing(client):
+    r = client.get("/static/nonexistent.js")
+    assert r.status_code == 404
