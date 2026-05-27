@@ -99,7 +99,7 @@ pousses sortent à 30-50°, puis ouvrent à 60-80° avec l'âge** (poids +
 photo). Le sag ne change pas l'angle d'insertion, il plie l'internode
 déjà placé.
 
-### e. Pas de réitération / pas de bourgeons dormants épicormiques
+### e. [ADDRESSED — Phase 2B] Pas de réitération / pas de bourgeons dormants épicormiques
 Pas de dormance hivernale → pas de cicatrices d'écailles, pas de relances
 après stress. Pour de vieux chênes ou des bouleaux endommagés, c'est ce qui
 crée les fourches et les remontées caractéristiques.
@@ -146,7 +146,7 @@ houppier (chêne = milliers de feuilles/m³). Moins critique car le rendu
    `sim.growth_mode: preformed` où chaque "année" (un set d'itérations
    consécutives) tire un nombre fixe d'internodes ± stochastique par
    leader, indépendant de Q. Crée les vrais étages.
-5. **Réitération / bourgeons épicormiques.** Quand le shedding tue une
+5. [ADDRESSED — Phase 2B] **Réitération / bourgeons épicormiques.** Quand le shedding tue une
    branche maîtresse, réveiller un bourgeon dormant proximal et lui donner
    un boost de Q. Capture les fourches naturelles.
 6. **Tropisme par poids (plagiotropisme dynamique).** Ce que le README
