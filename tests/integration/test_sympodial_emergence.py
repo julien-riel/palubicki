@@ -9,14 +9,13 @@ pytestmark = pytest.mark.slow
 
 
 def _count_promotions(tree) -> int:
-    """Count nodes with multiple main-axis child internodes (post-promotion fork)."""
-    forks = 0
-    for internode in tree.all_internodes:
-        parent = internode.parent_node
-        main_children = [c for c in parent.children_internodes if c.is_main_axis]
-        if len(main_children) > 1 and main_children[0] is internode:
-            forks += 1
-    return forks
+    """Count sympodial fork events recorded on nodes during simulation."""
+    return sum(
+        1
+        for internode in tree.all_internodes
+        if internode.parent_node.sympodial_fork
+        and internode.parent_node.children_internodes[0] is internode
+    )
 
 
 def test_oak_produces_forks(tmp_path):

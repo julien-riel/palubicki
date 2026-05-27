@@ -32,6 +32,7 @@ class Node:
     children_internodes: list["Internode"] = field(default_factory=list)
     terminal_bud: Optional[Bud] = None
     lateral_buds: list[Bud] = field(default_factory=list)
+    sympodial_fork: bool = False
 
 
 @dataclass(eq=False)

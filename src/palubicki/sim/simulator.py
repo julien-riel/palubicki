@@ -226,6 +226,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 terminal = Bud(
                     position=new_pos.copy(), direction=d,
                     axis_order=cur.axis_order, parent_node=new_node,
+                    low_quality_steps=cur.low_quality_steps,
                 )
                 new_node.terminal_bud = terminal
 

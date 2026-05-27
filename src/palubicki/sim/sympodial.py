@@ -57,6 +57,7 @@ def promote_lateral_if_failing(
         best.axis_order = bud.axis_order
 
         bud.state = BudState.DEAD
+        node.sympodial_fork = True
 
         best.low_quality_steps = 0
 

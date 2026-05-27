@@ -14,7 +14,7 @@ sim:
   sympodial:
     enabled: true
     q_threshold: 1.5
-    n_consecutive_steps: 3
+    n_consecutive_steps: 4
 tropism:
   w_perception: 1.0
   w_orthotropy_main: 0.35
