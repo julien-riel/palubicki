@@ -33,8 +33,10 @@ geom:
   bark_color: [0.45, 0.25, 0.18]
   bark_texture: "proc:pine_bark"
   leaf_texture: "proc:pine_needle"
-  leaf_size: 0.11
+  # Pinus sylvestris: aiguilles 4–7 cm × 1–2 mm (fascicules de 2).
+  # leaf_size = longueur d'aiguille ; leaf_aspect = largeur/longueur ≈ 0.025.
+  leaf_size: 0.06
   leaf_cluster_count: 5
-  leaf_aspect: 0.12
+  leaf_aspect: 0.025
   leaf_splay_deg: 25
   foliage_depth: 3

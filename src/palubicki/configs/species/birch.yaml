@@ -43,7 +43,8 @@ geom:
   bark_color: [0.85, 0.82, 0.75]
   bark_texture: "proc:birch_bark"
   leaf_texture: "proc:birch_leaf"
-  leaf_size: 0.09
+  # Betula pendula: feuilles 3–7 cm, triangulaires-ovales, largeur ≈ 0.7 × longueur.
+  leaf_size: 0.05
   leaf_cluster_count: 3
   leaf_aspect: 0.7
   leaf_splay_deg: 20
