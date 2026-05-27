@@ -106,7 +106,7 @@ class TropismConfig:
 
 @dataclass(frozen=True)
 class PhyllotaxyConfig:
-    mode: Literal["alternate", "opposite", "whorled"] = field(
+    mode: Literal["alternate", "opposite", "whorled", "decussate"] = field(
         default="alternate", metadata={"ui": {"label": "Mode"}}
     )
     whorl_count: int = field(default=3, metadata={"ui": {"min": 2, "max": 8, "step": 1}})

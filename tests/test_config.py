@@ -404,3 +404,11 @@ def test_config_rejects_negative_reactivation_count(tmp_path):
             shedding=SheddingConfig(reactivation_count=-1),
             output=tmp_path / "out.glb",
         )
+
+
+def test_phyllotaxy_mode_decussate_is_accepted(tmp_path):
+    cfg = _make_config(
+        phyllotaxy=PhyllotaxyConfig(mode="decussate", divergence_angle_deg=0.0),
+        output=tmp_path / "out.glb",
+    )
+    assert cfg.phyllotaxy.mode == "decussate"
