@@ -39,3 +39,17 @@ def test_get_initial_returns_valid_config(client, tmp_path):
         output=tmp_path / "tree.glb",
     )
     assert cfg.envelope.shape in ("sphere", "ellipsoid", "cone", "half_ellipsoid")
+
+
+def test_post_species_oak_returns_preset_dict(client):
+    r = client.post("/api/species/oak")
+    assert r.status_code == 200
+    body = r.json()
+    # Preset YAML for oak contains an "envelope" section
+    assert "envelope" in body or "sim" in body or "geom" in body
+
+
+def test_post_species_unknown_returns_400(client):
+    r = client.post("/api/species/notarealspecies")
+    assert r.status_code == 400
+    assert "error" in r.json()
