@@ -34,6 +34,7 @@ class Node:
     children_internodes: list["Internode"] = field(default_factory=list)
     terminal_bud: Optional[Bud] = None
     lateral_buds: list[Bud] = field(default_factory=list)
+    dormant_reserve_buds: list[Bud] = field(default_factory=list)
     # Set to True by sym.promote_lateral_if_failing when a lateral bud is
     # promoted to terminal at this node. Lets diagnostics count promotion
     # events without traversing structural geometry.

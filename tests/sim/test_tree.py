@@ -50,3 +50,11 @@ def test_bud_default_low_light_steps_is_zero():
     bud = Bud(position=np.zeros(3), direction=np.array([0, 1, 0]),
               axis_order=0, parent_node=Node(position=np.zeros(3)))
     assert bud.low_light_steps == 0
+
+
+def test_node_default_dormant_reserve_buds_is_empty_list():
+    node = Node(position=np.zeros(3))
+    assert node.dormant_reserve_buds == []
+    other = Node(position=np.zeros(3))
+    node.dormant_reserve_buds.append("sentinel")
+    assert other.dormant_reserve_buds == []
