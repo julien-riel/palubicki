@@ -224,12 +224,17 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                         continue
 
                 new_node = Node(position=new_pos)
+                lf = (
+                    float(light_info.light_factor.get(cur, 1.0))
+                    if light_info is not None else 1.0
+                )
                 iod = Internode(
                     parent_node=cur.parent_node,
                     child_node=new_node,
                     length=length,
                     is_main_axis=is_main,
                     window=cfg.shedding.window,
+                    light_factor=lf,
                 )
                 cur.parent_node.children_internodes.append(iod)
                 new_node.parent_internode = iod
