@@ -216,7 +216,11 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 )
                 new_node.terminal_bud = terminal
 
-                lateral_dirs = lateral_bud_directions(d, cfg.phyllotaxy, node_index=state.node_index)
+                lateral_dirs = lateral_bud_directions(
+                    d, cfg.phyllotaxy,
+                    node_index=state.node_index,
+                    seed=cfg.seed,
+                )
                 state.node_index += 1
                 for ld in lateral_dirs:
                     lat = Bud(

@@ -74,6 +74,11 @@ class PhyllotaxyConfig:
     whorl_count: int = field(default=3, metadata={"ui": {"min": 2, "max": 8, "step": 1}})
     divergence_angle_deg: float = field(default=137.5, metadata={"ui": {"min": 0.0, "max": 360.0, "step": 0.5}})
     branch_angle_deg: float = field(default=45.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}})
+    # Gaussian jitter (σ in degrees) on the azimuthal divergence between
+    # successive lateral buds. 4-6° matches realistic biological variability.
+    divergence_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 30.0, "step": 0.5}})
+    # Gaussian jitter on the branch insertion angle. Clamped to [0°, 90°].
+    branch_angle_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
 
 
 @dataclass(frozen=True)
@@ -228,6 +233,16 @@ class Config:
             v = getattr(t, fname)
             if v < 0:
                 raise ConfigError(f"tropism.{fname} must be >= 0, got {v}")
+
+        p = self.phyllotaxy
+        if p.divergence_jitter_deg < 0:
+            raise ConfigError(
+                f"phyllotaxy.divergence_jitter_deg must be >= 0, got {p.divergence_jitter_deg}"
+            )
+        if p.branch_angle_jitter_deg < 0:
+            raise ConfigError(
+                f"phyllotaxy.branch_angle_jitter_deg must be >= 0, got {p.branch_angle_jitter_deg}"
+            )
 
         g = self.geom
         if not (1.0 <= g.pipe_exponent <= 4.0):

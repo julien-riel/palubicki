@@ -8,12 +8,25 @@ import numpy as np
 from palubicki.config import PhyllotaxyConfig
 
 
+# Salt for SeedSequence to namespace phyllotaxy jitter independently of other
+# RNG consumers (light_perception, internode_length jitter).
+_PHYLLO_SALT = int.from_bytes(b"phyl", "big")
+
+
 def lateral_bud_directions(
     growth_direction: np.ndarray,
     cfg: PhyllotaxyConfig,
     node_index: int,
+    *,
+    seed: int,
 ) -> np.ndarray:
-    """Return (K, 3) unit vectors for lateral bud directions at this node."""
+    """Return (K, 3) unit vectors for lateral bud directions at this node.
+
+    If ``cfg.divergence_jitter_deg`` or ``cfg.branch_angle_jitter_deg`` is > 0,
+    a gaussian perturbation is drawn from a per-(seed, node_index) RNG. The
+    branch angle is hard-clamped to [0°, 90°] after jitter to avoid inverted
+    or perpendicular-to-self branches.
+    """
     g = np.asarray(growth_direction, dtype=np.float64)
     g = g / np.linalg.norm(g)
     right, up = _frame_perpendicular_to(g)
@@ -29,6 +42,16 @@ def lateral_bud_directions(
 
     base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
     branch_angle = math.radians(cfg.branch_angle_deg)
+
+    if cfg.divergence_jitter_deg > 0 or cfg.branch_angle_jitter_deg > 0:
+        ss = np.random.SeedSequence([seed, _PHYLLO_SALT, node_index])
+        rng = np.random.default_rng(ss.generate_state(1)[0])
+        if cfg.divergence_jitter_deg > 0:
+            base_azimuth += math.radians(rng.normal(0.0, cfg.divergence_jitter_deg))
+        if cfg.branch_angle_jitter_deg > 0:
+            branch_angle += math.radians(rng.normal(0.0, cfg.branch_angle_jitter_deg))
+            branch_angle = max(0.0, min(math.pi / 2, branch_angle))
+
     cos_b = math.cos(branch_angle)
     sin_b = math.sin(branch_angle)
 
