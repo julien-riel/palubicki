@@ -132,3 +132,39 @@ def test_leaf_size_clamped_low():
     t_ref = _tree_one_apex_with_internode(light_factor=1.0)
     p_ref = build_leaves_primitive(t_ref, leaf_size=0.1, material=_mat(), sun_shade_k=0.0)
     assert _leaf_extent(p) >= 0.5 * _leaf_extent(p_ref) - 1e-6
+
+
+def test_leaves_follow_sag_offset_at_apex():
+    """When the apex node has a downward sag_offset, leaves should be emitted
+    at the bent position, not the raw position."""
+    import numpy as np
+    from palubicki.geom.leaves import build_leaves_primitive
+    from palubicki.geom.mesh import Material
+    from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+
+    root = Node(position=np.zeros(3))
+    tip = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0,
+                    is_main_axis=True, diameter=0.05)
+    root.children_internodes.append(iod)
+    tip.parent_internode = iod
+    tree = Tree(root=root, all_internodes=[iod])
+    bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]),
+              axis_order=0, parent_node=tip)
+    tip.terminal_bud = bud
+    tree.active_buds = [bud]
+
+    mat = Material(name="leaf", base_color=(0.4, 0.6, 0.2, 1.0),
+                   metallic=0.0, roughness=1.0, base_color_texture_png=None,
+                   alpha_mode="OPAQUE", alpha_cutoff=0.5, double_sided=True)
+
+    prim_baseline = build_leaves_primitive(tree, leaf_size=0.1, material=mat,
+                                           foliage_depth=1)
+    baseline_y_mean = float(prim_baseline.positions[:, 1].mean())
+
+    tip.sag_offset = np.array([0.0, -0.5, 0.0])
+    prim_bent = build_leaves_primitive(tree, leaf_size=0.1, material=mat,
+                                       foliage_depth=1)
+    bent_y_mean = float(prim_bent.positions[:, 1].mean())
+
+    assert bent_y_mean < baseline_y_mean - 0.4

@@ -104,8 +104,12 @@ def _collect_foliage_sites(
         node = bud.parent_node
         if len(node.children_internodes) != 0:
             continue
+        # Site position = node's bent position (apex tip after sag). Direction
+        # stays from the bud (still topological), since it controls leaf
+        # orientation, not placement.
+        site_pos = np.asarray(node.position + node.sag_offset, dtype=np.float64)
         sites.append((
-            np.asarray(bud.position, dtype=np.float64),
+            site_pos,
             np.asarray(bud.direction, dtype=np.float64),
             node.parent_internode,
         ))
@@ -125,13 +129,17 @@ def _collect_foliage_sites(
                 break
             visited.add(id(current))
             if current.parent_internode is not None:
-                seg = current.position - current.parent_internode.parent_node.position
+                parent_node = current.parent_internode.parent_node
+                cur_bent = current.position + current.sag_offset
+                par_bent = parent_node.position + parent_node.sag_offset
+                seg = cur_bent - par_bent
                 seg_norm = float(np.linalg.norm(seg))
                 direction = seg / seg_norm if seg_norm > 1e-12 else np.array([0.0, 1.0, 0.0])
             else:
                 direction = np.array([0.0, 1.0, 0.0])
+            site_pos = np.asarray(current.position + current.sag_offset, dtype=np.float64)
             sites.append((
-                np.asarray(current.position, dtype=np.float64),
+                site_pos,
                 direction,
                 current.parent_internode,
             ))
