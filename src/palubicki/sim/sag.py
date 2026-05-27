@@ -35,10 +35,22 @@ from palubicki.sim.tree import Node, Tree
 
 
 def apply_sag(tree: Tree, cfg: SagConfig) -> None:
-    """In-place: bend the tree under gravity per the SagConfig.
+    """Idempotent: recompute sag_offset for every Node from scratch.
 
-    Requires diameters to be set on all internodes (call compute_radii first).
+    Walks the tree pre-order; for each internode computes a bend angle from
+    load (length × diameter² × density proxy) and applies the resulting
+    rotation to all descendants' *bent* positions (position + sag_offset).
+    The result is written back into each descendant's sag_offset.
+
+    Bud positions/directions are NOT rotated — leaves read node bent positions
+    directly (geom/leaves.py).
+
+    Requires diameters to be set on all internodes (call update_diameters_incremental
+    or compute_radii first).
     """
+    # Always reset: a disabled sag must clear any previous offsets, and an
+    # enabled sag must compute from scratch (idempotence).
+    _reset_offsets(tree)
     if not cfg.enabled:
         return
 
@@ -57,6 +69,7 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
     stack: list[tuple[Node, int]] = [(tree.root, 0)]
     while stack:
         parent, parent_order = stack.pop()
+        parent_bent = parent.position + parent.sag_offset
         for iod in parent.children_internodes:
             child = iod.child_node
             child_order = parent_order if iod.is_main_axis else parent_order + 1
@@ -65,7 +78,8 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
                 stack.append((child, child_order))
                 continue
 
-            old_vec = child.position - parent.position
+            child_bent = child.position + child.sag_offset
+            old_vec = child_bent - parent_bent
             seg_len = float(np.linalg.norm(old_vec))
             if seg_len < 1e-12:
                 stack.append((child, child_order))
@@ -80,16 +94,9 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
             axis = cross / sin_theta
 
             diameter = max(float(iod.diameter), 1e-4)
-            # Load = weight hanging off the joint at parent: the iod itself
-            # (uniformly distributed mass) plus everything below child. Without
-            # the iod's own weight, single-segment laterals and tip internodes
-            # never droop (load_below[tip] = 0).
             r_iod = 0.5 * float(iod.diameter)
             iod_vol = math.pi * r_iod * r_iod * float(iod.length)
             load = iod_vol + float(load_below.get(id(child), 0.0))
-            # sin_theta scales the perpendicular gravity component: horizontal
-            # branches see the full bending moment, near-vertical branches see
-            # almost none (smooth transition to the parallel case above).
             bend = k * load * sin_theta / (diameter * diameter)
             if bend > max_bend_rad:
                 bend = max_bend_rad
@@ -98,7 +105,7 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
                 continue
 
             R = _rodrigues(axis, bend)
-            _rotate_subtree_around(child, R, parent.position, include_root=True)
+            _rotate_subtree_offsets(child, R, parent_bent)
             stack.append((child, child_order))
 
 
@@ -128,27 +135,34 @@ def _compute_load_below(tree: Tree) -> dict[int, float]:
     return load
 
 
-def _rotate_subtree_around(
-    root: Node, R: np.ndarray, pivot: np.ndarray, *, include_root: bool,
-) -> None:
-    """Rotate every node position in the subtree rooted at ``root`` (and the
-    terminal_bud / lateral_bud positions attached to those nodes) by R around
-    ``pivot``. Includes ``root`` itself iff ``include_root`` is True.
-    """
-    stack: list[tuple[Node, bool]] = [(root, include_root)]
+def _reset_offsets(tree: Tree) -> None:
+    """Zero every Node.sag_offset in the tree (iterative DFS)."""
+    stack: list[Node] = [tree.root]
     while stack:
-        node, do_self = stack.pop()
-        if do_self:
-            node.position = R @ (node.position - pivot) + pivot
-            if node.terminal_bud is not None:
-                tb = node.terminal_bud
-                tb.position = R @ (tb.position - pivot) + pivot
-                tb.direction = R @ tb.direction
-            for lb in node.lateral_buds:
-                lb.position = R @ (lb.position - pivot) + pivot
-                lb.direction = R @ lb.direction
+        n = stack.pop()
+        n.sag_offset = np.zeros(3, dtype=np.float64)
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+
+
+def _rotate_subtree_offsets(
+    root: Node, R: np.ndarray, pivot: np.ndarray,
+) -> None:
+    """For every node in the subtree rooted at ``root`` (including ``root``),
+    rotate its current bent position (position + sag_offset) by R around
+    ``pivot`` and store the resulting offset back into sag_offset.
+
+    Bud positions/directions are NOT touched — leaves read node bent positions
+    in geom/leaves.py.
+    """
+    stack: list[Node] = [root]
+    while stack:
+        node = stack.pop()
+        bent = node.position + node.sag_offset
+        new_bent = R @ (bent - pivot) + pivot
+        node.sag_offset = new_bent - node.position
         for iod in node.children_internodes:
-            stack.append((iod.child_node, True))
+            stack.append(iod.child_node)
 
 
 def _rodrigues(axis: np.ndarray, angle: float) -> np.ndarray:
