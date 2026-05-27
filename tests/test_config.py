@@ -311,3 +311,25 @@ def test_phyllotaxy_branch_angle_by_order_negative_raises(tmp_path):
             phyllotaxy=PhyllotaxyConfig(branch_angle_by_order=(45.0, -5.0)),
             output=tmp_path / "out.glb",
         )
+
+
+def test_tropism_plagiotropism_defaults(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.tropism.w_plagiotropism_main == 0.0
+    assert cfg.tropism.w_plagiotropism_lateral == 0.0
+
+
+def test_tropism_plagiotropism_negative_main_raises(tmp_path):
+    with pytest.raises(ConfigError, match="w_plagiotropism_main"):
+        _make_config(
+            tropism=TropismConfig(w_plagiotropism_main=-0.1),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_tropism_plagiotropism_negative_lateral_raises(tmp_path):
+    with pytest.raises(ConfigError, match="w_plagiotropism_lateral"):
+        _make_config(
+            tropism=TropismConfig(w_plagiotropism_lateral=-0.5),
+            output=tmp_path / "out.glb",
+        )

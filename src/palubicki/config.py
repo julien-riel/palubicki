@@ -79,6 +79,12 @@ class TropismConfig:
     # pendula can droop its laterals while the trunk stays vertical.
     w_gravitropism_main: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_gravitropism_lateral: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    # Plagiotropism = push toward the horizontal plane. v_plagio is the
+    # projection of current_direction onto XY, renormalized. Main typically
+    # stays 0 (trunk vertical); lateral > 0 forces branches to splay
+    # horizontally. Independent of gravity (no pendula side effect).
+    w_plagiotropism_main: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    w_plagiotropism_lateral: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_phototropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_direction_inertia: float = field(default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)  # not exposed; vec3 stays defaulted
@@ -269,6 +275,7 @@ class Config:
         for fname in (
             "w_orthotropy_main", "w_orthotropy_lateral",
             "w_gravitropism_main", "w_gravitropism_lateral",
+            "w_plagiotropism_main", "w_plagiotropism_lateral",
         ):
             v = getattr(t, fname)
             if v < 0:
