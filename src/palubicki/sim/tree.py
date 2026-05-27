@@ -39,6 +39,7 @@ class Node:
     # promoted to terminal at this node. Lets diagnostics count promotion
     # events without traversing structural geometry.
     sympodial_fork: bool = False
+    sag_offset: np.ndarray = field(default_factory=lambda: np.zeros(3, dtype=np.float64))
 
 
 @dataclass(eq=False)

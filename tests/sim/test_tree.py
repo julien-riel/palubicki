@@ -75,3 +75,9 @@ def test_internode_accepts_explicit_light_factor():
         is_main_axis=True, light_factor=0.42,
     )
     assert iod.light_factor == 0.42
+
+
+def test_node_sag_offset_defaults_to_zero_vector():
+    n = Node(position=np.array([1.0, 2.0, 3.0]))
+    np.testing.assert_array_equal(n.sag_offset, np.zeros(3))
+    assert n.sag_offset.dtype == np.float64
