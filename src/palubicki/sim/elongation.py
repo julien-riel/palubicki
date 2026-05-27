@@ -38,3 +38,24 @@ def compute_target_with_age(
         + (1.0 - cfg.age_factor_min) * (base - base_at_one) / (1.0 - base_at_one)
     )
     return base_length * factor
+
+
+def update_lengths(tree: Tree, current_iteration: int, cfg: ElongationConfig) -> None:
+    """Recompute Internode.length in-place via sigmoid ramp.
+
+    length(t) = length_target * sigmoid((elapsed - tau) / (tau/2))
+    where elapsed = max(0, current_iteration - birth_iteration).
+
+    No-op if cfg.enabled is False or cfg.tau_iterations <= 0.
+    """
+    if not cfg.enabled:
+        return
+    tau = cfg.tau_iterations
+    if tau <= 0:
+        return
+    half_tau = tau / 2.0
+    for iod in tree.all_internodes:
+        elapsed = max(0, current_iteration - iod.birth_iteration)
+        x = (elapsed - tau) / half_tau
+        sigma = 1.0 / (1.0 + math.exp(-x))
+        iod.length = iod.length_target * sigma
