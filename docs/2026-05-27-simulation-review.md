@@ -268,3 +268,29 @@ individuelle, il faudrait que `leaves.py` :
 Effort estimé : ~150 lignes dans `leaves.py` + 2-3 paramètres en config.
 Effet visuel important pour les rameaux feuillus en gros plan, plus
 faible en silhouette de couronne.
+
+
+---
+
+## Statut Phase 2C (2026-05-27)
+
+**Phyllotaxie décussée :** ADRESSÉE. Le mode `decussate` est implémenté dans
+`phyllotaxy.py::lateral_bud_directions` (`PhyllotaxyConfig.mode = "decussate"`).
+Avec `divergence_angle_deg: 0.0`, chaque node alterne 90° autour du tangent,
+reproduisant le pattern érable / frêne / dogwood. Le nouveau préset `maple.yaml`
+l'exploite. Test d'intégration `tests/integration/test_decussate_maple.py`
+valide que la médiane des angles entre paires successives ≈ 90°.
+
+**Feuilles sun/shade :** ADRESSÉE. `GeomConfig` expose désormais
+`leaf_sun_shade_k` (validé `[0, 2]`) ; chaque `Internode` capture `light_factor`
+à sa création (`simulator.py`), et `geom/leaves.py` calcule par feuille
+`eff_size = leaf_size * (1 + k * (1 - light_factor))` clampé à `[0.5×, 2×]`.
+Les présets oak (k=1.0) et birch (k=0.4) activent le mécanisme ; pine (k=0.0)
+reste neutre (aiguilles sans plasticité). Test d'intégration
+`tests/integration/test_sun_shade_oak.py` confirme un gradient vertical de
+taille de feuille en condition d'ombrage.
+
+Limitation acceptée (cf. spec Phase 2C §4.7) : le grid voxel de lumière
+utilise toujours `light.leaf_area` constant — pas de couplage
+feuille→absorption→feuille pour éviter une boucle de point fixe. Effet
+purement visuel.
