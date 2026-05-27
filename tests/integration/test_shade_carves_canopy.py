@@ -40,8 +40,14 @@ def _simulate_oak_with_shade(tmp_path, *, shade_enabled: bool):
 
     cli_overrides = {
         "sim.shade_mortality.enabled": shade_enabled,
-        "sim.max_iterations": 25,
-        "envelope.marker_count": 3000,
+        # 30 iterations + 30 000 markers lets the tree grow dense enough that
+        # interior buds accumulate >= n_consecutive_steps (3) of low light and
+        # are killed.  k_absorption=2.0 (vs default 0.55) pushes light_factor
+        # well below the oak preset's shade_mortality threshold (0.20) so the
+        # canopy self-shades strongly by iter ~20.
+        "sim.max_iterations": 30,
+        "envelope.marker_count": 30000,
+        "light.k_absorption": 2.0,
     }
     cfg = load_config(
         yaml_path=None, cli_overrides=cli_overrides,
