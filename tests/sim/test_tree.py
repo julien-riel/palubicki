@@ -44,3 +44,9 @@ def test_internode_links_nodes_bidirectionally():
 def test_bud_state_has_reserve():
     assert BudState.RESERVE is not None
     assert BudState.RESERVE not in (BudState.ACTIVE, BudState.DORMANT, BudState.DEAD)
+
+
+def test_bud_default_low_light_steps_is_zero():
+    bud = Bud(position=np.zeros(3), direction=np.array([0, 1, 0]),
+              axis_order=0, parent_node=Node(position=np.zeros(3)))
+    assert bud.low_light_steps == 0

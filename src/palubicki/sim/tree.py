@@ -24,6 +24,7 @@ class Bud:
     age: int = 0
     state: BudState = BudState.ACTIVE
     low_quality_steps: int = 0
+    low_light_steps: int = 0
 
 
 @dataclass(eq=False)
