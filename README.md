@@ -153,6 +153,32 @@ If your tree looks too dense or too sparse:
   to splay branches flat without polluting the gravity tuning (pendula
   species can stack gravitropism + plagiotropism independently).
 
+### Phase 2B — bud lifecycle (shade mortality + reiteration)
+
+Two new mechanisms make the canopy carve itself realistically and recover from
+branch loss:
+
+- **Shade-induced mortality** (`sim.shade_mortality`): a bud whose `light_factor`
+  stays below `light_threshold` for `n_consecutive_steps` consecutive iterations
+  dies (state → DEAD). This produces a natural live-crown ratio — lower branches
+  in deep shade die off instead of dragging quality down. Requires
+  `light.enabled: true` (the config raises `ConfigError` otherwise).
+- **Reiteration via dormant reserves** (`phyllotaxy.dormant_reserve_count` +
+  `shedding.reactivation_count`): every emitted node carries K pre-formed
+  RESERVE buds (state `BudState.RESERVE`, invisible to perception and light).
+  When the shedding pass removes a child subtree, `reactivation_count` reserves
+  on the parent node flip to ACTIVE and join `tree.active_buds`. This is the
+  epicormic-shoot / water-sprout mechanism — strong in oak and poplar, absent
+  in conifers.
+
+Species defaults:
+
+| Species | shade_mortality.threshold | reserves / node | activations / shed |
+|---------|---------------------------|-----------------|--------------------|
+| oak     | 0.20                      | 2               | 1                  |
+| pine    | 0.12                      | 0               | 0                  |
+| birch   | 0.20                      | 1               | 1                  |
+
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
@@ -181,7 +207,7 @@ pytest --cov            # coverage report
 - ~~**V4** : species presets (oak, pine, birch) — livré~~.
 - **Phase 1** (livré) : main-vs-lateral tropisms + gaussian jitter on phyllotaxy + stochastic internode length.
 - **Phase 2A** (livré) : sympodial branching mode, `branch_angle_by_order`, explicit plagiotropism term.
-- **Phase 2B** : bud life cycle (shade mortality, reiteration).
+- **Phase 2B** (livré) : bud life cycle (shade mortality, reiteration via dormant reserves).
 - **Phase 2C** : decussate phyllotaxy + sun/shade leaves.
 - **Phase 2D** : progressive elongation + dynamic secondary growth.
 
