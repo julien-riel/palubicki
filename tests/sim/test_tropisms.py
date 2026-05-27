@@ -190,3 +190,75 @@ def test_lateral_axis_uses_lateral_gravitropism_weight():
         is_main_axis=False,
     )
     np.testing.assert_allclose(d_lat, [0, -1, 0], atol=1e-7)
+
+
+def test_plagiotropism_pulls_horizontal():
+    cfg = TropismConfig(
+        w_perception=0.0,
+        w_orthotropy_main=0.0,
+        w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0,
+        w_gravitropism_lateral=0.0,
+        w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0,
+        w_direction_inertia=0.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    d = growth_direction(
+        v_perception=np.zeros(3),
+        current_direction=cur,
+        cfg=cfg,
+        is_main_axis=False,
+    )
+    assert abs(float(np.dot(d, [0.0, 1.0, 0.0]))) < 1e-6
+    assert d[0] > 0.99
+
+
+def test_plagiotropism_skipped_when_near_vertical():
+    cfg = TropismConfig(
+        w_perception=0.0,
+        w_orthotropy_main=0.0,
+        w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0,
+        w_gravitropism_lateral=0.0,
+        w_plagiotropism_lateral=10.0,
+        w_phototropism=0.0,
+        w_direction_inertia=1.0,
+    )
+    cur = np.array([0.0, 1.0, 0.0])
+    d = growth_direction(
+        v_perception=np.zeros(3),
+        current_direction=cur,
+        cfg=cfg,
+        is_main_axis=False,
+    )
+    np.testing.assert_allclose(d, [0.0, 1.0, 0.0], atol=1e-7)
+
+
+def test_plagiotropism_main_vs_lateral():
+    cfg = TropismConfig(
+        w_perception=0.0,
+        w_orthotropy_main=0.0,
+        w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0,
+        w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0,
+        w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0,
+        w_direction_inertia=0.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    d_main = growth_direction(
+        v_perception=np.zeros(3),
+        current_direction=cur,
+        cfg=cfg,
+        is_main_axis=True,
+    )
+    np.testing.assert_allclose(d_main, cur, atol=1e-7)
+    d_lat = growth_direction(
+        v_perception=np.zeros(3),
+        current_direction=cur,
+        cfg=cfg,
+        is_main_axis=False,
+    )
+    assert abs(float(np.dot(d_lat, [0.0, 1.0, 0.0]))) < 1e-6

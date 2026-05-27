@@ -43,10 +43,34 @@ def growth_direction(
     decay = float(cfg.axis_decay) ** int(axis_order)
     w_ortho = cfg.w_orthotropy_main if is_main_axis else cfg.w_orthotropy_lateral
     w_gravi = cfg.w_gravitropism_main if is_main_axis else cfg.w_gravitropism_lateral
+    w_plagio = cfg.w_plagiotropism_main if is_main_axis else cfg.w_plagiotropism_lateral
+
+    # Plagiotropism: project current_direction onto the XY plane (horizontal).
+    # If current_direction is near-vertical (|dot(UP)| >= 0.99) the projection
+    # is ambiguous; skip the term this iteration. It re-engages once other
+    # tropisms tilt the direction off-vertical.
+    cd = np.asarray(current_direction, dtype=np.float64)
+    cd_norm = float(np.linalg.norm(cd))
+    if w_plagio > 0.0 and cd_norm > 1e-12:
+        cd_unit = cd / cd_norm
+        vertical_component = float(np.dot(cd_unit, _UP))
+        if abs(vertical_component) < 0.99:
+            v_plagio = cd_unit - vertical_component * _UP
+            n_plagio = float(np.linalg.norm(v_plagio))
+            if n_plagio > 1e-12:
+                v_plagio = v_plagio / n_plagio
+            else:
+                v_plagio = np.zeros(3)
+        else:
+            v_plagio = np.zeros(3)
+    else:
+        v_plagio = np.zeros(3)
+
     blend = (
         cfg.w_perception * v_perception
         + (w_ortho * decay) * _UP
         + (w_gravi * decay) * _DOWN
+        + (w_plagio * decay) * v_plagio
         + (cfg.w_phototropism * decay) * photo
         + cfg.w_direction_inertia * current_direction
     )
