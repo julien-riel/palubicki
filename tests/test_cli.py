@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from pathlib import Path
 
 import pygltflib
 import pytest
@@ -245,3 +246,47 @@ def test_edit_help_lists_flags(capsys):
     assert exc.value.code == 0
     for flag in ("--config", "--species", "--port", "--no-browser"):
         assert flag in out
+
+
+@pytest.mark.slow
+def test_edit_server_boots_and_serves_schema():
+    import socket
+    import threading
+    import time
+    import urllib.request
+    import urllib.error
+
+    from palubicki.cli import _find_free_port
+    from palubicki.edit.server import create_app
+    from palubicki.config import load_config
+
+    port = _find_free_port(9000)
+    assert port is not None
+
+    cfg = load_config(yaml_path=None, cli_overrides={}, output=Path("tree.glb"))
+    app = create_app(cfg)
+
+    import uvicorn
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
+    server = uvicorn.Server(config)
+
+    t = threading.Thread(target=server.run, daemon=True)
+    t.start()
+
+    # Poll up to 3s for readiness
+    deadline = time.time() + 3.0
+    body = None
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/schema", timeout=0.5) as resp:
+                body = resp.read()
+                break
+        except (urllib.error.URLError, ConnectionRefusedError):
+            time.sleep(0.05)
+    server.should_exit = True
+    t.join(timeout=2.0)
+
+    assert body is not None, "server never answered /api/schema"
+    import json
+    parsed = json.loads(body)
+    assert "sections" in parsed
