@@ -18,6 +18,7 @@ from palubicki.sim.phyllotaxy import lateral_bud_directions
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tropisms import growth_direction
 
 
@@ -113,6 +114,8 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
     nodes_created_this_step = 0
 
     for tree in forest.trees:
+        if cfg.sim.sympodial.enabled:
+            promote_lateral_if_failing(tree, quality, cfg.sim.sympodial)
         v_subtree = compute_v_subtree(tree, quality)
         n_by_bud = allocate(
             tree, quality=quality,
@@ -230,6 +233,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     d, cfg.phyllotaxy,
                     node_index=state.node_index,
                     seed=cfg.seed,
+                    axis_order=cur.axis_order,
                 )
                 state.node_index += 1
                 for ld in lateral_dirs:
