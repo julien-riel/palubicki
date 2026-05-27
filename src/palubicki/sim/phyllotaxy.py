@@ -43,12 +43,22 @@ def lateral_bud_directions(
         k = 2
     elif cfg.mode == "whorled":
         k = max(1, cfg.whorl_count)
+    elif cfg.mode == "decussate":
+        k = 2
     else:
         raise ValueError(f"unknown phyllotaxy mode: {cfg.mode!r}")
 
     angles = cfg.branch_angle_by_order
     idx = min(int(axis_order), len(angles) - 1)
-    base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
+
+    if cfg.mode == "decussate":
+        base_azimuth = (
+            math.radians(cfg.divergence_angle_deg) * node_index
+            + (math.pi / 2.0) * (node_index % 2)
+        )
+    else:
+        base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
+
     branch_angle = math.radians(angles[idx])
 
     if cfg.divergence_jitter_deg > 0 or cfg.branch_angle_jitter_deg > 0:

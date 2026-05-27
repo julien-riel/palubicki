@@ -199,3 +199,38 @@ def test_reserve_directions_deterministic():
     d_a = reserve_bud_directions(np.array([0, 1, 0]), cfg, node_index=7, seed=42, count=2)
     d_b = reserve_bud_directions(np.array([0, 1, 0]), cfg, node_index=7, seed=42, count=2)
     np.testing.assert_array_equal(d_a, d_b)
+
+
+def test_decussate_two_buds_per_node():
+    cfg = PhyllotaxyConfig(mode="decussate", branch_angle_by_order=(45.0,), divergence_angle_deg=0.0)
+    dirs = lateral_bud_directions(np.array([0, 1, 0]), cfg, node_index=0, seed=0, axis_order=0)
+    assert dirs.shape == (2, 3)
+    assert abs(np.linalg.norm(dirs[0]) - 1.0) < 1e-7
+    assert abs(np.linalg.norm(dirs[1]) - 1.0) < 1e-7
+
+
+def test_decussate_alternates_90_per_node():
+    cfg = PhyllotaxyConfig(mode="decussate", branch_angle_by_order=(45.0,), divergence_angle_deg=0.0)
+    growth = np.array([0.0, 1.0, 0.0])
+    d_even = lateral_bud_directions(growth, cfg, node_index=0, seed=0, axis_order=0)[0]
+    d_odd = lateral_bud_directions(growth, cfg, node_index=1, seed=0, axis_order=0)[0]
+    proj_even = d_even - np.dot(d_even, growth) * growth
+    proj_odd = d_odd - np.dot(d_odd, growth) * growth
+    proj_even = proj_even / np.linalg.norm(proj_even)
+    proj_odd = proj_odd / np.linalg.norm(proj_odd)
+    cos_angle = float(np.dot(proj_even, proj_odd))
+    assert abs(cos_angle) < 1e-6
+
+
+def test_decussate_with_nonzero_divergence():
+    cfg = PhyllotaxyConfig(mode="decussate", branch_angle_by_order=(45.0,), divergence_angle_deg=10.0)
+    growth = np.array([0.0, 1.0, 0.0])
+    d0 = lateral_bud_directions(growth, cfg, node_index=0, seed=0, axis_order=0)[0]
+    d2 = lateral_bud_directions(growth, cfg, node_index=2, seed=0, axis_order=0)[0]
+    p0 = d0 - np.dot(d0, growth) * growth
+    p2 = d2 - np.dot(d2, growth) * growth
+    p0 = p0 / np.linalg.norm(p0)
+    p2 = p2 / np.linalg.norm(p2)
+    cos_angle = float(np.dot(p0, p2))
+    expected = np.cos(np.radians(20.0))
+    assert abs(cos_angle - expected) < 1e-6
