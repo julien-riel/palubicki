@@ -391,3 +391,16 @@ def test_config_rejects_negative_dormant_reserve_count(tmp_path):
             phyllotaxy=PhyllotaxyConfig(dormant_reserve_count=-1),
             output=tmp_path / "out.glb",
         )
+
+
+def test_shedding_reactivation_count_default():
+    s = SheddingConfig()
+    assert s.reactivation_count == 1
+
+
+def test_config_rejects_negative_reactivation_count(tmp_path):
+    with pytest.raises(ConfigError, match="reactivation_count"):
+        _make_config(
+            shedding=SheddingConfig(reactivation_count=-1),
+            output=tmp_path / "out.glb",
+        )

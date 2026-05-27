@@ -134,6 +134,9 @@ class SheddingConfig:
     quality_threshold: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
     window: int = field(default=5, metadata={"ui": {"min": 1, "max": 20, "step": 1}})
     enabled: bool = field(default=True, metadata={"ui": {"label": "Enabled"}})
+    reactivation_count: int = field(
+        default=1, metadata={"ui": {"min": 0, "max": 5, "step": 1}}
+    )
 
 
 @dataclass(frozen=True)
@@ -331,6 +334,12 @@ class Config:
         if p.dormant_reserve_count < 0:
             raise ConfigError(
                 f"phyllotaxy.dormant_reserve_count must be >= 0, got {p.dormant_reserve_count}"
+            )
+
+        sh = self.shedding
+        if sh.reactivation_count < 0:
+            raise ConfigError(
+                f"shedding.reactivation_count must be >= 0, got {sh.reactivation_count}"
             )
 
         g = self.geom
