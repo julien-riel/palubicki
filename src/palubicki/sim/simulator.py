@@ -163,10 +163,12 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     continue
                 cur = chain.current
                 light_grad = light_info.gradient[cur] if light_info else None
+                is_main = (cur is cur.parent_node.terminal_bud)
                 d = growth_direction(
                     v_perception=res.direction[cur],
                     current_direction=cur.direction,
                     cfg=cfg.tropism,
+                    is_main_axis=is_main,
                     light_gradient=light_grad,
                     axis_order=cur.axis_order,
                 )
@@ -199,7 +201,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     parent_node=cur.parent_node,
                     child_node=new_node,
                     length=cfg.sim.internode_length,
-                    is_main_axis=(cur is cur.parent_node.terminal_bud),
+                    is_main_axis=is_main,
                     window=cfg.shedding.window,
                 )
                 cur.parent_node.children_internodes.append(iod)

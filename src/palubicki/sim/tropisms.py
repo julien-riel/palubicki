@@ -14,16 +14,15 @@ def growth_direction(
     v_perception: np.ndarray,
     current_direction: np.ndarray,
     cfg: TropismConfig,
+    is_main_axis: bool,
     light_gradient: np.ndarray | None = None,
     axis_order: int = 0,
 ) -> np.ndarray:
     """Blend perception + orthotropy (UP) + gravitropy (DOWN) + photo + inertia.
 
-    When `light_gradient` is provided and non-zero, it replaces `cfg.photo_direction`
-    in the phototropism term.
-
-    Each weight is scaled by ``cfg.axis_decay ** axis_order`` so the trunk gets
-    full weighting and higher-order branches get attenuated (Fix #2).
+    ``is_main_axis`` selects between main-axis weights (e.g. w_orthotropy_main)
+    and lateral-axis weights. Each tropism weight at order k is multiplied by
+    ``cfg.axis_decay**k``.
     """
     if light_gradient is not None:
         lg = np.asarray(light_gradient, dtype=np.float64)
@@ -42,10 +41,12 @@ def growth_direction(
             photo = photo / pn
 
     decay = float(cfg.axis_decay) ** int(axis_order)
+    w_ortho = cfg.w_orthotropy_main if is_main_axis else cfg.w_orthotropy_lateral
+    w_gravi = cfg.w_gravitropism_main if is_main_axis else cfg.w_gravitropism_lateral
     blend = (
         cfg.w_perception * v_perception
-        + (cfg.w_orthotropy * decay) * _UP
-        + (cfg.w_gravitropism * decay) * _DOWN
+        + (w_ortho * decay) * _UP
+        + (w_gravi * decay) * _DOWN
         + (cfg.w_phototropism * decay) * photo
         + cfg.w_direction_inertia * current_direction
     )

@@ -52,7 +52,6 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--marker-count", type=int, default=None)
     g.add_argument("--iterations", type=int, default=None)
     g.add_argument("--lambda", dest="lambda_apical", type=float, default=None)
-    g.add_argument("--w-gravity", type=float, default=None)
     g.add_argument("--leaf-texture", type=Path, default=None)
     g.add_argument("--no-leaves", action="store_true")
     g.add_argument("--no-shed", action="store_true")
@@ -171,9 +170,6 @@ def _cmd_generate(args) -> int:
         overrides["sim.max_iterations"] = args.iterations
     if args.lambda_apical is not None:
         overrides["sim.lambda_apical"] = args.lambda_apical
-    if args.w_gravity is not None:
-        # Legacy flag name kept for backwards compat; maps to w_orthotropy.
-        overrides["tropism.w_orthotropy"] = args.w_gravity
     if args.leaf_texture is not None:
         overrides["geom.leaf_texture"] = args.leaf_texture
     if args.no_leaves:
