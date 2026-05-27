@@ -13,6 +13,10 @@ sim:
   max_iterations: 50
   sympodial:
     enabled: false
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.20
+    n_consecutive_steps: 3
 tropism:
   w_perception: 1.0
   w_orthotropy_main: 0.40
@@ -30,10 +34,12 @@ phyllotaxy:
   branch_angle_by_order: [45.0, 35.0, 30.0, 25.0]
   divergence_jitter_deg: 5.0
   branch_angle_jitter_deg: 4.0
+  dormant_reserve_count: 1
 shedding:
   quality_threshold: 0.02
   window: 5
   enabled: true
+  reactivation_count: 1
 light:
   enabled: true
   k_absorption: 0.45

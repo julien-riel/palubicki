@@ -40,6 +40,9 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
             cur_dict.update(preset_section)
             if section_name == "sim" and "sympodial" in cur_dict and isinstance(cur_dict["sympodial"], dict):
                 cur_dict["sympodial"] = SympodialConfig(**cur_dict["sympodial"])
+            if section_name == "sim" and "shade_mortality" in cur_dict and isinstance(cur_dict["shade_mortality"], dict):
+                from palubicki.config import ShadeMortalityConfig
+                cur_dict["shade_mortality"] = ShadeMortalityConfig(**cur_dict["shade_mortality"])
             if section_name == "phyllotaxy" and "branch_angle_by_order" in cur_dict and isinstance(cur_dict["branch_angle_by_order"], list):
                 cur_dict["branch_angle_by_order"] = tuple(float(x) for x in cur_dict["branch_angle_by_order"])
             new_sections[section_name] = type_(**cur_dict)

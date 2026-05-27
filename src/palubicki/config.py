@@ -433,6 +433,8 @@ def load_config(
             sec_data = {**sec_data, "branch_angle_by_order": tuple(float(x) for x in v)}
         if name == "sim" and "sympodial" in sec_data and isinstance(sec_data["sympodial"], dict):
             sec_data = {**sec_data, "sympodial": SympodialConfig(**sec_data["sympodial"])}
+        if name == "sim" and "shade_mortality" in sec_data and isinstance(sec_data["shade_mortality"], dict):
+            sec_data = {**sec_data, "shade_mortality": ShadeMortalityConfig(**sec_data["shade_mortality"])}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:
