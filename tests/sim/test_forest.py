@@ -32,11 +32,11 @@ def test_per_tree_config_applies_dotted_overrides():
     cfg = _base_cfg()
     seed = ForestSeed(
         position=(0.0, 0.0, 0.0),
-        overrides={"envelope.shape": "cone", "tropism.w_orthotropy": 0.5},
+        overrides={"envelope.shape": "cone", "tropism.w_orthotropy_main": 0.5},
     )
     out = per_tree_config(cfg, seed, tree_index=0)
     assert out.envelope.shape == "cone"
-    assert out.tropism.w_orthotropy == 0.5
+    assert out.tropism.w_orthotropy_main == 0.5
 
 
 def test_per_tree_config_seed_derivation():

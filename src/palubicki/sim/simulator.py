@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+_ILEN_SALT = int.from_bytes(b"ilen", "big")
+
 from palubicki.config import Config
 from palubicki.sim.bh import allocate, compute_v_subtree
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
@@ -181,7 +183,15 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     new_active.append(cur)
                     chain.done = True
                     continue
-                new_pos = cur.position + d * cfg.sim.internode_length
+                length = cfg.sim.internode_length
+                if cfg.sim.internode_length_jitter > 0:
+                    ss = np.random.SeedSequence(
+                        [cfg.seed, _ILEN_SALT, iteration, state.node_index]
+                    )
+                    rng = np.random.default_rng(ss.generate_state(1)[0])
+                    factor = max(0.5, min(1.5, rng.normal(1.0, cfg.sim.internode_length_jitter)))
+                    length = cfg.sim.internode_length * factor
+                new_pos = cur.position + d * length
 
                 # V3: obstacle blocking
                 if forest.obstacles:
@@ -200,7 +210,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 iod = Internode(
                     parent_node=cur.parent_node,
                     child_node=new_node,
-                    length=cfg.sim.internode_length,
+                    length=length,
                     is_main_axis=is_main,
                     window=cfg.shedding.window,
                 )

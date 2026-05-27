@@ -87,7 +87,7 @@ forest:
       seed: 42
       overrides:
         envelope.shape: cone
-        tropism.w_orthotropy: 0.5
+        tropism.w_orthotropy_main: 0.5
 """)
     cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
     assert len(cfg.forest.seeds) == 2
@@ -95,7 +95,7 @@ forest:
     assert cfg.forest.seeds[0].seed is None
     assert cfg.forest.seeds[1].position == (5.0, 0.0, 0.0)
     assert cfg.forest.seeds[1].seed == 42
-    assert cfg.forest.seeds[1].overrides == {"envelope.shape": "cone", "tropism.w_orthotropy": 0.5}
+    assert cfg.forest.seeds[1].overrides == {"envelope.shape": "cone", "tropism.w_orthotropy_main": 0.5}
 
 
 def test_load_config_unknown_obstacle_kind_raises(tmp_path):

@@ -228,3 +228,19 @@ def test_config_rejects_negative_w_gravitropism_lateral(tmp_path):
             tropism=TropismConfig(w_gravitropism_lateral=-0.2),
             output=tmp_path / "out.glb",
         )
+
+
+def test_config_rejects_internode_length_jitter_above_cap(tmp_path):
+    with pytest.raises(ConfigError, match="internode_length_jitter"):
+        _make_config(
+            sim=SimConfig(internode_length_jitter=0.6),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_config_rejects_negative_internode_length_jitter(tmp_path):
+    with pytest.raises(ConfigError, match="internode_length_jitter"):
+        _make_config(
+            sim=SimConfig(internode_length_jitter=-0.05),
+            output=tmp_path / "out.glb",
+        )

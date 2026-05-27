@@ -32,7 +32,7 @@ def test_per_tree_config_applies_oak_preset(tmp_path):
     derived = per_tree_config(cfg, seed_entry, tree_index=0)
     assert derived.envelope.shape == "half_ellipsoid"
     assert derived.envelope.rx == pytest.approx(5.0)
-    assert derived.phyllotaxy.branch_angle_deg == pytest.approx(55.0)
+    assert derived.phyllotaxy.branch_angle_deg == pytest.approx(60.0)
     assert derived.envelope.center == (0.0, 0.0, 0.0)
 
 
@@ -41,10 +41,10 @@ def test_per_tree_config_overrides_win_over_species(tmp_path):
     seed_entry = ForestSeed(
         position=(0.0, 0.0, 0.0),
         species="oak",
-        overrides={"tropism.w_orthotropy": 0.99},
+        overrides={"tropism.w_orthotropy_main": 0.99},
     )
     derived = per_tree_config(cfg, seed_entry, tree_index=0)
-    assert derived.tropism.w_orthotropy == pytest.approx(0.99)
+    assert derived.tropism.w_orthotropy_main == pytest.approx(0.99)
     assert derived.envelope.shape == "half_ellipsoid"  # oak preserved
 
 

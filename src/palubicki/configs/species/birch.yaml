@@ -1,4 +1,4 @@
-# Betula pendula — élancé, branches fines, port pleureur léger
+# Betula pendula — élancé, branches fines, port pleureur
 envelope:
   shape: ellipsoid
   rx: 2.5
@@ -7,31 +7,35 @@ envelope:
   marker_count: 20000
 sim:
   internode_length: 0.18
-  # Birch has very strong apical dominance — single straight leader, the
-  # weeping shape comes from sag on long thin laterals, not the trunk.
+  internode_length_jitter: 0.15
+  # Birch has very strong apical dominance — single straight leader.
   lambda_apical: 0.95
   alpha_basipetal: 2.0
   max_iterations: 45
 tropism:
-  # Pendula → trunk orthotropic, mild gravitropic bias; the real droop comes
-  # from post-sim mechanical sag (see sag section below).
-  w_orthotropy: 0.35
-  w_gravitropism: 0.05
+  # Pendula: trunk strictly orthotropic, lateral axes get a real downward pull.
+  # This is the proper plagiotropism mechanism; the sag pass below is now a
+  # complementary touch, not the primary droop source.
+  w_orthotropy_main: 0.40
+  w_orthotropy_lateral: 0.10
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.15
   w_phototropism: 0.25
   w_direction_inertia: 0.50
   axis_decay: 0.85
 sag:
   enabled: true
-  k: 0.015
-  max_bend_deg: 8.0
+  k: 0.010
+  max_bend_deg: 6.0
   rigid_axis_order: 2
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5
+  divergence_jitter_deg: 5.0
   branch_angle_deg: 45
+  branch_angle_jitter_deg: 4.0
 shedding:
-  # Pendula self-shadows heavily; threshold must be very permissive to keep
-  # the drooping skirt alive.
+  # Pendula self-shadows heavily; threshold must be very permissive.
   quality_threshold: 0.02
 light:
   enabled: true
@@ -43,7 +47,6 @@ geom:
   bark_color: [0.85, 0.82, 0.75]
   bark_texture: "proc:birch_bark"
   leaf_texture: "proc:birch_leaf"
-  # Betula pendula: feuilles 3–7 cm, triangulaires-ovales, largeur ≈ 0.7 × longueur.
   leaf_size: 0.05
   leaf_cluster_count: 3
   leaf_aspect: 0.7

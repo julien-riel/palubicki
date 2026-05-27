@@ -7,12 +7,16 @@ envelope:
   marker_count: 18000
 sim:
   internode_length: 0.18
+  internode_length_jitter: 0.08
   lambda_apical: 0.85
   alpha_basipetal: 1.8
   max_iterations: 40
 tropism:
-  # Conifer: strong apical dominance — orthotropy preserved across orders.
-  w_orthotropy: 0.15
+  # Conifer: strict apical dominance, near-horizontal whorl laterals.
+  w_orthotropy_main: 0.30
+  w_orthotropy_lateral: 0.05
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.02
   w_phototropism: 0.20
   w_direction_inertia: 0.8
   axis_decay: 0.85
@@ -20,7 +24,9 @@ phyllotaxy:
   mode: whorled
   whorl_count: 5
   divergence_angle_deg: 72
+  divergence_jitter_deg: 3.0
   branch_angle_deg: 75
+  branch_angle_jitter_deg: 4.0
 shedding:
   quality_threshold: 0.20
 light:
@@ -33,8 +39,6 @@ geom:
   bark_color: [0.45, 0.25, 0.18]
   bark_texture: "proc:pine_bark"
   leaf_texture: "proc:pine_needle"
-  # Pinus sylvestris: aiguilles 4–7 cm × 1–2 mm (fascicules de 2).
-  # leaf_size = longueur d'aiguille ; leaf_aspect = largeur/longueur ≈ 0.025.
   leaf_size: 0.06
   leaf_cluster_count: 5
   leaf_aspect: 0.025

@@ -7,29 +7,32 @@ envelope:
   marker_count: 25000
 sim:
   internode_length: 0.18
-  # Oak: moderate apical dominance. 0.75 keeps the leader winning while the
-  # canopy has only a few laterals; once the lateral subtree gets very large
-  # the trunk apex starves and clean-bole formation happens naturally.
+  internode_length_jitter: 0.12
+  # Oak: moderate apical dominance.
   lambda_apical: 0.75
   alpha_basipetal: 2.2
   max_iterations: 45
 tropism:
   # Oak: strong orthotropic trunk, primary branches go more horizontal.
-  w_orthotropy: 0.25
+  w_orthotropy_main: 0.35
+  w_orthotropy_lateral: 0.05
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.0
   w_phototropism: 0.35
   w_direction_inertia: 0.5
   axis_decay: 0.65
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5
-  branch_angle_deg: 55
+  divergence_jitter_deg: 6.0
+  branch_angle_deg: 60
+  branch_angle_jitter_deg: 5.0
 shedding:
   quality_threshold: 0.15
 light:
   enabled: true
   k_absorption: 0.55
 sag:
-  # Subtle: large branches sag visibly under their own weight.
   enabled: true
   k: 0.005
   max_bend_deg: 5.0

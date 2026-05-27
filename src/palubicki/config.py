@@ -46,6 +46,12 @@ class SimConfig:
     # r_kill in a single year), and re-introduce the "wineglass" fold-back when
     # the trunk shoots through the envelope in one iteration.
     n_substeps_max: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
+    # Gaussian jitter (σ as a fraction of internode_length) applied per new
+    # internode. 0.0 = exact constant length; 0.10-0.15 = realistic variability.
+    # The drawn factor is clamped to [0.5, 1.5] regardless of σ.
+    internode_length_jitter: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
+    )
 
 
 @dataclass(frozen=True)
@@ -222,6 +228,10 @@ class Config:
             raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
         if s.internode_length <= 0:
             raise ConfigError(f"sim.internode_length must be > 0, got {s.internode_length}")
+        if not (0.0 <= s.internode_length_jitter <= 0.5):
+            raise ConfigError(
+                f"sim.internode_length_jitter must be in [0, 0.5], got {s.internode_length_jitter}"
+            )
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
 
