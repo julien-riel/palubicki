@@ -79,8 +79,8 @@ def test_load_preset_birch(tmp_path):
     # Birch preset: strong orthotropic trunk, lateral axes have a real downward
     # gravitropic pull (the pendula effect). Sag stays enabled but attenuated.
     assert cfg.tropism.w_orthotropy_main == pytest.approx(0.40)
-    assert cfg.tropism.w_orthotropy_lateral == pytest.approx(0.10)
-    assert cfg.tropism.w_gravitropism_lateral == pytest.approx(0.15)
+    assert cfg.tropism.w_orthotropy_lateral == pytest.approx(0.05)
+    assert cfg.tropism.w_gravitropism_lateral == pytest.approx(0.45)
     assert cfg.phyllotaxy.divergence_jitter_deg == pytest.approx(5.0)
     assert cfg.sag.enabled is True
     assert cfg.sag.k == pytest.approx(0.010)

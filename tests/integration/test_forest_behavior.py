@@ -10,30 +10,37 @@ from palubicki.sim.simulator import simulate, simulate_forest
 
 @pytest.mark.slow
 def test_two_trees_compete_for_space(tmp_path):
-    """Two trees close together → the inner-facing sides have fewer internodes than the outer-facing sides."""
+    """Two trees close together → the inner-facing sides have fewer internodes than the outer-facing sides.
+
+    Cross-tree marker depletion suppresses inner-side growth, so the outer side
+    accumulates more internodes. With Phase 1 defaults (lateral orthotropy/gravi
+    weights from TropismConfig), the asymmetry needs enough iterations and tight
+    enough spacing to be discriminating: spacing=1.2 (inner gap=2.4, env_rx=1.5
+    → envelopes overlap) and max_iterations=18 surface a clear outer-favored
+    margin without being overly slow.
+    """
     cfg = Config(
         envelope=EnvelopeConfig(rx=1.5, ry=3.0, rz=1.5, marker_count=3000),
-        sim=SimConfig(max_iterations=12),
+        sim=SimConfig(max_iterations=18),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "x.glb", seed=42,
         forest=ForestConfig(seeds=(
-            ForestSeed(position=(-1.5, 0.0, 0.0)),
-            ForestSeed(position=(1.5, 0.0, 0.0)),
+            ForestSeed(position=(-1.2, 0.0, 0.0)),
+            ForestSeed(position=(1.2, 0.0, 0.0)),
         )),
     )
     forest = simulate_forest(cfg)
 
     tree_left, tree_right = forest.trees[0], forest.trees[1]
-    # tree_left at x=-1.5; inner side = +x (towards 0), outer side = -x
-    left_inner = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] > -1.5)
-    left_outer = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] < -1.5)
-    # We expect roughly balanced or outer-favored mass; allow generous margin since
-    # the trees can still grow inward where markers from the OTHER tree's envelope provide pulls.
-    # After Phase 1 (lateral orthotropy weight 0.1 vs main 0.3) lateral buds explore
-    # more horizontally and the asymmetry is small. Loose assertion: outer not
-    # drastically below inner.
-    assert left_outer >= left_inner - 15, f"left_inner={left_inner}, left_outer={left_outer}"
+    # tree_left at x=-1.2; inner side = +x (towards 0), outer side = -x
+    left_inner = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] > -1.2)
+    left_outer = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] < -1.2)
+    # Outer should outgrow inner because cross-tree markers above the OTHER tree
+    # get consumed by both trees, depleting the inner side faster. Margin of 5
+    # restored (was widened to 15 to mask a semantic inversion under the old
+    # iter=12, spacing=1.5 config).
+    assert left_outer >= left_inner + 5, f"left_inner={left_inner}, left_outer={left_outer}"
 
 
 @pytest.mark.slow

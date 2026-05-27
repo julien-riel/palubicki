@@ -17,11 +17,11 @@ tropism:
   # This is the proper plagiotropism mechanism; the sag pass below is now a
   # complementary touch, not the primary droop source.
   w_orthotropy_main: 0.40
-  w_orthotropy_lateral: 0.10
+  w_orthotropy_lateral: 0.05      # weaker than gravi so net is DOWN
   w_gravitropism_main: 0.0
-  w_gravitropism_lateral: 0.15
-  w_phototropism: 0.25
-  w_direction_inertia: 0.50
+  w_gravitropism_lateral: 0.45    # strong pull — primary droop source
+  w_phototropism: 0.05            # minimal — phototropism (UP) otherwise overpowers gravi
+  w_direction_inertia: 0.25       # halved so laterals can re-curve down instead of locking in starting angle
   axis_decay: 0.85
 sag:
   enabled: true
