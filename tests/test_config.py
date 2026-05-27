@@ -8,6 +8,7 @@ from palubicki.config import (
 
 
 def _make_config(**overrides):
+    from palubicki.config import LightConfig
     base = dict(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=1.0, rz=1.0),
         sim=SimConfig(),
@@ -15,6 +16,7 @@ def _make_config(**overrides):
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(),
         geom=GeomConfig(),
+        light=LightConfig(),
     )
     base.update(overrides)
     return Config(**base)
@@ -331,5 +333,48 @@ def test_tropism_plagiotropism_negative_lateral_raises(tmp_path):
     with pytest.raises(ConfigError, match="w_plagiotropism_lateral"):
         _make_config(
             tropism=TropismConfig(w_plagiotropism_lateral=-0.5),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_shade_mortality_config_defaults():
+    from palubicki.config import ShadeMortalityConfig
+    c = ShadeMortalityConfig()
+    assert c.enabled is False
+    assert c.light_threshold == 0.15
+    assert c.n_consecutive_steps == 3
+
+
+def test_config_includes_shade_mortality(tmp_path):
+    from palubicki.config import ShadeMortalityConfig
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert isinstance(cfg.sim.shade_mortality, ShadeMortalityConfig)
+    assert cfg.sim.shade_mortality.enabled is False
+
+
+def test_config_rejects_light_threshold_out_of_range(tmp_path):
+    from palubicki.config import ShadeMortalityConfig
+    with pytest.raises(ConfigError, match="light_threshold"):
+        _make_config(
+            sim=SimConfig(shade_mortality=ShadeMortalityConfig(light_threshold=1.5)),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_config_rejects_n_consecutive_steps_zero(tmp_path):
+    from palubicki.config import ShadeMortalityConfig
+    with pytest.raises(ConfigError, match="n_consecutive_steps"):
+        _make_config(
+            sim=SimConfig(shade_mortality=ShadeMortalityConfig(n_consecutive_steps=0)),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_config_rejects_shade_mortality_enabled_without_light(tmp_path):
+    from palubicki.config import LightConfig, ShadeMortalityConfig
+    with pytest.raises(ConfigError, match="shade_mortality.*light"):
+        _make_config(
+            sim=SimConfig(shade_mortality=ShadeMortalityConfig(enabled=True)),
+            light=LightConfig(enabled=False),
             output=tmp_path / "out.glb",
         )

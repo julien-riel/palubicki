@@ -65,6 +65,19 @@ class SimConfig:
         default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
     )
     sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
+    shade_mortality: "ShadeMortalityConfig" = field(default_factory=lambda: ShadeMortalityConfig())
+
+
+@dataclass(frozen=True)
+class ShadeMortalityConfig:
+    """Kills buds whose light_factor stays below threshold for N consecutive steps."""
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    light_threshold: float = field(
+        default=0.15, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}}
+    )
+    n_consecutive_steps: int = field(
+        default=3, metadata={"ui": {"min": 1, "max": 10, "step": 1}}
+    )
 
 
 @dataclass(frozen=True)
@@ -267,6 +280,19 @@ class Config:
             raise ConfigError(
                 f"sim.sympodial.n_consecutive_steps must be >= 1, "
                 f"got {sym.n_consecutive_steps}"
+            )
+        sm = s.shade_mortality
+        if not (0.0 <= sm.light_threshold <= 1.0):
+            raise ConfigError(
+                f"sim.shade_mortality.light_threshold must be in [0, 1], got {sm.light_threshold}"
+            )
+        if sm.n_consecutive_steps < 1:
+            raise ConfigError(
+                f"sim.shade_mortality.n_consecutive_steps must be >= 1, got {sm.n_consecutive_steps}"
+            )
+        if sm.enabled and not self.light.enabled:
+            raise ConfigError(
+                "sim.shade_mortality.enabled=True requires light.enabled=True"
             )
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
