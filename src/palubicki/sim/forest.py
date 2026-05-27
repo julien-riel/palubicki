@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, ForestSeed, SympodialConfig,
+    Config, ConfigError, ElongationConfig, EnvelopeConfig, ForestSeed, SympodialConfig,
     _SECTION_TYPES, _load_packaged_species,
 )
 
@@ -43,6 +43,8 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
             if section_name == "sim" and "shade_mortality" in cur_dict and isinstance(cur_dict["shade_mortality"], dict):
                 from palubicki.config import ShadeMortalityConfig
                 cur_dict["shade_mortality"] = ShadeMortalityConfig(**cur_dict["shade_mortality"])
+            if section_name == "sim" and isinstance(cur_dict.get("elongation"), dict):
+                cur_dict["elongation"] = ElongationConfig(**cur_dict["elongation"])
             if section_name == "phyllotaxy" and "branch_angle_by_order" in cur_dict and isinstance(cur_dict["branch_angle_by_order"], list):
                 cur_dict["branch_angle_by_order"] = tuple(float(x) for x in cur_dict["branch_angle_by_order"])
             new_sections[section_name] = type_(**cur_dict)

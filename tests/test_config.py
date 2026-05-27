@@ -433,3 +433,43 @@ def test_geom_leaf_sun_shade_k_above_two_rejected(tmp_path):
             geom=GeomConfig(leaf_sun_shade_k=2.5),
             output=tmp_path / "x.glb",
         )
+
+
+def test_elongation_defaults_disabled():
+    from palubicki.config import ElongationConfig
+    cfg = ElongationConfig()
+    assert cfg.enabled is False
+    assert cfg.tau_iterations == 3.0
+    assert cfg.age_factor_min == 0.5
+    assert cfg.age_factor_decay == 0.5
+
+
+def test_sim_config_has_elongation_subdataclass():
+    from palubicki.config import SimConfig, ElongationConfig
+    s = SimConfig()
+    assert isinstance(s.elongation, ElongationConfig)
+    assert s.elongation.enabled is False
+
+
+def test_elongation_validation_tau_must_be_positive(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    tau_iterations: 0.0\n")
+    with pytest.raises(ConfigError, match="tau_iterations"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_elongation_validation_age_factor_min_bounds(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    age_factor_min: 0.05\n")
+    with pytest.raises(ConfigError, match="age_factor_min"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_elongation_validation_decay_must_be_nonnegative(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    yaml_path = tmp_path / "bad.yaml"
+    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    age_factor_decay: -0.1\n")
+    with pytest.raises(ConfigError, match="age_factor_decay"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")

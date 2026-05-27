@@ -66,6 +66,7 @@ class SimConfig:
     )
     sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
     shade_mortality: "ShadeMortalityConfig" = field(default_factory=lambda: ShadeMortalityConfig())
+    elongation: "ElongationConfig" = field(default_factory=lambda: ElongationConfig())
 
 
 @dataclass(frozen=True)
@@ -161,6 +162,27 @@ class SagConfig:
     # Internodes whose ``axis_order`` is less than this stay rigid. 1 = trunk
     # doesn't sag (typical); 0 = even trunk can sag (extreme weep).
     rigid_axis_order: int = field(default=1, metadata={"ui": {"min": 0, "max": 4, "step": 1}})
+
+
+@dataclass(frozen=True)
+class ElongationConfig:
+    """Progressive internode elongation (S-curve) + age_factor on target length.
+
+    Each Internode records its birth_iteration and length_target at creation.
+    Its effective ``length`` ramps from 0 toward ``length_target`` via a sigmoid
+    centered at ``tau_iterations`` after birth (so length ≈ 0.5 * target at
+    age=tau, ≈ 0.88 * target at age=2*tau).
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    tau_iterations: float = field(
+        default=3.0, metadata={"ui": {"min": 0.5, "max": 10.0, "step": 0.1}}
+    )
+    age_factor_min: float = field(
+        default=0.5, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}}
+    )
+    age_factor_decay: float = field(
+        default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.1}}
+    )
 
 
 @dataclass(frozen=True)
@@ -304,6 +326,17 @@ class Config:
             raise ConfigError(
                 "sim.shade_mortality.enabled=True requires light.enabled=True"
             )
+        e = self.sim.elongation
+        if e.tau_iterations <= 0:
+            raise ConfigError(f"sim.elongation.tau_iterations must be > 0, got {e.tau_iterations}")
+        if not (0.1 <= e.age_factor_min <= 1.0):
+            raise ConfigError(
+                f"sim.elongation.age_factor_min must be in [0.1, 1.0], got {e.age_factor_min}"
+            )
+        if e.age_factor_decay < 0:
+            raise ConfigError(
+                f"sim.elongation.age_factor_decay must be >= 0, got {e.age_factor_decay}"
+            )
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
 
@@ -443,6 +476,15 @@ def load_config(
             sec_data = {**sec_data, "sympodial": SympodialConfig(**sec_data["sympodial"])}
         if name == "sim" and "shade_mortality" in sec_data and isinstance(sec_data["shade_mortality"], dict):
             sec_data = {**sec_data, "shade_mortality": ShadeMortalityConfig(**sec_data["shade_mortality"])}
+        if name == "sim" and isinstance(sec_data.get("elongation"), dict):
+            elong_data = sec_data["elongation"]
+            elong_allowed = {f.name for f in fields(ElongationConfig)}
+            elong_unknown = set(elong_data) - elong_allowed
+            if elong_unknown:
+                raise ConfigError(
+                    f"unknown keys in section 'sim.elongation': {sorted(elong_unknown)}"
+                )
+            sec_data = {**sec_data, "elongation": ElongationConfig(**elong_data)}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:
