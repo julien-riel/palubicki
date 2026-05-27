@@ -39,3 +39,8 @@ def test_internode_links_nodes_bidirectionally():
     child.parent_internode = iod
     assert iod in parent.children_internodes
     assert child.parent_internode is iod
+
+
+def test_bud_state_has_reserve():
+    assert BudState.RESERVE is not None
+    assert BudState.RESERVE not in (BudState.ACTIVE, BudState.DORMANT, BudState.DEAD)

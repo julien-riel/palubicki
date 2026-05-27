@@ -12,6 +12,7 @@ class BudState(Enum):
     ACTIVE = auto()
     DORMANT = auto()
     DEAD = auto()
+    RESERVE = auto()
 
 
 @dataclass(eq=False)
