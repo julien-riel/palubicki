@@ -528,3 +528,45 @@ def test_simulator_no_reserves_when_count_zero(tmp_path):
         assert n.dormant_reserve_buds == []
         for iod in n.children_internodes:
             stack.append(iod.child_node)
+
+
+def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
+    """With shade_mortality enabled and light enabled, a bud forced under
+    threshold for N consecutive steps must end up DEAD."""
+    from palubicki.config import (
+        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
+        ShadeMortalityConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+    from palubicki.sim.tree import BudState
+
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        sim=SimConfig(
+            max_iterations=15,
+            shade_mortality=ShadeMortalityConfig(
+                enabled=True, light_threshold=0.99, n_consecutive_steps=2,
+            ),
+        ),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(mode="alternate"),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        light=LightConfig(enabled=True, k_absorption=2.0),
+        output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    # With threshold near 1.0 and high absorption, most buds end up shaded → dead.
+    dead = 0
+    alive = 0
+    stack = [tree.root]
+    while stack:
+        n = stack.pop()
+        for b in ([n.terminal_bud] if n.terminal_bud else []) + n.lateral_buds:
+            if b.state is BudState.DEAD:
+                dead += 1
+            elif b.state is BudState.ACTIVE:
+                alive += 1
+        for iod in n.children_internodes:
+            stack.append(iod.child_node)
+    assert dead > 0, "expected shade mortality to kill at least one bud"

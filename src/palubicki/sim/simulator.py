@@ -15,6 +15,7 @@ from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_l
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
 from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions
+from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
@@ -98,6 +99,19 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
         )
     else:
         light_info = None
+
+    # Phase 2B: shade-induced bud mortality runs AFTER perceive_light populates
+    # light_factor and BEFORE marker perception / allocation so that dead buds
+    # do not consume markers or appear in the substep loop.
+    if light_info is not None and cfg.sim.shade_mortality.enabled:
+        kill_shaded_buds(
+            union_buds, light_info.light_factor, cfg.sim.shade_mortality
+        )
+        for tree in forest.trees:
+            tree.active_buds = [
+                b for b in tree.active_buds if b.state is not BudState.DEAD
+            ]
+        union_buds = all_active_buds(forest)
 
     res = perceive(
         union_buds, forest.markers,
