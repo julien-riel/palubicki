@@ -32,6 +32,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_forest(args)
     if args.command == "preview":
         return _cmd_preview(args)
+    if args.command == "edit":
+        return _cmd_edit(args)
 
     parser.print_help()
     return 1
@@ -105,6 +107,14 @@ def _build_parser() -> argparse.ArgumentParser:
                     help="Background: white | black | transparent (default white)")
     pv.add_argument("--no-leaves", action="store_true",
                     help="Filter out green-dominant primitives (leaves)")
+
+    ed = sub.add_parser("edit", help="Launch the browser-based parameter editor")
+    ed.add_argument("--config", type=Path, default=None)
+    ed.add_argument("--species",
+                    choices=species_choices if species_choices else None,
+                    default=None)
+    ed.add_argument("--port", type=int, default=8765)
+    ed.add_argument("--no-browser", action="store_true")
 
     return parser
 
@@ -334,6 +344,68 @@ def _cmd_dump_config(args) -> int:
         return 1
     yaml.safe_dump(config, sys.stdout, sort_keys=False)
     return 0
+
+
+def _cmd_edit(args) -> int:
+    try:
+        import uvicorn
+        from palubicki.edit.server import create_app
+    except ImportError:
+        print(
+            "edit error: extra not installed. Run: pip install -e '.[edit]'",
+            file=sys.stderr,
+        )
+        return 2
+
+    try:
+        cfg = load_config(
+            yaml_path=args.config,
+            cli_overrides={},
+            output=Path("tree.glb"),
+            species=args.species,
+        )
+    except ConfigError as e:
+        print(f"config error: {e}", file=sys.stderr)
+        return 2
+
+    port = _find_free_port(args.port)
+    if port is None:
+        print(
+            f"no free port in range {args.port}..{args.port + 9}",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not args.no_browser:
+        _schedule_open_browser(port)
+
+    app = create_app(cfg)
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="info")
+    return 0
+
+
+def _find_free_port(start: int) -> int | None:
+    import socket
+    for p in range(start, start + 10):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", p))
+                return p
+            except OSError:
+                continue
+    return None
+
+
+def _schedule_open_browser(port: int) -> None:
+    import threading
+    import time
+    import webbrowser
+
+    def _open():
+        time.sleep(0.5)
+        webbrowser.open(f"http://127.0.0.1:{port}/")
+
+    threading.Thread(target=_open, daemon=True).start()
 
 
 def _config_to_dict(cfg: Config) -> dict:

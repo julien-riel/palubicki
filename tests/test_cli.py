@@ -235,3 +235,13 @@ def test_preview_renderer_dep_missing_exits_2(tmp_path, capsys, monkeypatch):
     err = capsys.readouterr().err
     assert "preview error" in err
     assert "matplotlib" in err
+
+
+def test_edit_help_lists_flags(capsys):
+    from palubicki.cli import main
+    with pytest.raises(SystemExit) as exc:
+        main(["edit", "--help"])
+    out = capsys.readouterr().out
+    assert exc.value.code == 0
+    for flag in ("--config", "--species", "--port", "--no-browser"):
+        assert flag in out
