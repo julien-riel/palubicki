@@ -82,3 +82,36 @@ def test_empty_mesh_raises(tmp_path):
     mesh = Mesh(primitives=[empty])
     with pytest.raises(ExportError, match="empty"):
         write_glb(mesh, tmp_path / "empty.glb", asset_meta={})
+
+
+def test_write_glb_to_bytes_returns_glb_magic():
+    from palubicki.export.gltf import write_glb_to_bytes
+
+    mesh = Mesh(primitives=[_cube_primitive()])
+    data = write_glb_to_bytes(mesh, asset_meta={"seed": 0})
+    assert isinstance(data, (bytes, bytearray))
+    assert bytes(data[:4]) == b"glTF"
+
+
+def test_write_glb_and_to_bytes_agree(tmp_path):
+    from palubicki.export.gltf import write_glb_to_bytes
+
+    mesh = Mesh(primitives=[_cube_primitive()])
+    out = tmp_path / "tree.glb"
+    write_glb(mesh, out, asset_meta={"seed": 0})
+    on_disk = out.read_bytes()
+    in_mem = bytes(write_glb_to_bytes(mesh, asset_meta={"seed": 0}))
+    assert on_disk == in_mem
+
+
+def test_write_glb_to_bytes_empty_raises():
+    from palubicki.export.gltf import write_glb_to_bytes
+
+    empty = _cube_primitive()
+    empty.positions = np.zeros((0, 3), dtype=np.float32)
+    empty.indices = np.zeros((0,), dtype=np.uint32)
+    empty.normals = np.zeros((0, 3), dtype=np.float32)
+    empty.uvs = np.zeros((0, 2), dtype=np.float32)
+    mesh = Mesh(primitives=[empty])
+    with pytest.raises(ExportError):
+        write_glb_to_bytes(mesh, asset_meta={})

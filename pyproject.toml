@@ -25,6 +25,11 @@ dev = [
 render = [
     "matplotlib>=3.7",
 ]
+edit = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "httpx>=0.27",
+]
 
 [project.scripts]
 palubicki = "palubicki.cli:main"
