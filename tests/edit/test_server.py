@@ -140,3 +140,15 @@ def test_app_js_served(client):
     assert "renderSidebar" in body
     assert "renderField" in body
     assert "regenerate" in body
+
+
+def test_app_js_has_viewer_logic(client):
+    r = client.get("/static/app.js")
+    body = r.text
+    # Symbols introduced in Task 16:
+    assert "THREE.WebGLRenderer" in body
+    assert "THREE.OrbitControls" in body
+    assert "THREE.GLTFLoader" in body
+    assert "disposeChildren" in body
+    assert "fitCameraToObject" in body
+    assert "replaceTree" in body

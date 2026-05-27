@@ -7,6 +7,8 @@ const state = {
   lastGlbBytes: null,  // ArrayBuffer of the most recent generation
 };
 
+let viewer = null; // { scene, camera, renderer, controls, treeRoot }
+
 async function init() {
   try {
     state.schema = await fetchJSON("/api/schema");
@@ -148,13 +150,125 @@ function attachActions() {
   document.getElementById("regenerate-btn").addEventListener("click", regenerate);
 }
 
-async function regenerate() {
-  // Stub — implemented in next task
-  console.log("regenerate clicked", state.values);
+function initViewer() {
+  const canvas = document.getElementById("viewer-canvas");
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  resizeRenderer(renderer);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xe8e8e8);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.6);
+  dir.position.set(5, 10, 7);
+  scene.add(dir);
+
+  const camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 1000);
+  camera.position.set(8, 6, 10);
+
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.1;
+
+  const treeRoot = new THREE.Group();
+  scene.add(treeRoot);
+
+  viewer = { scene, camera, renderer, controls, treeRoot };
+
+  window.addEventListener("resize", () => {
+    resizeRenderer(renderer);
+    camera.aspect = canvas.clientWidth / canvas.clientHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
 }
 
-function initViewer() {
-  // Stub — implemented in next task
+function resizeRenderer(renderer) {
+  const canvas = renderer.domElement;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    renderer.setSize(w, h, false);
+  }
+}
+
+async function regenerate() {
+  const btn = document.getElementById("regenerate-btn");
+  const spinner = document.getElementById("spinner");
+  btn.disabled = true;
+  spinner.classList.remove("hidden");
+  try {
+    const r = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state.values),
+    });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); if (j.error) msg = j.error; } catch (_) {}
+      throw new Error(msg);
+    }
+    const buf = await r.arrayBuffer();
+    state.lastGlbBytes = buf;
+    document.getElementById("export-glb-btn").disabled = false;
+    await replaceTree(buf);
+  } catch (err) {
+    showToast("Generation failed: " + err.message);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.add("hidden");
+  }
+}
+
+function replaceTree(arrayBuffer) {
+  return new Promise((resolve, reject) => {
+    const loader = new THREE.GLTFLoader();
+    loader.parse(arrayBuffer, "", (gltf) => {
+      disposeChildren(viewer.treeRoot);
+      viewer.treeRoot.add(gltf.scene);
+      fitCameraToObject(viewer.camera, viewer.controls, gltf.scene);
+      resolve();
+    }, (err) => {
+      reject(new Error("GLTFLoader: " + (err.message || err)));
+    });
+  });
+}
+
+function disposeChildren(group) {
+  while (group.children.length) {
+    const child = group.children[0];
+    group.remove(child);
+    child.traverse?.((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) {
+          if (m.map) m.map.dispose();
+          m.dispose();
+        }
+      }
+    });
+  }
+}
+
+function fitCameraToObject(camera, controls, object) {
+  const box = new THREE.Box3().setFromObject(object);
+  if (box.isEmpty()) return;
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * (Math.PI / 180);
+  const dist = (maxDim / 2) / Math.tan(fov / 2) * 1.5;
+  const dir = new THREE.Vector3(1, 0.6, 1).normalize();
+  camera.position.copy(center).addScaledVector(dir, dist);
+  camera.lookAt(center);
+  controls.target.copy(center);
+  controls.update();
 }
 
 function showToast(msg) {
