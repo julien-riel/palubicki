@@ -412,3 +412,24 @@ def test_phyllotaxy_mode_decussate_is_accepted(tmp_path):
         output=tmp_path / "out.glb",
     )
     assert cfg.phyllotaxy.mode == "decussate"
+
+
+def test_geom_leaf_sun_shade_k_default_zero(tmp_path):
+    g = GeomConfig()
+    assert g.leaf_sun_shade_k == 0.0
+
+
+def test_geom_leaf_sun_shade_k_negative_rejected(tmp_path):
+    with pytest.raises(ConfigError, match="leaf_sun_shade_k"):
+        _make_config(
+            geom=GeomConfig(leaf_sun_shade_k=-0.1),
+            output=tmp_path / "x.glb",
+        )
+
+
+def test_geom_leaf_sun_shade_k_above_two_rejected(tmp_path):
+    with pytest.raises(ConfigError, match="leaf_sun_shade_k"):
+        _make_config(
+            geom=GeomConfig(leaf_sun_shade_k=2.5),
+            output=tmp_path / "x.glb",
+        )
