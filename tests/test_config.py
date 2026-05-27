@@ -244,3 +244,36 @@ def test_config_rejects_negative_internode_length_jitter(tmp_path):
             sim=SimConfig(internode_length_jitter=-0.05),
             output=tmp_path / "out.glb",
         )
+
+
+def test_sympodial_config_defaults():
+    from palubicki.config import SympodialConfig
+    s = SympodialConfig()
+    assert s.enabled is False
+    assert s.q_threshold == 1.0
+    assert s.n_consecutive_steps == 3
+
+
+def test_sim_config_has_sympodial_default(tmp_path):
+    from palubicki.config import SympodialConfig
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert isinstance(cfg.sim.sympodial, SympodialConfig)
+    assert cfg.sim.sympodial.enabled is False
+
+
+def test_sympodial_q_threshold_negative_raises(tmp_path):
+    from palubicki.config import SimConfig, SympodialConfig
+    with pytest.raises(ConfigError, match="q_threshold"):
+        _make_config(
+            sim=SimConfig(sympodial=SympodialConfig(q_threshold=-0.1)),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_sympodial_n_consecutive_steps_zero_raises(tmp_path):
+    from palubicki.config import SimConfig, SympodialConfig
+    with pytest.raises(ConfigError, match="n_consecutive_steps"):
+        _make_config(
+            sim=SimConfig(sympodial=SympodialConfig(n_consecutive_steps=0)),
+            output=tmp_path / "out.glb",
+        )

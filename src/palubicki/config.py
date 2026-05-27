@@ -24,6 +24,18 @@ class EnvelopeConfig:
 
 
 @dataclass(frozen=True)
+class SympodialConfig:
+    """When the terminal_bud fails (Q < threshold) for N consecutive steps,
+    the lateral on the same node with the highest quality takes its place.
+    The old terminal dies. The new leader orients itself naturally via the
+    (stronger) main-axis tropism weights.
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    q_threshold: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
+    n_consecutive_steps: int = field(default=3, metadata={"ui": {"min": 1, "max": 10, "step": 1}})
+
+
+@dataclass(frozen=True)
 class SimConfig:
     r_perception: float = field(default=0.6, metadata={"ui": {"min": 0.1, "max": 3.0, "step": 0.05}})
     theta_perception_deg: float = field(default=90.0, metadata={"ui": {"min": 10.0, "max": 180.0, "step": 5.0}})
@@ -52,6 +64,7 @@ class SimConfig:
     internode_length_jitter: float = field(
         default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
     )
+    sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
 
 
 @dataclass(frozen=True)
@@ -231,6 +244,16 @@ class Config:
         if not (0.0 <= s.internode_length_jitter <= 0.5):
             raise ConfigError(
                 f"sim.internode_length_jitter must be in [0, 0.5], got {s.internode_length_jitter}"
+            )
+        sym = s.sympodial
+        if sym.q_threshold < 0:
+            raise ConfigError(
+                f"sim.sympodial.q_threshold must be >= 0, got {sym.q_threshold}"
+            )
+        if sym.n_consecutive_steps < 1:
+            raise ConfigError(
+                f"sim.sympodial.n_consecutive_steps must be >= 1, "
+                f"got {sym.n_consecutive_steps}"
             )
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
