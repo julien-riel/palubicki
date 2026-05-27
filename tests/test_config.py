@@ -378,3 +378,16 @@ def test_config_rejects_shade_mortality_enabled_without_light(tmp_path):
             light=LightConfig(enabled=False),
             output=tmp_path / "out.glb",
         )
+
+
+def test_phyllotaxy_dormant_reserve_count_default():
+    p = PhyllotaxyConfig()
+    assert p.dormant_reserve_count == 0
+
+
+def test_config_rejects_negative_dormant_reserve_count(tmp_path):
+    with pytest.raises(ConfigError, match="dormant_reserve_count"):
+        _make_config(
+            phyllotaxy=PhyllotaxyConfig(dormant_reserve_count=-1),
+            output=tmp_path / "out.glb",
+        )

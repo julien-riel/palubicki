@@ -124,6 +124,9 @@ class PhyllotaxyConfig:
     divergence_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 30.0, "step": 0.5}})
     # Gaussian jitter on the branch insertion angle. Clamped to [0deg, 90deg].
     branch_angle_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
+    dormant_reserve_count: int = field(
+        default=0, metadata={"ui": {"min": 0, "max": 5, "step": 1}}
+    )
 
 
 @dataclass(frozen=True)
@@ -325,6 +328,10 @@ class Config:
                 raise ConfigError(
                     f"phyllotaxy.branch_angle_by_order[{i}] must be in [0, 90], got {a}"
                 )
+        if p.dormant_reserve_count < 0:
+            raise ConfigError(
+                f"phyllotaxy.dormant_reserve_count must be >= 0, got {p.dormant_reserve_count}"
+            )
 
         g = self.geom
         if not (1.0 <= g.pipe_exponent <= 4.0):
