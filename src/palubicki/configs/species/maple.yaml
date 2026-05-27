@@ -11,10 +11,11 @@ sim:
   lambda_apical: 0.80
   alpha_basipetal: 2.1
   max_iterations: 42
+  theta_perception_deg: 35.0
   sympodial:
     enabled: true
-    q_threshold: 1.3
-    n_consecutive_steps: 3
+    q_threshold: 1.6
+    n_consecutive_steps: 5
   shade_mortality:
     enabled: true
     light_threshold: 0.18
