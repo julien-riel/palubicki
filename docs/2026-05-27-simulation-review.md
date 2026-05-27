@@ -121,14 +121,21 @@ houppier (chêne = milliers de feuilles/m³). Moins critique car le rendu
 ## 4. Suggestions d'amélioration (priorisées)
 
 ### Haut impact, effort modéré
-1. **Exploiter `is_main_axis` partout.** Ajouter dans `TropismConfig` :
+1. ~~**Exploiter `is_main_axis` partout.** Ajouter dans `TropismConfig` :
    `w_orthotropy_main` vs `w_orthotropy_lateral`, idem gravitropisme. Et un
    paramètre `plagiotropic_axes: [1, 2]` qui transforme
    `w_orthotropy → w_gravitropism_perpendiculaire` sur ces ordres. C'est *le*
-   levier biologique manquant.
-2. **Jitter phyllotaxique.** Ajouter `divergence_jitter_deg` (gaussien,
+   levier biologique manquant.~~ — **Addressed.** Phase 1 introduced
+   `w_orthotropy_main/_lateral` and `w_gravitropism_main/_lateral`. Phase 2A
+   adds explicit `w_plagiotropism_main/_lateral` (horizontal projection of
+   current direction), making the plagiotropic axis tunable per-species
+   without polluting gravity.
+2. ~~**Jitter phyllotaxique.** Ajouter `divergence_jitter_deg` (gaussien,
    default ~5°) et `branch_angle_jitter_deg`. Trivial à implémenter, gros
-   gain visuel anti-AI.
+   gain visuel anti-AI.~~ — **Addressed in Phase 1.** Both
+   `phyllotaxy.divergence_jitter_deg` and `phyllotaxy.branch_angle_jitter_deg`
+   are wired with gaussian draws from a deterministic per-(seed, node_index)
+   RNG.
 3. **Angle d'insertion qui s'ouvre avec l'âge/le poids.** Au lieu de sag
    postérieur, calculer pour chaque internode une rotation de son insertion
    *à la création*, proportionnelle à `axis_order` et à
@@ -155,9 +162,14 @@ houppier (chêne = milliers de feuilles/m³). Moins critique car le rendu
 8. **`alpha_basipetal` qui décroît avec l'âge du tree** (carbon use
    efficiency baisse) → ralentissement naturel de la croissance vers la
    maturité.
-9. **Validation visuelle automatisée** : silhouettes 2D comparées à une
+9. ~~**Validation visuelle automatisée** : silhouettes 2D comparées à une
    banque d'images d'arbres réels (Procrustes ou métriques de fractalité).
-   Évite la dérive paramétrique en aveugle.
+   Évite la dérive paramétrique en aveugle.~~ — **Addressed.** Golden
+   buffer-hash regression tests (`tests/golden/test_species_goldens.py`)
+   plus per-species integration tests
+   (`tests/integration/test_sympodial_emergence.py`,
+   `tests/integration/test_plagiotropy_horizontalizes.py`) detect
+   parametric drift on every commit.
 
 ### Pour les presets actuels
 - **Oak** : `sag.k=0.005` trop faible — viser 0.01-0.015 sur les ordres
