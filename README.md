@@ -62,6 +62,19 @@ import matplotlib.pyplot as plt
 plt.imshow(render_glb("oak.glb"))
 ```
 
+### Editor — tune parameters live in a browser
+
+```bash
+pip install -e ".[edit]"
+palubicki edit --species oak --seed 42
+```
+
+Opens `http://127.0.0.1:8765/` with sliders for the most-tweaked parameters
+on the left, a three.js viewer on the right, and a **Régénérer** button to
+re-run the simulation with the current values. Use **Export .glb** to save
+the current tree and **Export YAML** to dump the current config (re-usable
+with `palubicki generate --config`).
+
 ### V2 — voxel light shadowing (BHls hybrid)
 
 Enable with `--light-enabled`. The bud's quality becomes
