@@ -45,6 +45,8 @@ def lateral_bud_directions(
         k = max(1, cfg.whorl_count)
     elif cfg.mode == "decussate":
         k = 2
+    elif cfg.mode == "distichous":
+        k = 1
     else:
         raise ValueError(f"unknown phyllotaxy mode: {cfg.mode!r}")
 
@@ -56,6 +58,9 @@ def lateral_bud_directions(
             math.radians(cfg.divergence_angle_deg) * node_index
             + (math.pi / 2.0) * (node_index % 2)
         )
+    elif cfg.mode == "distichous":
+        # Fixed 180° flip per node; divergence_angle_deg is ignored here.
+        base_azimuth = math.pi * node_index
     else:
         base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
 

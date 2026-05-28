@@ -234,3 +234,34 @@ def test_decussate_with_nonzero_divergence():
     cos_angle = float(np.dot(p0, p2))
     expected = np.cos(np.radians(20.0))
     assert abs(cos_angle - expected) < 1e-6
+
+
+def test_distichous_yields_one_direction():
+    cfg = PhyllotaxyConfig(mode="distichous", branch_angle_by_order=(45.0,))
+    dirs = lateral_bud_directions(np.array([0, 1, 0]), cfg, node_index=0, seed=0, axis_order=0)
+    assert dirs.shape == (1, 3)
+    assert abs(np.linalg.norm(dirs[0]) - 1.0) < 1e-7
+
+
+def test_distichous_alternates_180_between_successive_nodes():
+    cfg = PhyllotaxyConfig(mode="distichous", branch_angle_by_order=(45.0,))
+    g = np.array([0.0, 1.0, 0.0])
+
+    def perp(v):
+        p = v - np.dot(v, g) * g
+        return p / np.linalg.norm(p)
+
+    d0 = lateral_bud_directions(g, cfg, node_index=0, seed=0, axis_order=0)[0]
+    d1 = lateral_bud_directions(g, cfg, node_index=1, seed=0, axis_order=0)[0]
+    d2 = lateral_bud_directions(g, cfg, node_index=2, seed=0, axis_order=0)[0]
+    assert np.dot(perp(d0), perp(d1)) < -0.999
+    assert np.dot(perp(d1), perp(d2)) < -0.999
+
+
+def test_distichous_ignores_divergence_angle_deg():
+    cfg_a = PhyllotaxyConfig(mode="distichous", branch_angle_by_order=(45.0,), divergence_angle_deg=0.0)
+    cfg_b = PhyllotaxyConfig(mode="distichous", branch_angle_by_order=(45.0,), divergence_angle_deg=137.5)
+    g = np.array([0.0, 1.0, 0.0])
+    d_a = lateral_bud_directions(g, cfg_a, node_index=1, seed=0, axis_order=0)
+    d_b = lateral_bud_directions(g, cfg_b, node_index=1, seed=0, axis_order=0)
+    np.testing.assert_allclose(d_a, d_b, atol=1e-10)
