@@ -381,11 +381,16 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
         splay_deg=g.leaf_splay_deg,
         foliage_depth=g.foliage_depth,
         sun_shade_k=g.leaf_sun_shade_k,
+        leaf_shape=g.leaf_shape,
+        leaf_margin=g.leaf_margin,
+        leaf_margin_depth=g.leaf_margin_depth,
+        leaf_margin_count=g.leaf_margin_count,
     )
     h = float(np.sum(prim.positions.astype(np.float64) ** 2))
-    # Baseline captured from oak/seed-0 run after parametric blade integration
-    # (Task 7: replace cross-quads with leaf_blade.build_blade).
-    EXPECTED_HASH = 18322988.00007069  # noqa: N806
+    # Baseline captured from oak/seed-0 run after parametric leaf blade changes
+    # (Task 9: update golden tests and diagnostic baselines after leaf shape/margin integration).
+    # Updated with leaf_shape/leaf_margin parameters now passed to build_leaves_primitive.
+    EXPECTED_HASH = 33392697.220862743  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
@@ -432,6 +437,10 @@ def test_leaf_area_matches_geom_helper():
         splay_deg=g.leaf_splay_deg,
         foliage_depth=g.foliage_depth,
         sun_shade_k=g.leaf_sun_shade_k,
+        leaf_shape=g.leaf_shape,
+        leaf_margin=g.leaf_margin,
+        leaf_margin_depth=g.leaf_margin_depth,
+        leaf_margin_count=g.leaf_margin_count,
     )
 
     pos = prim.positions.astype(np.float64)

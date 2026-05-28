@@ -4,12 +4,13 @@
 
 **Code root:** `src/palubicki/`. Species presets currently shipped: **oak**, **birch**, **pine**, **maple**.
 
-**Last reviewed:** 2026-05-27, after Phases 2A–2D landed on `main`.
+**Last reviewed:** 2026-05-28, after parametric leaf blade (issue #4) landed on the issue branch.
 
 ## What changed since the previous review
 
 Phases 2A–2D were merged. Concretely, the following moved from ❌/🟡 to ✅:
 
+- **Parametric leaf blade** (`geom/leaf_blade.py`) — 6 shapes × 4 margins replace cross-quad rectangles. Each species now has a distinct silhouette.
 - **Sympodial branching** (`sim/sympodial.py`) — terminal bud failure promotes a lateral.
 - **Plagiotropism** (`sim/tropisms.py` `w_plagiotropism_main/_lateral`) — projects direction onto XY plane.
 - **Per-branch-order angles** (`phyllotaxy.branch_angle_by_order`).
@@ -127,7 +128,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
 | Petiole (stalk) | ❌ | = | — | L–M | L | **ADD** — almost free; visible improvement against "leaves stuck to stem" look. |
-| Blade with parametric length, width, shape | 🟡 | = | `leaf_size`, `leaf_aspect` only; cross-quads of fixed proportion | H | L | **IMPROVE** — replace cross-quad with a parametric blade mesh (basal taper, apex angle, margin function). **Highest leaf-realism payoff for the dollar.** |
+| Blade with parametric length, width, shape | ✅ | ⬆ Implemented | `geom/leaf_blade.py` (issue #4 / PR #17) — `build_blade(L, W, shape, margin, depth, count)` with 6 shapes × 4 margins. Species presets updated: oak (ovate+lobed), birch (ovate+serrate), maple (palmate), pine/fir (linear). | — | — | **DONE** — leaf silhouettes are now species-distinct. Compound leaves and petiole geometry remain. |
 | Simple vs compound leaf (pinnate / palmate / bipinnate) | ❌ | = | All leaves are simple | H (ash, walnut, rose, sumac, mimosa, locust) | L | **ADD** — a compound leaf is a small phytomer chain; reuse the same walker on a leaf-scale subgrammar. Unlocks many broadleaf species. |
 | Venation (parallel / pinnate / palmate) | 🟡 | = | Texture-driven | M | L | **IMPROVE** — bake into blade shape parameters; don't model veins as geometry. |
 | Margins (serrate, dentate, lobed, entire) | ❌ | = | — | M (oak vs cherry vs willow silhouette) | L | **ADD** — margin function on blade outline. Cheap; very recognizable. |
@@ -138,7 +139,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Leaf life span | ❌ | = | All leaves permanent | M | L | **ADD with Phase 1 (seasonal cycles)** — `leaf_age` field once leaves move onto nodes. Prerequisite for deciduousness. |
 | Deciduous / evergreen / marcescent | ❌ | = | — | H (seasonal scenes) | L | **ADD with Phase 1** — payoff is enormous if seasonal renders matter. |
 
-**Verdict.** Phase 2C added one real-world leaf behavior (sun/shade morphology) but leaves are still cross-quads with no per-leaf state. **In priority order: parametric blade → compound leaves → margins → (Phase 1: leaves-on-nodes + deciduousness).** The first three don't require seasonal infrastructure and can land anytime.
+**Verdict.** Parametric blade + margins (issue #4) and sun/shade morphology (Phase 2C) are in; leaves still aren't first-class node attributes. **In priority order: compound leaves → petiole geometry → (Phase 1: leaves-on-nodes + deciduousness).** The first two don't require seasonal infrastructure.
 
 ---
 
@@ -226,15 +227,14 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D already delivered.
 
-1. **Parametric leaf blade + margins** (§6) — replace the cross-quad with a real blade silhouette. Doubles the visible species range; no architectural dependency.
-2. **Compound leaves** (§6) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
-3. **True distichous (180°) phyllotaxis mode** (§5) — one new branch in `phyllotaxy.py`. Required for grass leaves and for visibly correct conifer side-sprays. No dependency.
-4. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
-5. **Root flare at trunk base** (§7) — one swept-profile mesh. Very high visibility, no simulation dependency.
-6. **Diagnostic / validation harness** (§11) — print Strahler ratio, mean divergence, per-order insertion angles, sympodial fork count, leaf-area density per generated tree. Speeds up all future tuning.
-7. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems.
-8. **Petiole geometry** (§6) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
-9. **Fascicles of needles** (§6) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
+1. **Compound leaves** (§6) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
+2. **True distichous (180°) phyllotaxis mode** (§5) — one new branch in `phyllotaxy.py`. Required for grass leaves and for visibly correct conifer side-sprays. No dependency.
+3. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
+4. **Root flare at trunk base** (§7) — one swept-profile mesh. Very high visibility, no simulation dependency.
+5. **Diagnostic / validation harness** (§11) — print Strahler ratio, mean divergence, per-order insertion angles, sympodial fork count, leaf-area density per generated tree. Speeds up all future tuning.
+6. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems.
+7. **Petiole geometry** (§6) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
+8. **Fascicles of needles** (§6) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
 
 ## Phase 1 — Foundation: time / phenology axis *(at the right moment)*
 

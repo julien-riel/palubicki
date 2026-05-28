@@ -61,6 +61,10 @@ geom:
   leaf_texture: "proc:pine_needle"
   leaf_size: 0.05
   leaf_aspect: 0.025
+  leaf_shape: linear
+  leaf_margin: entire
+  leaf_margin_depth: 0.0
+  leaf_margin_count: 0
   leaf_cluster_count: 4
   leaf_splay_deg: 20
   foliage_depth: 3
