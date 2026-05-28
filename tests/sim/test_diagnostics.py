@@ -205,3 +205,43 @@ def test_insertion_angle_vs_main_sibling_differs_from_vs_parent():
     m = compute_metrics(tree)
     assert m["insertion_angle_deg_vs_parent"][1]["mean"] == pytest.approx(30.0, abs=1e-6)
     assert m["insertion_angle_deg_vs_main_sibling"][1]["mean"] == pytest.approx(60.0, abs=1e-6)
+
+
+def test_divergence_angle_known_pair():
+    """Trunk +Y, two main-axis continuations along +Y. At each continuation's
+    child node, one lateral. Lateral 1 points along +X (azimuth 0°);
+    lateral 2 points at azimuth 137.5° in the perpendicular basis used by
+    phyllotaxy.py → divergence = 137.5°.
+    """
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    n1 = Node(position=np.array([0.0, 1.0, 0.0]))
+    n2 = Node(position=np.array([0.0, 2.0, 0.0]))
+    az2_rad = math.radians(137.5)
+    # phyllotaxy's _frame_perpendicular_to(+Y) yields right=+X, up=-Z.
+    # Lateral 1 is purely +X (azimuth 0° in that basis); some +Y component
+    # is fine — azimuth uses only the perpendicular-plane projection.
+    lat1_dir = np.array([1.0, 0.5, 0.0])
+    lat2_dir = np.array([math.cos(az2_rad), 0.5, -math.sin(az2_rad)])
+
+    lat1_node = Node(position=n1.position + lat1_dir)
+    lat2_node = Node(position=n2.position + lat2_dir)
+
+    tree = Tree(root=root)
+    trunk = _link(root, n1, is_main_axis=True)
+    cont = _link(n1, n2, is_main_axis=True)
+    l1 = _link(n1, lat1_node, is_main_axis=False)
+    l2 = _link(n2, lat2_node, is_main_axis=False)
+    tree.all_internodes.extend([trunk, cont, l1, l2])
+
+    m = compute_metrics(tree)
+    assert 1 in m["divergence_angle_deg"]
+    stats = m["divergence_angle_deg"][1]
+    assert stats["mean"] == pytest.approx(137.5, abs=0.5)
+    assert stats["n"] == 1
+
+
+def test_divergence_angle_single_lateral_contributes_nothing():
+    tree = _make_trunk_with_lateral(branch_dir=np.array([1.0, 1.0, 0.0]))
+    m = compute_metrics(tree)
+    # One lateral on one axis → no divergence pairs at all.
+    assert m["divergence_angle_deg"] == {}

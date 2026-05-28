@@ -191,6 +191,86 @@ def _insertion_angle_metrics(
     }
 
 
+# ── Axis chains and divergence ────────────────────────────────────────────
+
+def _walk_axis_chains(root: Node) -> list[list[Internode]]:
+    """Return list of chains. Each chain = maximal sequence of internodes
+    linked by is_main_axis=True continuation. A chain starts when an
+    internode either has no parent_internode (root's child) or is itself a
+    lateral (is_main_axis=False).
+    """
+    chains: list[list[Internode]] = []
+    visited: set[int] = set()
+    for iod in _walk_internodes(root):
+        if id(iod) in visited:
+            continue
+        if iod.parent_node.parent_internode is not None and iod.is_main_axis:
+            continue
+        chain: list[Internode] = [iod]
+        visited.add(id(iod))
+        cur = iod
+        while True:
+            nxt: Internode | None = None
+            for c in cur.child_node.children_internodes:
+                if c.is_main_axis:
+                    nxt = c
+                    break
+            if nxt is None:
+                break
+            chain.append(nxt)
+            visited.add(id(nxt))
+            cur = nxt
+        chains.append(chain)
+    return chains
+
+
+def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    # why: Duplicated from sim/phyllotaxy.py. Both must agree on basis
+    # convention so divergence measurements use the same in-plane basis
+    # the simulator used to place lateral buds.
+    canonical = np.array([1.0, 0.0, 0.0]) if abs(d[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    right = canonical - np.dot(canonical, d) * d
+    right = right / np.linalg.norm(right)
+    up = np.cross(d, right)
+    return right, up
+
+
+def _divergence_angle_metrics(
+    chains: list[list[Internode]],
+    axis_orders: dict[int, int],
+) -> dict:
+    """For each chain, walk in order, collect lateral children in chain
+    order, and compute consecutive azimuth deltas (mod 360°) in the basis
+    perpendicular to the chain tangent at the lateral's parent node.
+    Group by the LATERAL's axis_order.
+    """
+    by_order: dict[int, list[float]] = defaultdict(list)
+    for chain in chains:
+        laterals: list[tuple[Internode, Internode]] = []
+        for cur in chain:
+            for c in cur.child_node.children_internodes:
+                if not c.is_main_axis:
+                    laterals.append((cur, c))
+        if len(laterals) < 2:
+            continue
+
+        prev_az: float | None = None
+        for cur, lat in laterals:
+            T = _tangent(cur)
+            right, up = _frame_perpendicular_to(T)
+            lat_t = _tangent(lat)
+            az = math.degrees(math.atan2(
+                float(np.dot(lat_t, up)),
+                float(np.dot(lat_t, right)),
+            ))
+            if prev_az is not None:
+                diff = (az - prev_az) % 360.0
+                by_order[axis_orders[id(lat)]].append(diff)
+            prev_az = az
+
+    return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
+
+
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
@@ -212,8 +292,10 @@ def compute_metrics(
 
     internodes = _walk_internodes(tree.root)
     axis_orders = _axis_orders(tree.root)
+    chains = _walk_axis_chains(tree.root)
 
     out: dict = {}
     out.update(_strahler_metrics(tree.root))
     out.update(_insertion_angle_metrics(internodes, axis_orders))
+    out.update(_divergence_angle_metrics(chains, axis_orders))
     return out
