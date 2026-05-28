@@ -1,9 +1,11 @@
 # tests/test_config.py
+from pathlib import Path
+
 import pytest
 
 from palubicki.config import (
     Config, ConfigError, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    SheddingConfig, SimConfig, TropismConfig, load_config,
 )
 
 
@@ -472,4 +474,62 @@ def test_elongation_validation_decay_must_be_nonnegative(tmp_path):
     yaml_path = tmp_path / "bad.yaml"
     yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    age_factor_decay: -0.1\n")
     with pytest.raises(ConfigError, match="age_factor_decay"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_bud_break_bias_defaults_to_uniform(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "c.yaml"
+    yaml_path.write_text("sim: {}\n")
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.sim.bud_break_bias.mode == "uniform"
+    assert cfg.sim.bud_break_bias.strength == 0.0
+
+
+def test_bud_break_bias_loads_from_yaml(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "c.yaml"
+    yaml_path.write_text(
+        "sim:\n"
+        "  bud_break_bias:\n"
+        "    mode: basitonic\n"
+        "    strength: 0.6\n"
+    )
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.sim.bud_break_bias.mode == "basitonic"
+    assert cfg.sim.bud_break_bias.strength == pytest.approx(0.6)
+
+
+def test_bud_break_bias_rejects_invalid_mode(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "c.yaml"
+    yaml_path.write_text(
+        "sim:\n"
+        "  bud_break_bias:\n"
+        "    mode: anisotonic\n"
+        "    strength: 0.5\n"
+    )
+    with pytest.raises(ConfigError, match="bud_break_bias.mode"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_bud_break_bias_rejects_out_of_range_strength(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "c.yaml"
+    yaml_path.write_text(
+        "sim:\n"
+        "  bud_break_bias:\n"
+        "    mode: acrotonic\n"
+        "    strength: 1.5\n"
+    )
+    with pytest.raises(ConfigError, match="bud_break_bias.strength"):
+        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+
+
+def test_bud_break_bias_rejects_unknown_key(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "c.yaml"
+    yaml_path.write_text(
+        "sim:\n"
+        "  bud_break_bias:\n"
+        "    mode: uniform\n"
+        "    strength: 0.0\n"
+        "    bogus: 1\n"
+    )
+    with pytest.raises(ConfigError, match="bud_break_bias"):
         load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
