@@ -11,6 +11,11 @@ sim:
   lambda_apical: 0.80
   alpha_basipetal: 2.1
   max_iterations: 42
+  elongation:
+    enabled: true
+    tau_iterations: 3.0
+    age_factor_min: 0.5
+    age_factor_decay: 0.7
   theta_perception_deg: 35.0
   sympodial:
     enabled: true
