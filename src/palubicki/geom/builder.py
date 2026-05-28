@@ -6,16 +6,11 @@ from palubicki.config import Config, ConfigError
 from palubicki.geom._textures import _PROC_TEXTURES, default_leaf_png
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
-from palubicki.geom.radii import compute_radii
 from palubicki.geom.tubes import build_bark_primitive
-from palubicki.sim.sag import apply_sag
 from palubicki.sim.tree import Tree
 
 
 def build_mesh(tree: Tree, cfg: Config) -> Mesh:
-    compute_radii(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
-    apply_sag(tree, cfg.sag)
-
     bark_png = _resolve_texture(cfg.geom.bark_texture)
     bark_mat = Material(
         name="bark",

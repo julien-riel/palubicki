@@ -74,6 +74,18 @@ def simulate_forest(cfg: Config) -> Forest:
             no_new_streak = 0
         if no_new_streak >= 2:
             break
+
+    # --- Phase 2D finalization ---
+    # Snap every internode to its target length, recompute diameters and sag.
+    if cfg.sim.elongation.enabled:
+        for tree in forest.trees:
+            for iod in tree.all_internodes:
+                iod.length = iod.length_target
+    for tree in forest.trees:
+        update_diameters_incremental(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
+    if cfg.sag.enabled:
+        for tree in forest.trees:
+            apply_sag(tree, cfg=cfg.sag)
     return forest
 
 

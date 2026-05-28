@@ -597,10 +597,8 @@ def test_internodes_record_birth_iteration_and_length_target(tmp_path):
         assert iod.length_target > 0.0
 
 
-def test_internodes_have_progressive_lengths_when_elongation_enabled(tmp_path):
-    """At END of simulate(), young internodes (born late) should have length
-    strictly less than length_target — they didn't have time to ramp.
-    NOTE: this test is REPLACED in Task 12 by a finalization-aware test."""
+def test_finalization_snaps_length_to_target(tmp_path):
+    """After simulate(), every internode must have length == length_target."""
     from palubicki.config import (
         Config, ElongationConfig, EnvelopeConfig, GeomConfig, LightConfig,
         PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
@@ -610,8 +608,7 @@ def test_internodes_have_progressive_lengths_when_elongation_enabled(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=2.0, rz=2.0, marker_count=500),
         sim=SimConfig(max_iterations=8,
-                      elongation=ElongationConfig(enabled=True, tau_iterations=3.0,
-                                                  age_factor_decay=0.0)),
+                      elongation=ElongationConfig(enabled=True, tau_iterations=3.0)),
         tropism=TropismConfig(w_orthotropy_main=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -620,8 +617,9 @@ def test_internodes_have_progressive_lengths_when_elongation_enabled(tmp_path):
         seed=42,
     )
     tree = simulate(cfg)
-    by_birth = {}
+    assert len(tree.all_internodes) > 0
     for iod in tree.all_internodes:
-        by_birth.setdefault(iod.birth_iteration, []).append(iod)
-    latest_birth = max(by_birth.keys())
-    assert any(iod.length < iod.length_target * 0.99 for iod in by_birth[latest_birth])
+        assert iod.length == iod.length_target, (
+            f"internode born at {iod.birth_iteration}: length={iod.length}, "
+            f"target={iod.length_target}"
+        )
