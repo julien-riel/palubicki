@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from palubicki.sim.tree import Bud, Tree
+from palubicki.sim.tree import Bud, Internode, Node, Tree
 
 
 def position_weight(
@@ -60,11 +60,11 @@ def compute_axis_positions(tree: Tree) -> dict[Bud, tuple[int, int]]:
     return out
 
 
-def _walk_main_axis_chains(root):
+def _walk_main_axis_chains(root: Node) -> list[list[Internode]]:
     """Iterative walk: each chain is a maximal sequence of internodes linked
     by ``is_main_axis=True`` continuation. Mirrors ``diagnostics._walk_axis_chains``
     but kept local to avoid a cross-module dependency on diagnostics."""
-    chains = []
+    chains: list[list[Internode]] = []
     visited: set[int] = set()
     stack = [root]
     while stack:
