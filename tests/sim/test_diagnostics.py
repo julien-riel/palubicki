@@ -444,3 +444,59 @@ def test_leaf_area_matches_geom_helper():
 
     m = compute_metrics(tree, cfg=cfg)
     assert m["total_leaf_area"] == pytest.approx(rendered_area, rel=1e-5)
+
+
+def test_compute_metrics_accepts_list_of_trees():
+    """Two hand-built trees with known heights → mean/stddev/per_seed."""
+    def trunk_to_height(h: float) -> Tree:
+        root = Node(position=np.array([0.0, 0.0, 0.0]))
+        top = Node(position=np.array([0.0, h, 0.0]))
+        tree = Tree(root=root)
+        iod = _link(root, top, is_main_axis=True)
+        tree.all_internodes.append(iod)
+        return tree
+
+    t1 = trunk_to_height(2.0)
+    t2 = trunk_to_height(4.0)
+    m = compute_metrics([t1, t2])
+
+    h = m["tree_height"]
+    assert h["mean"] == pytest.approx(3.0)
+    assert h["stddev"] == pytest.approx(1.0)
+    assert h["per_seed"] == [pytest.approx(2.0), pytest.approx(4.0)]
+
+    hist = m["strahler_order_histogram"]
+    assert hist[1]["mean"] == pytest.approx(1.0)
+    assert hist[1]["per_seed"] == [1, 1]
+
+
+def test_compute_metrics_multi_seed_missing_axis_order():
+    """Tree A has order-2 internodes; tree B doesn't. The order-2 stats
+    appear in the aggregate with per_seed=[val, None] and mean/stddev
+    computed over the non-None subset."""
+    rootA = Node(position=np.array([0.0, 0.0, 0.0]))
+    midA = Node(position=np.array([0.0, 1.0, 0.0]))
+    latA = Node(position=np.array([1.0, 1.5, 0.0]))
+    sublatA = Node(position=np.array([1.5, 2.0, 0.0]))
+    treeA = Tree(root=rootA)
+    treeA.all_internodes.extend([
+        _link(rootA, midA, is_main_axis=True),
+        _link(midA, latA, is_main_axis=False),
+        _link(latA, sublatA, is_main_axis=False),
+    ])
+
+    rootB = Node(position=np.array([0.0, 0.0, 0.0]))
+    midB = Node(position=np.array([0.0, 1.0, 0.0]))
+    latB = Node(position=np.array([1.0, 1.5, 0.0]))
+    treeB = Tree(root=rootB)
+    treeB.all_internodes.extend([
+        _link(rootB, midB, is_main_axis=True),
+        _link(midB, latB, is_main_axis=False),
+    ])
+
+    m = compute_metrics([treeA, treeB])
+    assert 1 in m["insertion_angle_deg_vs_parent"]
+    assert 2 in m["insertion_angle_deg_vs_parent"]
+    o2 = m["insertion_angle_deg_vs_parent"][2]
+    assert "mean" in o2
+    assert o2["per_seed"][1] is None

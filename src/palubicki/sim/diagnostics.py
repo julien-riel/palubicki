@@ -358,8 +358,8 @@ def compute_metrics(
     `cfg` is optional; only consumed by total_leaf_area.
     """
     if isinstance(tree, list):
-        # Multi-seed path lands in Task 7. Stub for now.
-        raise NotImplementedError("multi-seed compute_metrics arrives in Task 7")
+        per_tree = [compute_metrics(t, cfg=cfg) for t in tree]
+        return _aggregate(per_tree)
 
     nodes = _walk_nodes(tree.root)
     internodes = _walk_internodes(tree.root)
@@ -381,4 +381,92 @@ def compute_metrics(
         out["total_leaf_area"] = _total_leaf_area(tree, cfg)
     else:
         out["total_leaf_area"] = 0.0
+    return out
+
+
+# ── Multi-seed aggregation ────────────────────────────────────────────────
+
+_SCALAR_KEYS = (
+    "strahler_order_max",
+    "horton_bifurcation_ratio_mean",
+    "sympodial_fork_count",
+    "tree_height",
+    "trunk_base_diameter",
+    "crown_radius",
+    "total_leaf_area",
+)
+
+_HISTOGRAM_KEYS = (
+    "strahler_order_histogram",
+    "bud_state_histogram",
+)
+
+_ANGLE_KEYS = (
+    "insertion_angle_deg_vs_parent",
+    "insertion_angle_deg_vs_main_sibling",
+    "divergence_angle_deg",
+)
+
+
+def _agg_scalar(values: list) -> dict:
+    """Aggregate a list of scalars where None or NaN counts as missing."""
+    non_null = [
+        v for v in values
+        if v is not None and not (isinstance(v, float) and math.isnan(v))
+    ]
+    if not non_null:
+        return {"mean": float("nan"), "stddev": float("nan"), "per_seed": values}
+    arr = np.asarray(non_null, dtype=np.float64)
+    return {
+        "mean": float(arr.mean()),
+        "stddev": float(arr.std(ddof=0)),
+        "per_seed": values,
+    }
+
+
+def _aggregate(per_tree: list[dict]) -> dict:
+    """Combine N per-tree metric dicts into a multi-seed dict.
+
+    Scalar leaves wrap into {mean, stddev, per_seed}. Histograms union over
+    bin keys (missing = 0). Per-order angle stats union over orders (missing
+    = None in per_seed; excluded from mean/stddev). Per-order Horton ratios
+    union over orders (missing = None).
+    """
+    if not per_tree:
+        return {}
+
+    out: dict = {}
+
+    for k in _SCALAR_KEYS:
+        out[k] = _agg_scalar([m[k] for m in per_tree])
+
+    for k in _HISTOGRAM_KEYS:
+        all_keys: set = set()
+        for m in per_tree:
+            all_keys.update(m[k].keys())
+        out[k] = {
+            kk: _agg_scalar([m[k].get(kk, 0) for m in per_tree])
+            for kk in sorted(all_keys, key=lambda x: (isinstance(x, str), x))
+        }
+
+    all_ratio_orders: set = set()
+    for m in per_tree:
+        all_ratio_orders.update(m["horton_bifurcation_ratio"].keys())
+    out["horton_bifurcation_ratio"] = {
+        kk: _agg_scalar([m["horton_bifurcation_ratio"].get(kk) for m in per_tree])
+        for kk in sorted(all_ratio_orders)
+    }
+
+    for k in _ANGLE_KEYS:
+        all_orders: set = set()
+        for m in per_tree:
+            all_orders.update(m[k].keys())
+        out[k] = {}
+        for order in sorted(all_orders):
+            means = [
+                (m[k][order]["mean"] if order in m[k] else None)
+                for m in per_tree
+            ]
+            out[k][order] = _agg_scalar(means)
+
     return out
