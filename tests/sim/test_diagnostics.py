@@ -349,3 +349,44 @@ def test_root_only_tree_returns_zeros():
     assert m["trunk_base_diameter"] == pytest.approx(0.0)
     assert m["crown_radius"] == pytest.approx(0.0)
     assert m["total_leaf_area"] == pytest.approx(0.0)
+
+
+@pytest.mark.slow
+def test_compute_effective_leaf_size_extraction_preserves_geom_output():
+    """Refactor invariant: build_leaves_primitive's positions array must be
+    bit-identical before and after we extract compute_effective_leaf_size.
+
+    Hash captured pre-refactor; assertion fails if the refactor drifted.
+    """
+    from pathlib import Path
+    from palubicki.config import load_config
+    from palubicki.geom.leaves import build_leaves_primitive
+    from palubicki.geom.mesh import Material
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species="oak")
+    tree = simulate(cfg)
+
+    g = cfg.geom
+    mat = Material(name="leaves_a", base_color=(0.2, 0.6, 0.2, 1.0),
+                   metallic=0.0, roughness=1.0, base_color_texture_png=None,
+                   alpha_mode="OPAQUE", alpha_cutoff=0.5, double_sided=True)
+    prim = build_leaves_primitive(
+        tree,
+        leaf_size=g.leaf_size,
+        material=mat,
+        cluster_count=g.leaf_cluster_count,
+        aspect=g.leaf_aspect,
+        splay_deg=g.leaf_splay_deg,
+        foliage_depth=g.foliage_depth,
+        sun_shade_k=g.leaf_sun_shade_k,
+    )
+    h = float(np.sum(prim.positions.astype(np.float64) ** 2))
+    # PRE-REFACTOR baseline captured from oak/seed-0 run before the
+    # compute_effective_leaf_size extraction.
+    EXPECTED_HASH = 4392811.55783453  # noqa: N806
+    assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
+        f"Pre-refactor hash: {h!r}. If this is the first run before the "
+        f"refactor, replace EXPECTED_HASH with this value and re-run."
+    )
