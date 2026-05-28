@@ -193,6 +193,25 @@ Species defaults:
   leaves (k=0.6), sympodial branching, and reiteration. Oak and birch use
   k=1.0 and k=0.4 respectively; pine stays at k=0 (needles don't show plasticity).
 
+### Phase 2D — temporal dynamics (progressive elongation + dynamic diameter/sag)
+
+Every internode now tracks its birth iteration and a target length. The
+effective `length` ramps via a sigmoid each iteration; pipe-model diameters
+and cantilever-bend sag are recomputed live on the growing tree. A
+finalization snap at the end of `simulate()` sets every length to its target
+and reruns diameters + sag once more, so the exported geometry is always
+fully grown — regardless of when an internode was born.
+
+- **`sim.elongation`** (per-preset): `enabled`, `tau_iterations` (sigmoid
+  width), `age_factor_min` (final scale), `age_factor_decay` (curvature).
+  Late-born internodes have shorter targets, capturing the
+  early-vigorous-vs-late-conservative chronology of real shoots.
+- **`Node.sag_offset`** separates the visual sag from topological position.
+  `apply_sag` is now idempotent (resets offsets to zero each call) and safe
+  to run per-iteration.
+- **`update_diameters_incremental`** in `sim/radii.py` exposes pipe-model
+  recomputation as a public callable.
+
 ## Architecture
 
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
@@ -223,7 +242,7 @@ pytest --cov            # coverage report
 - **Phase 2A** (livré) : sympodial branching mode, `branch_angle_by_order`, explicit plagiotropism term.
 - **Phase 2B** (livré) : bud life cycle (shade mortality, reiteration via dormant reserves).
 - **Phase 2C** (livré) : decussate phyllotaxy + sun/shade leaves + maple species preset.
-- **Phase 2D** : progressive elongation + dynamic secondary growth.
+- **Phase 2D** (livré) : progressive elongation + dynamic secondary growth.
 
 See `docs/superpowers/roadmap/`.
 

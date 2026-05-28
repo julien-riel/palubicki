@@ -294,3 +294,23 @@ Limitation acceptée (cf. spec Phase 2C §4.7) : le grid voxel de lumière
 utilise toujours `light.leaf_area` constant — pas de couplage
 feuille→absorption→feuille pour éviter une boucle de point fixe. Effet
 purement visuel.
+
+
+---
+
+## Statut Phase 2D (2026-05-27)
+
+**Progressive elongation :** ADRESSÉE. `sim.elongation` expose 4 paramètres
+(`enabled`, `tau_iterations`, `age_factor_min`, `age_factor_decay`). Chaque
+internode garde `birth_iteration` et `length_target`; sa `length` rampe via
+sigmoïde chaque itération vers le target. La passe finale snap
+`length = length_target` pour garantir une géométrie complète à l'export.
+Test `tests/integration/test_elongation_chronology.py` vérifie que les
+internodes nés tard sont plus courts que ceux nés tôt.
+
+**Croissance secondaire dynamique :** ADRESSÉE. `update_diameters_incremental`
+dans `sim/radii.py` recompute le pipe model à chaque itération. La passe
+finale est idempotente. `apply_sag` est aussi devenu idempotent via
+`Node.sag_offset` (séparé de `Node.position`) et tourne en boucle. Le
+`compute_radii` post-sim dans `geom/builder.py` a été retiré (le simulateur
+possède maintenant le cycle de vie complet).
