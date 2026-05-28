@@ -15,6 +15,8 @@ from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_l
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
 from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions
+from palubicki.sim.radii import update_diameters_incremental
+from palubicki.sim.sag import apply_sag
 from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
@@ -360,6 +362,18 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
 
     for tree in forest.trees:
         shed_low_quality(tree, cfg=cfg.shedding)
+
+    # --- Phase 2D: per-iteration temporal dynamics ---
+    # Order matters: lengths first (sag reads load = length × diameter²),
+    # diameters next (sag reads diameter), sag last.
+    if cfg.sim.elongation.enabled:
+        for tree in forest.trees:
+            update_lengths(tree, current_iteration=iteration, cfg=cfg.sim.elongation)
+    for tree in forest.trees:
+        update_diameters_incremental(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
+    if cfg.sag.enabled:
+        for tree in forest.trees:
+            apply_sag(tree, cfg=cfg.sag)
 
     logger.info(
         "[%.1fs] sim/iter %d/%d  trees=%d  nodes_created=%d",
