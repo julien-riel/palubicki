@@ -230,3 +230,35 @@ def test_build_blade_convex_shapes_under_64_verts(shape):
         margin_depth=0.0, margin_count=0,
     )
     assert pos.shape[0] <= 64
+
+
+from palubicki.geom.leaf_blade import _outline_palmate
+
+
+def test_palmate_outline_invariants():
+    boundary, anchor = _outline_palmate(L=1.0, W=1.0)
+    assert boundary.shape[1] == 2
+    assert _polygon_signed_area(boundary) > 0
+    assert _point_in_polygon(anchor, boundary)
+    assert _is_star_shape_from(anchor, boundary)
+
+
+def test_palmate_has_five_radial_peaks():
+    """A palmate outline should have 5 local maxima in radial distance from anchor."""
+    boundary, anchor = _outline_palmate(L=1.0, W=1.0)
+    radii = np.linalg.norm(boundary - anchor, axis=1)
+    # Count local maxima (compare to both neighbors with wraparound).
+    n = len(radii)
+    peaks = 0
+    for i in range(n):
+        if radii[i] > radii[(i - 1) % n] and radii[i] > radii[(i + 1) % n]:
+            peaks += 1
+    assert peaks == 5, f"expected 5 lobe peaks, got {peaks}"
+
+
+def test_palmate_under_64_verts():
+    pos, _, _, _ = build_blade(
+        length=1.0, width=1.0, shape="palmate", margin="entire",
+        margin_depth=0.0, margin_count=0,
+    )
+    assert pos.shape[0] <= 64

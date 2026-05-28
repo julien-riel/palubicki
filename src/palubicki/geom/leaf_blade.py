@@ -182,6 +182,58 @@ def _outline_cordate(L: float, W: float, n: int = 20) -> tuple[np.ndarray, np.nd
     return boundary, anchor
 
 
+def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """5 radial lobes from center (0, 0.4*L).
+
+    Each lobe has a peak at angle theta_k and an inter-lobe valley at the
+    midpoint between adjacent peaks. Boundary is sampled around the polar
+    contour at samples_per_lobe samples per lobe (lobe edge from valley → peak
+    → valley = 2 segments) plus extra detail at peaks.
+    """
+    n_lobes = 5
+    cx, cy = 0.0, 0.4 * L
+    anchor = np.array([cx, cy], dtype=np.float64)
+    R_peak = 0.5 * max(L, W)
+    R_valley = 0.3 * R_peak
+    # Lobe peak angles (radians); CCW around the center starting at pi/2 (straight up).
+    # IMPORTANT: theta_next_peak intentionally does NOT modulo by n_lobes — the
+    # last lobe's valley needs to be at theta+2pi/5, not wrap back to pi/2.
+    boundary_pts = []
+    for k in range(n_lobes):
+        theta_peak = np.pi * 0.5 + k * (2.0 * np.pi / n_lobes)
+        theta_next_peak = np.pi * 0.5 + (k + 1) * (2.0 * np.pi / n_lobes)
+        # Emit the peak itself.
+        peak = np.array([cx + R_peak * np.cos(theta_peak),
+                         cy + R_peak * np.sin(theta_peak)])
+        boundary_pts.append(peak)
+        # Walk from peak to inter-lobe valley with intermediate samples.
+        theta_valley = (theta_peak + theta_next_peak) * 0.5
+        for s in range(1, samples_per_lobe):
+            t = s / samples_per_lobe
+            theta = theta_peak + t * (theta_valley - theta_peak)
+            R = R_peak + t * (R_valley - R_peak)
+            boundary_pts.append(np.array([cx + R * np.cos(theta),
+                                          cy + R * np.sin(theta)]))
+        # Emit the valley.
+        boundary_pts.append(np.array([cx + R_valley * np.cos(theta_valley),
+                                      cy + R_valley * np.sin(theta_valley)]))
+        # Walk from valley to the NEXT peak with intermediate samples.
+        for s in range(1, samples_per_lobe):
+            t = s / samples_per_lobe
+            theta = theta_valley + t * (theta_next_peak - theta_valley)
+            R = R_valley + t * (R_peak - R_valley)
+            boundary_pts.append(np.array([cx + R * np.cos(theta),
+                                          cy + R * np.sin(theta)]))
+    boundary = np.array(boundary_pts, dtype=np.float64)
+    # Defensive CCW check; reverse if signed area came out negative.
+    x = boundary[:, 0]
+    y = boundary[:, 1]
+    area = 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+    if area < 0:
+        boundary = boundary[::-1].copy()
+    return boundary, anchor
+
+
 def _triangulate_fan(
     boundary: np.ndarray, anchor: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -214,4 +266,5 @@ _OUTLINE_FNS = {
     "lanceolate": _outline_lanceolate,
     "ovate": _outline_ovate,
     "cordate": _outline_cordate,
+    "palmate": _outline_palmate,
 }
