@@ -390,3 +390,57 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
         f"Pre-refactor hash: {h!r}. If this is the first run before the "
         f"refactor, replace EXPECTED_HASH with this value and re-run."
     )
+
+
+@pytest.mark.slow
+def test_leaf_area_matches_geom_helper():
+    """Cross-check: compute total_leaf_area via the diagnostics harness and
+    independently sum quad areas from the rendered positions array. Must
+    match to within float epsilon.
+
+    The independent computation walks the rendered triangles (each pair
+    forms a quad) and sums (1/2)|edge1 × edge2| — this exercises the
+    rendered geometry, not the helper, so it's a real cross-check of the
+    helper's formula, not a self-check.
+    """
+    from pathlib import Path
+    from palubicki.config import load_config
+    from palubicki.geom.leaves import build_leaves_primitive
+    from palubicki.geom.mesh import Material
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species="oak")
+    tree = simulate(cfg)
+
+    g = cfg.geom
+    mat = Material(
+        name="leaves_a",
+        base_color=(0.2, 0.6, 0.2, 1.0),
+        metallic=0.0,
+        roughness=1.0,
+        base_color_texture_png=None,
+        alpha_mode="OPAQUE",
+        alpha_cutoff=0.5,
+        double_sided=True,
+    )
+    prim = build_leaves_primitive(
+        tree,
+        leaf_size=g.leaf_size,
+        material=mat,
+        cluster_count=g.leaf_cluster_count,
+        aspect=g.leaf_aspect,
+        splay_deg=g.leaf_splay_deg,
+        foliage_depth=g.foliage_depth,
+        sun_shade_k=g.leaf_sun_shade_k,
+    )
+
+    pos = prim.positions.astype(np.float64)
+    idx = prim.indices.reshape(-1, 3)
+    e1 = pos[idx[:, 1]] - pos[idx[:, 0]]
+    e2 = pos[idx[:, 2]] - pos[idx[:, 0]]
+    tri_areas = 0.5 * np.linalg.norm(np.cross(e1, e2), axis=1)
+    rendered_area = float(tri_areas.sum())
+
+    m = compute_metrics(tree, cfg=cfg)
+    assert m["total_leaf_area"] == pytest.approx(rendered_area, rel=1e-5)

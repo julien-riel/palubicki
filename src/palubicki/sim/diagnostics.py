@@ -314,6 +314,34 @@ def _trunk_base_diameter(root: Node) -> float:
     return max(float(iod.diameter) for iod in root.children_internodes)
 
 
+# ── Leaf area ─────────────────────────────────────────────────────────────
+
+def _total_leaf_area(tree: Tree, cfg: "Config") -> float:
+    """Sum of rendered leaf surface areas across foliage sites.
+
+    Per site, per cluster: two quads in the renderer.
+      * Quad A is parallelogram-sheared by ``splay_deg`` (axes are
+        ``rot_axis_u`` and ``leaf_up`` = cos(splay)·d + sin(splay)·rot_axis_u),
+        so its area is ``eff² · aspect · cos(splay_rad)``.
+      * Quad B is rectangular (axes ``rot_axis_w`` and ``leaf_up`` are
+        orthogonal), with area ``eff² · aspect``.
+    Total per cluster = ``eff² · aspect · (1 + cos(splay_rad))``.
+    """
+    from palubicki.geom.leaves import _collect_foliage_sites, compute_effective_leaf_size
+
+    g = cfg.geom
+    sites = _collect_foliage_sites(tree, g.foliage_depth)
+    if not sites:
+        return 0.0
+    splay_rad = math.radians(g.leaf_splay_deg)
+    cluster_factor = g.leaf_cluster_count * g.leaf_aspect * (1.0 + math.cos(splay_rad))
+    total = 0.0
+    for _center, _direction, source_iod in sites:
+        eff = compute_effective_leaf_size(source_iod, g.leaf_size, g.leaf_sun_shade_k)
+        total += (eff * eff) * cluster_factor
+    return total
+
+
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
@@ -349,5 +377,8 @@ def compute_metrics(
     out["tree_height"] = height
     out["trunk_base_diameter"] = _trunk_base_diameter(tree.root)
     out["crown_radius"] = crown_radius
-    out["total_leaf_area"] = 0.0
+    if cfg is not None:
+        out["total_leaf_area"] = _total_leaf_area(tree, cfg)
+    else:
+        out["total_leaf_area"] = 0.0
     return out
