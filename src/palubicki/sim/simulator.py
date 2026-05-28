@@ -19,6 +19,7 @@ from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.elongation import compute_target_with_age, update_lengths
 from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tropisms import growth_direction
 
@@ -200,15 +201,24 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                     new_active.append(cur)
                     chain.done = True
                     continue
-                length = cfg.sim.internode_length
+                base_length = cfg.sim.internode_length
                 if cfg.sim.internode_length_jitter > 0:
                     ss = np.random.SeedSequence(
                         [cfg.seed, _ILEN_SALT, iteration, state.node_index]
                     )
                     rng = np.random.default_rng(ss.generate_state(1)[0])
                     factor = max(0.5, min(1.5, rng.normal(1.0, cfg.sim.internode_length_jitter)))
-                    length = cfg.sim.internode_length * factor
-                new_pos = cur.position + d * length
+                    base_length = cfg.sim.internode_length * factor
+                target = compute_target_with_age(
+                    base_length=base_length,
+                    birth_iteration=iteration,
+                    max_iterations=cfg.sim.max_iterations,
+                    cfg=cfg.sim.elongation,
+                )
+                # Node placed at FINAL geometric position. During sim, length
+                # ramps from 0 toward target (transient visual gap closes by
+                # the finalization snap at end of simulate()).
+                new_pos = cur.position + d * target
 
                 # V3: obstacle blocking
                 if forest.obstacles:
@@ -231,10 +241,12 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
                 iod = Internode(
                     parent_node=cur.parent_node,
                     child_node=new_node,
-                    length=length,
+                    length=(0.0 if cfg.sim.elongation.enabled else target),
                     is_main_axis=is_main,
                     window=cfg.shedding.window,
                     light_factor=lf,
+                    birth_iteration=iteration,
+                    length_target=target,
                 )
                 cur.parent_node.children_internodes.append(iod)
                 new_node.parent_internode = iod

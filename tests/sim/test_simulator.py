@@ -570,3 +570,28 @@ def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
         for iod in n.children_internodes:
             stack.append(iod.child_node)
     assert dead > 0, "expected shade mortality to kill at least one bud"
+
+
+def test_internodes_record_birth_iteration_and_length_target(tmp_path):
+    from palubicki.config import (
+        Config, ElongationConfig, EnvelopeConfig, GeomConfig, LightConfig,
+        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    )
+    from palubicki.sim.simulator import simulate
+
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=2.0, ry=2.0, rz=2.0, marker_count=500),
+        sim=SimConfig(max_iterations=5,
+                      elongation=ElongationConfig(enabled=True, tau_iterations=2.0)),
+        tropism=TropismConfig(w_orthotropy_main=0.3),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(),
+        output=tmp_path / "tree.glb",
+        seed=42,
+    )
+    tree = simulate(cfg)
+    assert len(tree.all_internodes) > 0
+    for iod in tree.all_internodes:
+        assert 0 <= iod.birth_iteration < cfg.sim.max_iterations
+        assert iod.length_target > 0.0
