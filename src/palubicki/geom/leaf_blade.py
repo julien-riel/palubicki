@@ -93,6 +93,95 @@ def _outline_linear(L: float, W: float) -> tuple[np.ndarray, np.ndarray]:
     return boundary, anchor
 
 
+def _outline_elliptic(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np.ndarray]:
+    """Half-ellipse symmetric about u=0, max width at v=L/2."""
+    # Sample boundary CCW starting from petiole (0, 0).
+    # Right side ascending: v from 0 to L; left side descending: v from L to 0.
+    # Use n samples per side; skip duplicate at petiole and tip.
+    half = max(2, n // 2)
+    t_right = np.linspace(0.0, 1.0, half, endpoint=False)
+    v_right = t_right * L
+    u_right = (W * 0.5) * np.sin(np.pi * t_right)
+    t_left = np.linspace(1.0, 0.0, half, endpoint=False)
+    v_left = t_left * L
+    u_left = -(W * 0.5) * np.sin(np.pi * t_left)
+    boundary = np.empty((2 * half, 2), dtype=np.float64)
+    boundary[:half, 0] = u_right
+    boundary[:half, 1] = v_right
+    boundary[half:, 0] = u_left
+    boundary[half:, 1] = v_left
+    anchor = np.array([0.0, L * 0.5], dtype=np.float64)
+    return boundary, anchor
+
+
+def _outline_lanceolate(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np.ndarray]:
+    """Widest at v≈2L/5, narrow at both ends (asymmetrically tapered)."""
+    half = max(2, n // 2)
+    t_right = np.linspace(0.0, 1.0, half, endpoint=False)
+    v_right = t_right * L
+    # sin(pi * t^0.7): peak at t = 0.5^(1/0.7) ≈ 0.37, giving widest at v ≈ 0.37L.
+    u_right = (W * 0.5) * np.sin(np.pi * np.power(t_right, 0.7))
+    t_left = np.linspace(1.0, 0.0, half, endpoint=False)
+    v_left = t_left * L
+    u_left = -(W * 0.5) * np.sin(np.pi * np.power(t_left, 0.7))
+    boundary = np.empty((2 * half, 2), dtype=np.float64)
+    boundary[:half, 0] = u_right
+    boundary[:half, 1] = v_right
+    boundary[half:, 0] = u_left
+    boundary[half:, 1] = v_left
+    anchor = np.array([0.0, L / 3.0], dtype=np.float64)
+    return boundary, anchor
+
+
+def _outline_ovate(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np.ndarray]:
+    """Broadly widened near the base, widest at v≈L/4, tapering toward tip."""
+    half = max(2, n // 2)
+    t_right = np.linspace(0.0, 1.0, half, endpoint=False)
+    v_right = t_right * L
+    # sin(pi * t^0.5): peak at t = 0.5^(1/0.5) = 0.25, giving widest at v ≈ 0.25L.
+    # Broader at the base than lanceolate (which peaks later at v ≈ 0.37L).
+    u_right = (W * 0.5) * np.sin(np.pi * np.power(t_right, 0.5))
+    t_left = np.linspace(1.0, 0.0, half, endpoint=False)
+    v_left = t_left * L
+    u_left = -(W * 0.5) * np.sin(np.pi * np.power(t_left, 0.5))
+    boundary = np.empty((2 * half, 2), dtype=np.float64)
+    boundary[:half, 0] = u_right
+    boundary[:half, 1] = v_right
+    boundary[half:, 0] = u_left
+    boundary[half:, 1] = v_left
+    anchor = np.array([0.0, L / 3.0], dtype=np.float64)
+    return boundary, anchor
+
+
+def _outline_cordate(L: float, W: float, n: int = 20) -> tuple[np.ndarray, np.ndarray]:
+    """Heart-shaped: ovate body with a basal notch below v=0."""
+    # CCW winding: right side ascends (v: 0→L), left side descends (v: L→0),
+    # then a notch vertex dips below the petiole, closing the loop.
+    # Notch at the end means it sits between the left tail (near v=0) and the
+    # right start (v=0), so it never interrupts the main body traversal.
+    half = max(3, n // 2)
+    t_right = np.linspace(0.0, 1.0, half, endpoint=False)
+    v_right = t_right * L
+    u_right = (W * 0.5) * np.power(np.sin(np.pi * t_right), 1.0) \
+              * (1.0 - 0.4 * t_right)
+    t_left = np.linspace(1.0, 0.0, half, endpoint=False)
+    v_left = t_left * L
+    u_left = -(W * 0.5) * np.power(np.sin(np.pi * t_left), 1.0) \
+              * (1.0 - 0.4 * t_left)
+    # Notch vertex placed AFTER the left side (left tail ends near v≈0),
+    # before wrapping back to the right start at v=0.
+    boundary = np.empty((2 * half + 1, 2), dtype=np.float64)
+    boundary[:half, 0] = u_right
+    boundary[:half, 1] = v_right
+    boundary[half:half + half, 0] = u_left
+    boundary[half:half + half, 1] = v_left
+    # Notch dips below the petiole at the closure point
+    boundary[2 * half, 0] = 0.0
+    boundary[2 * half, 1] = -L / 8.0
+    anchor = np.array([0.0, L / 3.0], dtype=np.float64)
+    return boundary, anchor
+
+
 def _triangulate_fan(
     boundary: np.ndarray, anchor: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -121,4 +210,8 @@ def _apply_margin(
 
 _OUTLINE_FNS = {
     "linear": _outline_linear,
+    "elliptic": _outline_elliptic,
+    "lanceolate": _outline_lanceolate,
+    "ovate": _outline_ovate,
+    "cordate": _outline_cordate,
 }

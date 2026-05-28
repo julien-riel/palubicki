@@ -142,3 +142,91 @@ def test_build_blade_rejects_negative_margin_count():
     with pytest.raises(ValueError, match="margin_count"):
         build_blade(length=1.0, width=0.2, shape="linear", margin="entire",
                     margin_depth=0.0, margin_count=-1)
+
+
+from palubicki.geom.leaf_blade import (
+    _outline_elliptic, _outline_lanceolate, _outline_ovate, _outline_cordate,
+)
+
+
+def _segments_intersect(a, b, c, d) -> bool:
+    """Return True if open segments [a,b] and [c,d] properly intersect."""
+    def cross(o, x, y):
+        return (x[0] - o[0]) * (y[1] - o[1]) - (x[1] - o[1]) * (y[0] - o[0])
+    d1 = cross(c, d, a)
+    d2 = cross(c, d, b)
+    d3 = cross(a, b, c)
+    d4 = cross(a, b, d)
+    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
+       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
+        return True
+    return False
+
+
+def _is_star_shape_from(anchor: np.ndarray, boundary: np.ndarray) -> bool:
+    """Every boundary vertex must have unobstructed line-of-sight to anchor."""
+    n = len(boundary)
+    for i in range(n):
+        p = boundary[i]
+        for j in range(n):
+            j2 = (j + 1) % n
+            if j == i or j2 == i:
+                continue  # adjacent edges share p
+            if _segments_intersect(anchor, p, boundary[j], boundary[j2]):
+                return False
+    return True
+
+
+@pytest.mark.parametrize("name,fn,extra_v_range", [
+    ("elliptic", _outline_elliptic, 0.0),
+    ("lanceolate", _outline_lanceolate, 0.0),
+    ("ovate", _outline_ovate, 0.0),
+    ("cordate", _outline_cordate, 0.2),  # allow basal notch slack
+])
+def test_convex_outline_basic_invariants(name, fn, extra_v_range):
+    boundary, anchor = fn(L=1.0, W=0.5)
+    assert boundary.shape[1] == 2
+    assert boundary.dtype == np.float64
+    assert _polygon_signed_area(boundary) > 0, f"{name} not CCW"
+    assert _point_in_polygon(anchor, boundary), f"{name} anchor not inside"
+    assert _is_star_shape_from(anchor, boundary), f"{name} not star-shaped"
+    # Bounding box check
+    assert boundary[:, 0].min() >= -0.25 - 1e-6
+    assert boundary[:, 0].max() <= 0.25 + 1e-6
+    assert boundary[:, 1].min() >= -extra_v_range - 1e-6
+    assert boundary[:, 1].max() <= 1.0 + 1e-6
+
+
+def test_lanceolate_widest_at_lower_third():
+    boundary, _ = _outline_lanceolate(L=1.0, W=0.5)
+    # The widest u-coordinate should occur at v ~ L/3 (one-third).
+    widest_idx = int(np.argmax(boundary[:, 0]))
+    widest_v = boundary[widest_idx, 1]
+    assert 0.2 < widest_v < 0.5, f"expected widest near v=L/3, got {widest_v}"
+
+
+def test_ovate_broader_at_base_than_lanceolate():
+    """At v = L/4, ovate should be wider than lanceolate."""
+    b_ovate, _ = _outline_ovate(L=1.0, W=0.5)
+    b_lanc, _ = _outline_lanceolate(L=1.0, W=0.5)
+    def half_width_at(boundary, v_target):
+        return max(
+            abs(boundary[i, 0]) for i in range(len(boundary))
+            if abs(boundary[i, 1] - v_target) < 0.1
+        )
+    assert half_width_at(b_ovate, 0.25) > half_width_at(b_lanc, 0.25)
+
+
+def test_cordate_has_basal_notch():
+    boundary, _ = _outline_cordate(L=1.0, W=0.5)
+    # Notch creates a point with v < 0
+    assert boundary[:, 1].min() < 0.0
+
+
+@pytest.mark.parametrize("shape", ["elliptic", "lanceolate", "ovate", "cordate"])
+def test_build_blade_convex_shapes_under_64_verts(shape):
+    pos, _, _, _ = build_blade(
+        length=1.0, width=0.5, shape=shape, margin="entire",
+        margin_depth=0.0, margin_count=0,
+    )
+    assert pos.shape[0] <= 64
