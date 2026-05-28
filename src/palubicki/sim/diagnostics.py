@@ -121,6 +121,8 @@ def _tangent(iod: Internode) -> np.ndarray:
     v = np.asarray(iod.child_node.position - iod.parent_node.position,
                    dtype=np.float64)
     n = float(np.linalg.norm(v))
+    # Defensive guard: real internodes always have non-zero length; this
+    # only fires under broken sim output and prevents a divide-by-zero.
     if n < 1e-12:
         return np.array([0.0, 1.0, 0.0])
     return v / n
@@ -170,6 +172,10 @@ def _insertion_angle_metrics(
             by_parent[order].append(_angle_deg(L_t, _tangent(incoming)))
 
         main_sib: Internode | None = None
+        # Sim invariant: at most one main-axis child per node. We take the
+        # first match and break; multiple main-axis siblings would indicate
+        # a broken sim output (silently degraded measurement) — not asserted
+        # so diagnostics never crashes on imperfect input.
         for c in node.children_internodes:
             if c is L:
                 continue
