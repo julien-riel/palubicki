@@ -9,8 +9,7 @@ from palubicki.sim.diagnostics import compute_metrics
 from palubicki.sim.tree import Internode, Node, Tree
 
 
-def _link(parent: Node, child: Node, *, axis_order: int = 0,
-          is_main_axis: bool = True) -> Internode:
+def _link(parent: Node, child: Node, *, is_main_axis: bool = True) -> Internode:
     """Create + bidirectionally link an internode between parent and child."""
     iod = Internode(
         parent_node=parent, child_node=child,
@@ -36,10 +35,10 @@ def _make_tree_y_shape() -> Tree:
     c1 = Node(position=np.array([0.5, 1.5, 0.0]))
     c2 = Node(position=np.array([-0.5, 1.5, 0.0]))
     tree = Tree(root=root)
-    trunk = _link(root, mid, axis_order=0, is_main_axis=True)
+    trunk = _link(root, mid, is_main_axis=True)
     # Two laterals at the fork — neither marked main axis (terminal fork).
-    b1 = _link(mid, c1, axis_order=1, is_main_axis=False)
-    b2 = _link(mid, c2, axis_order=1, is_main_axis=False)
+    b1 = _link(mid, c1, is_main_axis=False)
+    b2 = _link(mid, c2, is_main_axis=False)
     tree.all_internodes.extend([trunk, b1, b2])
     return tree
 
@@ -82,13 +81,13 @@ def _make_pectinate_3level() -> Tree:
     g = Node(position=np.array([0.0, 4.0, 0.0]))
 
     tree = Tree(root=root)
-    trunk = _link(root, d, axis_order=0, is_main_axis=True)
-    l1 = _link(d, leaf1, axis_order=1, is_main_axis=False)
-    main1 = _link(d, e, axis_order=0, is_main_axis=True)
-    l2 = _link(e, leaf2, axis_order=1, is_main_axis=False)
-    main2 = _link(e, f, axis_order=0, is_main_axis=True)
-    l3 = _link(f, leaf3, axis_order=1, is_main_axis=False)
-    main3 = _link(f, g, axis_order=0, is_main_axis=True)
+    trunk = _link(root, d, is_main_axis=True)
+    l1 = _link(d, leaf1, is_main_axis=False)
+    main1 = _link(d, e, is_main_axis=True)
+    l2 = _link(e, leaf2, is_main_axis=False)
+    main2 = _link(e, f, is_main_axis=True)
+    l3 = _link(f, leaf3, is_main_axis=False)
+    main3 = _link(f, g, is_main_axis=True)
     tree.all_internodes.extend([trunk, l1, main1, l2, main2, l3, main3])
     return tree
 
@@ -110,7 +109,7 @@ def test_strahler_single_internode():
     root = Node(position=np.array([0.0, 0.0, 0.0]))
     child = Node(position=np.array([0.0, 1.0, 0.0]))
     tree = Tree(root=root)
-    iod = _link(root, child, axis_order=0, is_main_axis=True)
+    iod = _link(root, child, is_main_axis=True)
     tree.all_internodes.append(iod)
     m = compute_metrics(tree)
     assert m["strahler_order_max"] == 1
