@@ -269,6 +269,51 @@ def _divergence_angle_metrics(
     return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
 
 
+# ── Counts ────────────────────────────────────────────────────────────────
+
+def _bud_state_histogram(nodes: list[Node]) -> dict[str, int]:
+    counts: dict[str, int] = {s.name: 0 for s in BudState}
+    for n in nodes:
+        if n.terminal_bud is not None:
+            counts[n.terminal_bud.state.name] += 1
+        for b in n.lateral_buds:
+            counts[b.state.name] += 1
+        for b in n.dormant_reserve_buds:
+            counts[b.state.name] += 1
+    return counts
+
+
+def _sympodial_fork_count(nodes: list[Node]) -> int:
+    return sum(1 for n in nodes if n.sympodial_fork)
+
+
+# ── Architecture ──────────────────────────────────────────────────────────
+
+def _height_and_crown(nodes: list[Node]) -> tuple[float, float]:
+    """Returns (tree_height, crown_radius). Crown band is y > 0.4*height
+    using bent positions; matches what the rendered .glb actually looks like.
+    """
+    if not nodes:
+        return (0.0, 0.0)
+    ys = [float((n.position + n.sag_offset)[1]) for n in nodes]
+    height = max(ys)
+    threshold = 0.4 * height
+    crown = 0.0
+    for n in nodes:
+        bent = n.position + n.sag_offset
+        if float(bent[1]) > threshold:
+            r = float(math.hypot(bent[0], bent[2]))
+            if r > crown:
+                crown = r
+    return (height, crown)
+
+
+def _trunk_base_diameter(root: Node) -> float:
+    if not root.children_internodes:
+        return 0.0
+    return max(float(iod.diameter) for iod in root.children_internodes)
+
+
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
@@ -288,12 +333,21 @@ def compute_metrics(
         # Multi-seed path lands in Task 7. Stub for now.
         raise NotImplementedError("multi-seed compute_metrics arrives in Task 7")
 
+    nodes = _walk_nodes(tree.root)
     internodes = _walk_internodes(tree.root)
     axis_orders = _axis_orders(tree.root)
     chains = _walk_axis_chains(tree.root)
+
+    height, crown_radius = _height_and_crown(nodes)
 
     out: dict = {}
     out.update(_strahler_metrics(tree.root))
     out.update(_insertion_angle_metrics(internodes, axis_orders))
     out.update(_divergence_angle_metrics(chains, axis_orders))
+    out["sympodial_fork_count"] = _sympodial_fork_count(nodes)
+    out["bud_state_histogram"] = _bud_state_histogram(nodes)
+    out["tree_height"] = height
+    out["trunk_base_diameter"] = _trunk_base_diameter(tree.root)
+    out["crown_radius"] = crown_radius
+    out["total_leaf_area"] = 0.0
     return out

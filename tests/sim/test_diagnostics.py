@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from palubicki.sim.diagnostics import compute_metrics
-from palubicki.sim.tree import Internode, Node, Tree
+from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
 
 
 def _link(parent: Node, child: Node, *, is_main_axis: bool = True) -> Internode:
@@ -245,3 +245,107 @@ def test_divergence_angle_single_lateral_contributes_nothing():
     m = compute_metrics(tree)
     # One lateral on one axis → no divergence pairs at all.
     assert m["divergence_angle_deg"] == {}
+
+
+def test_bud_state_histogram_walks_all_nodes():
+    """A DORMANT bud on a non-active-list node must be counted."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    tree = Tree(root=root)
+    iod = _link(root, child, is_main_axis=True)
+    tree.all_internodes.append(iod)
+
+    term = Bud(position=child.position, direction=np.array([0.0, 1.0, 0.0]),
+               axis_order=0, parent_node=child)
+    child.terminal_bud = term
+    tree.active_buds.append(term)
+
+    dormant = Bud(position=child.position, direction=np.array([1.0, 0.0, 0.0]),
+                  axis_order=1, parent_node=child)
+    dormant.state = BudState.DORMANT
+    child.lateral_buds.append(dormant)
+
+    reserve = Bud(position=root.position, direction=np.array([0.0, 0.0, 1.0]),
+                  axis_order=0, parent_node=root)
+    reserve.state = BudState.RESERVE
+    root.dormant_reserve_buds.append(reserve)
+
+    m = compute_metrics(tree)
+    hist = m["bud_state_histogram"]
+    assert hist["ACTIVE"] == 1
+    assert hist["DORMANT"] == 1
+    assert hist["RESERVE"] == 1
+    assert hist.get("DEAD", 0) == 0
+
+
+def test_sympodial_count_uses_node_flag():
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    a = Node(position=np.array([0.0, 1.0, 0.0]))
+    b = Node(position=np.array([0.0, 2.0, 0.0]))
+    a.sympodial_fork = True
+    b.sympodial_fork = True
+    tree = Tree(root=root)
+    i1 = _link(root, a, is_main_axis=True)
+    i2 = _link(a, b, is_main_axis=True)
+    tree.all_internodes.extend([i1, i2])
+
+    m = compute_metrics(tree)
+    assert m["sympodial_fork_count"] == 2
+
+
+def test_height_uses_sag_offset():
+    """Node positioned at y=5 with sag_offset y=-0.4 → tree_height = 4.6."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    top = Node(position=np.array([0.0, 5.0, 0.0]))
+    top.sag_offset = np.array([0.0, -0.4, 0.0])
+    tree = Tree(root=root)
+    iod = _link(root, top, is_main_axis=True)
+    tree.all_internodes.append(iod)
+
+    m = compute_metrics(tree)
+    assert m["tree_height"] == pytest.approx(4.6, abs=1e-9)
+
+
+def test_crown_radius_band_only():
+    """Wide low node (below 0.4*height) is ignored; narrower high node defines
+    the crown_radius."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    low_wide = Node(position=np.array([3.0, 0.5, 0.0]))
+    mid = Node(position=np.array([0.0, 2.0, 0.0]))
+    high_narrow = Node(position=np.array([1.5, 4.0, 0.0]))
+    top = Node(position=np.array([0.0, 5.0, 0.0]))
+    tree = Tree(root=root)
+    tree.all_internodes.append(_link(root, low_wide, is_main_axis=False))
+    tree.all_internodes.append(_link(root, mid, is_main_axis=True))
+    tree.all_internodes.append(_link(mid, high_narrow, is_main_axis=False))
+    tree.all_internodes.append(_link(mid, top, is_main_axis=True))
+
+    m = compute_metrics(tree)
+    # 0.4 * 5.0 = 2.0; only high_narrow (y=4) and top (y=5) are in band.
+    # high_narrow r=1.5; top r=0. Crown = 1.5.
+    assert m["tree_height"] == pytest.approx(5.0)
+    assert m["crown_radius"] == pytest.approx(1.5, abs=1e-9)
+
+
+def test_trunk_base_diameter():
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    top = Node(position=np.array([0.0, 1.0, 0.0]))
+    tree = Tree(root=root)
+    iod = _link(root, top, is_main_axis=True)
+    iod.diameter = 0.18
+    tree.all_internodes.append(iod)
+    m = compute_metrics(tree)
+    assert m["trunk_base_diameter"] == pytest.approx(0.18)
+
+
+def test_root_only_tree_returns_zeros():
+    """Degenerate single-node tree must not crash."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    m = compute_metrics(tree)
+    assert m["strahler_order_max"] == 0
+    assert m["sympodial_fork_count"] == 0
+    assert m["tree_height"] == pytest.approx(0.0)
+    assert m["trunk_base_diameter"] == pytest.approx(0.0)
+    assert m["crown_radius"] == pytest.approx(0.0)
+    assert m["total_leaf_area"] == pytest.approx(0.0)
