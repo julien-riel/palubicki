@@ -470,3 +470,153 @@ def _aggregate(per_tree: list[dict]) -> dict:
             out[k][order] = _agg_scalar(means)
 
     return out
+
+
+# ── Reference-range flags and pretty-printer ──────────────────────────────
+
+from dataclasses import dataclass  # localised: only used here
+
+
+@dataclass
+class MetricRanges:
+    """Literature-range bounds for ✓/✗ flagging.
+
+    Field names use a path-style convention so format_report can resolve
+    the relevant value in the metrics dict:
+      "horton_bifurcation_ratio_mean"             → metrics["horton_bifurcation_ratio_mean"]
+      "divergence_angle_deg__orderN_mean"         → metrics["divergence_angle_deg"][N]["mean"]
+      "insertion_angle_deg_vs_parent__orderN_mean" → metrics["insertion_angle_deg_vs_parent"][N]["mean"]
+    A field absent from this class means no flag is rendered for that path.
+    """
+    horton_bifurcation_ratio_mean: tuple[float, float] = (3.0, 5.0)
+    divergence_angle_deg__order1_mean: tuple[float, float] = (130.0, 145.0)
+    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] = (30.0, 65.0)
+
+
+DEFAULT_RANGES = MetricRanges()
+
+
+def _flag(value: float | None, bounds: tuple[float, float] | None) -> str:
+    if value is None or bounds is None:
+        return ""
+    if isinstance(value, float) and math.isnan(value):
+        return "—"
+    lo, hi = bounds
+    return "✓" if lo <= value <= hi else "✗"
+
+
+def _is_multi(metrics: dict) -> bool:
+    """Heuristic: in multi-seed shape, scalar leaves are dicts with per_seed."""
+    v = metrics.get("tree_height")
+    return isinstance(v, dict) and "per_seed" in v
+
+
+def _scalar_value(metrics: dict, key: str) -> float | None:
+    v = metrics.get(key)
+    if v is None:
+        return None
+    if isinstance(v, dict) and "mean" in v:
+        return v["mean"]
+    return v
+
+
+def _bounds_for(ranges: MetricRanges, field_name: str) -> tuple[float, float] | None:
+    return getattr(ranges, field_name, None)
+
+
+def _fmt_scalar(v) -> str:
+    if v is None:
+        return "—"
+    if isinstance(v, float) and math.isnan(v):
+        return "—"
+    if isinstance(v, dict):
+        mean = v["mean"]
+        stddev = v["stddev"]
+        mean_s = "—" if (isinstance(mean, float) and math.isnan(mean)) else f"{mean:.3g}"
+        std_s = "—" if (isinstance(stddev, float) and math.isnan(stddev)) else f"{stddev:.3g}"
+        return f"mean={mean_s} stddev={std_s}"
+    if isinstance(v, float):
+        return f"{v:.3g}"
+    return str(v)
+
+
+def format_report(
+    metrics: dict,
+    *,
+    ranges: MetricRanges = DEFAULT_RANGES,
+    seeds: list[int] | None = None,
+    species: str | None = None,
+) -> str:
+    multi = _is_multi(metrics)
+    lines: list[str] = []
+    header = "palubicki diagnose"
+    if species is not None:
+        header += f" — species: {species}"
+    if seeds is not None:
+        if len(seeds) == 1:
+            header += f", seed: {seeds[0]}"
+        else:
+            header += f", seeds: [{','.join(str(s) for s in seeds)}]"
+    lines.append(header)
+    lines.append("=" * 72)
+    lines.append("")
+
+    lines.append("Architecture")
+    for k in ("tree_height", "trunk_base_diameter", "crown_radius", "total_leaf_area"):
+        val = metrics.get(k)
+        flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))
+        lines.append(f"  {k:24s} {_fmt_scalar(val):28s} {flag}".rstrip())
+    lines.append("")
+
+    lines.append("Strahler / Horton")
+    lines.append(f"  order_max                {_fmt_scalar(metrics.get('strahler_order_max'))}")
+    if not multi:
+        hist = metrics.get("strahler_order_histogram") or {}
+        lines.append(f"  histogram                {dict(sorted(hist.items()))}")
+        ratios = metrics.get("horton_bifurcation_ratio") or {}
+        if ratios:
+            ratio_strs = "   ".join(f"{n}→{n+1}: {r:.3g}" for n, r in sorted(ratios.items()))
+            lines.append(f"  bifurcation_ratio        {ratio_strs}")
+    bif_flag = _flag(
+        _scalar_value(metrics, "horton_bifurcation_ratio_mean"),
+        _bounds_for(ranges, "horton_bifurcation_ratio_mean"),
+    )
+    lines.append(
+        f"  bif_ratio_mean           "
+        f"{_fmt_scalar(metrics.get('horton_bifurcation_ratio_mean'))}  {bif_flag}".rstrip()
+    )
+    lines.append("")
+
+    lines.append("Angles (observed, by child axis_order)")
+    angle_blocks = [
+        ("insertion (vs parent)",      "insertion_angle_deg_vs_parent",      "insertion_angle_deg_vs_parent"),
+        ("insertion (vs main sib)",    "insertion_angle_deg_vs_main_sibling", None),
+        ("divergence",                  "divergence_angle_deg",                "divergence_angle_deg"),
+    ]
+    for label, key, range_prefix in angle_blocks:
+        d = metrics.get(key) or {}
+        if not d:
+            continue
+        lines.append(f"  {label}")
+        for order in sorted(d.keys()):
+            stats = d[order]
+            flag = ""
+            if range_prefix is not None:
+                bound_field = f"{range_prefix}__order{order}_mean"
+                mean = stats.get("mean") if isinstance(stats, dict) else None
+                flag = _flag(mean, _bounds_for(ranges, bound_field))
+            lines.append(f"    order {order}                 {_fmt_scalar(stats)}  {flag}".rstrip())
+    lines.append("")
+
+    lines.append("Counts")
+    lines.append(f"  sympodial_forks          {_fmt_scalar(metrics.get('sympodial_fork_count'))}")
+    bh = metrics.get("bud_state_histogram") or {}
+    if bh:
+        if multi:
+            for name in ("ACTIVE", "DORMANT", "DEAD", "RESERVE"):
+                if name in bh:
+                    lines.append(f"  buds.{name:10s}        {_fmt_scalar(bh[name])}")
+        else:
+            parts = "   ".join(f"{k}: {v}" for k, v in bh.items())
+            lines.append(f"  buds                     {parts}")
+    return "\n".join(lines)

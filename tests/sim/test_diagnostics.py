@@ -500,3 +500,55 @@ def test_compute_metrics_multi_seed_missing_axis_order():
     o2 = m["insertion_angle_deg_vs_parent"][2]
     assert "mean" in o2
     assert o2["per_seed"][1] is None
+
+
+def test_format_report_single_seed_includes_keys_and_flag():
+    from palubicki.sim.diagnostics import format_report
+
+    metrics = {
+        "strahler_order_max": 4,
+        "strahler_order_histogram": {1: 78, 2: 18, 3: 5, 4: 1},
+        "horton_bifurcation_ratio": {1: 4.33, 2: 3.60, 3: 5.00},
+        "horton_bifurcation_ratio_mean": 4.27,
+        "insertion_angle_deg_vs_parent": {
+            1: {"mean": 52.1, "stddev": 6.4, "n": 18},
+        },
+        "insertion_angle_deg_vs_main_sibling": {},
+        "divergence_angle_deg": {
+            1: {"mean": 137.4, "stddev": 9.2, "n": 12},
+        },
+        "sympodial_fork_count": 3,
+        "bud_state_histogram": {"ACTIVE": 24, "DORMANT": 7, "DEAD": 12, "RESERVE": 5},
+        "tree_height": 5.42,
+        "trunk_base_diameter": 0.18,
+        "crown_radius": 2.91,
+        "total_leaf_area": 12.4,
+    }
+    out = format_report(metrics, seeds=[0], species="oak")
+    assert "tree_height" in out
+    assert ("bif_ratio" in out) or ("bifurcation_ratio" in out)
+    assert "✓" in out  # bif_ratio_mean=4.27 is in [3.0, 5.0]
+
+
+def test_format_report_multi_seed_has_mean_stddev():
+    from palubicki.sim.diagnostics import format_report
+
+    multi = {
+        "strahler_order_max": {"mean": 4.0, "stddev": 0.0, "per_seed": [4, 4]},
+        "strahler_order_histogram": {1: {"mean": 78.0, "stddev": 0.0, "per_seed": [78, 78]}},
+        "horton_bifurcation_ratio": {},
+        "horton_bifurcation_ratio_mean": {"mean": 4.18, "stddev": 0.41, "per_seed": [4.0, 4.36]},
+        "insertion_angle_deg_vs_parent": {1: {"mean": 51.7, "stddev": 1.2, "per_seed": [50.5, 52.9]}},
+        "insertion_angle_deg_vs_main_sibling": {},
+        "divergence_angle_deg": {1: {"mean": 136.9, "stddev": 2.3, "per_seed": [135.0, 138.8]}},
+        "sympodial_fork_count": {"mean": 3.4, "stddev": 1.1, "per_seed": [2, 5]},
+        "bud_state_histogram": {"DEAD": {"mean": 11.6, "stddev": 2.1, "per_seed": [10, 13]}},
+        "tree_height": {"mean": 5.31, "stddev": 0.18, "per_seed": [5.13, 5.49]},
+        "trunk_base_diameter": {"mean": 0.17, "stddev": 0.01, "per_seed": [0.16, 0.18]},
+        "crown_radius": {"mean": 2.84, "stddev": 0.21, "per_seed": [2.6, 3.0]},
+        "total_leaf_area": {"mean": 11.9, "stddev": 0.8, "per_seed": [11.1, 12.7]},
+    }
+    out = format_report(multi, seeds=[0, 1], species="oak")
+    assert "mean" in out
+    assert "stddev" in out
+    assert "✓" in out  # bif_ratio_mean=4.18 still in range
