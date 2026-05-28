@@ -2,6 +2,7 @@ from palubicki.config import (
     BudBreakConfig, Config, EnvelopeConfig, GeomConfig, LightConfig,
     PhyllotaxyConfig, SagConfig, SheddingConfig, SimConfig, TropismConfig,
 )
+from palubicki.sim.simulator import simulate
 
 
 def _minimal_config(tmp_path, bud_break_bias: BudBreakConfig) -> Config:
@@ -24,7 +25,6 @@ def _minimal_config(tmp_path, bud_break_bias: BudBreakConfig) -> Config:
 
 
 def test_uniform_mode_matches_default_simulator(tmp_path):
-    from palubicki.sim.simulator import simulate
     cfg_uniform = _minimal_config(tmp_path, BudBreakConfig(mode="uniform", strength=0.0))
     tree_a = simulate(cfg_uniform)
     cfg_basis_strength_zero = _minimal_config(
@@ -36,16 +36,15 @@ def test_uniform_mode_matches_default_simulator(tmp_path):
 
 
 def test_basitonic_mode_changes_tree_versus_uniform(tmp_path):
-    from palubicki.sim.simulator import simulate
     cfg_uniform = _minimal_config(tmp_path, BudBreakConfig(mode="uniform", strength=0.0))
     tree_u = simulate(cfg_uniform)
     cfg_basitonic = _minimal_config(
         tmp_path, BudBreakConfig(mode="basitonic", strength=0.9)
     )
     tree_b = simulate(cfg_basitonic)
-    # With strong basitonic bias and a tall enough trunk, the resulting tree
-    # should differ structurally from the uniform-mode baseline.
-    assert len(tree_u.all_internodes) != len(tree_b.all_internodes) or any(
-        a.length != b.length
-        for a, b in zip(tree_u.all_internodes, tree_b.all_internodes)
-    )
+    # Strong basitonic bias re-distributes vigor along the trunk; under these
+    # settings (seed=42, 12 iterations) the resulting tree has materially
+    # fewer internodes than the uniform baseline. Comparing total counts is a
+    # stronger structural invariant than zip-of-lengths, which can pass on a
+    # truncated shared prefix.
+    assert len(tree_u.all_internodes) != len(tree_b.all_internodes)
