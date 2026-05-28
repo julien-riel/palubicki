@@ -265,3 +265,29 @@ def test_distichous_ignores_divergence_angle_deg():
     d_a = lateral_bud_directions(g, cfg_a, node_index=1, seed=0, axis_order=0)
     d_b = lateral_bud_directions(g, cfg_b, node_index=1, seed=0, axis_order=0)
     np.testing.assert_allclose(d_a, d_b, atol=1e-10)
+
+
+def test_distichous_on_plagiotropic_only_affects_lateral_axes():
+    cfg = PhyllotaxyConfig(
+        mode="alternate",
+        branch_angle_by_order=(45.0,),
+        divergence_angle_deg=137.5,
+        distichous_on_plagiotropic=True,
+    )
+    g = np.array([0.0, 1.0, 0.0])
+
+    def perp(v):
+        p = v - np.dot(v, g) * g
+        return p / np.linalg.norm(p)
+
+    # axis_order=0 (main): follows alternate/137.5 — should NOT be antiparallel.
+    d0_main = lateral_bud_directions(g, cfg, node_index=0, seed=0, axis_order=0)[0]
+    d1_main = lateral_bud_directions(g, cfg, node_index=1, seed=0, axis_order=0)[0]
+    cos_main = np.dot(perp(d0_main), perp(d1_main))
+    assert cos_main > -0.9, f"main axis was forced to distichous (cos={cos_main})"
+
+    # axis_order=1 (lateral): forced to distichous — must be antiparallel.
+    d0_lat = lateral_bud_directions(g, cfg, node_index=0, seed=0, axis_order=1)[0]
+    d1_lat = lateral_bud_directions(g, cfg, node_index=1, seed=0, axis_order=1)[0]
+    cos_lat = np.dot(perp(d0_lat), perp(d1_lat))
+    assert cos_lat < -0.999, f"lateral axis was not distichous (cos={cos_lat})"

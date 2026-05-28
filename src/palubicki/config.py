@@ -128,6 +128,10 @@ class PhyllotaxyConfig:
     dormant_reserve_count: int = field(
         default=0, metadata={"ui": {"min": 0, "max": 5, "step": 1}}
     )
+    distichous_on_plagiotropic: bool = field(
+        default=False,
+        metadata={"ui": {"label": "Distichous on lateral axes"}},
+    )
 
 
 @dataclass(frozen=True)
