@@ -249,6 +249,38 @@ def test_edit_help_lists_flags(capsys):
 
 
 @pytest.mark.slow
+def test_cli_diagnose_single_seed_runs():
+    res = _run("diagnose", "--species", "oak", "--seed", "0")
+    assert res.returncode == 0, res.stderr
+    assert "tree_height" in res.stdout
+    assert ("bif_ratio" in res.stdout) or ("bifurcation_ratio" in res.stdout)
+
+
+@pytest.mark.slow
+def test_cli_diagnose_json():
+    import json as _json
+    res = _run("diagnose", "--species", "oak", "--seed", "0", "--json")
+    assert res.returncode == 0, res.stderr
+    data = _json.loads(res.stdout)
+    assert "tree_height" in data
+    assert "strahler_order_max" in data
+    assert "horton_bifurcation_ratio_mean" in data
+
+
+@pytest.mark.slow
+def test_cli_diagnose_multi_seed():
+    res = _run("diagnose", "--species", "oak", "--seed", "0,1,2")
+    assert res.returncode == 0, res.stderr
+    assert "mean" in res.stdout
+    assert "stddev" in res.stdout
+
+
+def test_cli_diagnose_bad_seed_list():
+    res = _run("diagnose", "--species", "oak", "--seed", "0,foo")
+    assert res.returncode == 2
+
+
+@pytest.mark.slow
 def test_edit_server_boots_and_serves_schema():
     import socket
     import threading

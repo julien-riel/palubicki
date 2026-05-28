@@ -34,6 +34,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_preview(args)
     if args.command == "edit":
         return _cmd_edit(args)
+    if args.command == "diagnose":
+        return _cmd_diagnose(args)
 
     parser.print_help()
     return 1
@@ -117,6 +119,18 @@ def _build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--port", type=int, default=8765)
     ed.add_argument("--no-browser", action="store_true")
 
+    dg = sub.add_parser("diagnose", help="Compute and print structural metrics for a generated tree")
+    dg.add_argument("--config", type=Path, default=None)
+    dg.add_argument("--species",
+                    choices=species_choices if species_choices else None,
+                    default=None)
+    dg.add_argument("--seed", type=_parse_seed_list, default=[0],
+                    help="Seed N or comma-separated list N,M,...")
+    dg.add_argument("--json", action="store_true",
+                    help="Emit raw metrics dict as JSON (skips the report layout)")
+    dg.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"],
+                    default="WARNING")
+
     return parser
 
 
@@ -149,6 +163,17 @@ def _parse_bg(value: str) -> tuple[float, float, float, float]:
         raise argparse.ArgumentTypeError(
             f"invalid --bg {value!r}: choose from {sorted(_BG_PRESETS)}"
         )
+
+
+def _parse_seed_list(value: str) -> list[int]:
+    """Parse 'N' or 'N,M,...' → [int, ...]. Raises ArgumentTypeError on bad input."""
+    parts = value.split(",")
+    if not parts or any(p.strip() == "" for p in parts):
+        raise argparse.ArgumentTypeError(f"invalid --seed {value!r}: empty entry")
+    try:
+        return [int(p) for p in parts]
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid --seed {value!r}: not all integers")
 
 
 def _cmd_generate(args) -> int:
@@ -407,6 +432,47 @@ def _schedule_open_browser(port: int) -> None:
         webbrowser.open(f"http://127.0.0.1:{port}/")
 
     threading.Thread(target=_open, daemon=True).start()
+
+
+def _cmd_diagnose(args) -> int:
+    import json
+
+    level_name = "WARNING" if args.log_level == "WARN" else args.log_level
+    logging.basicConfig(
+        level=getattr(logging, level_name),
+        format="%(message)s",
+    )
+
+    from palubicki.sim.diagnostics import compute_metrics, format_report
+
+    seeds: list[int] = args.seed if isinstance(args.seed, list) else [args.seed]
+
+    trees = []
+    cfg = None
+    for s in seeds:
+        try:
+            cfg = load_config(
+                yaml_path=args.config,
+                cli_overrides={"seed": s},
+                output=Path("tree.glb"),
+                species=args.species,
+            )
+        except ConfigError as e:
+            print(f"config error: {e}", file=sys.stderr)
+            return 2
+        try:
+            trees.append(simulate(cfg))
+        except (ValueError, RuntimeError) as e:
+            print(f"diagnose error: {type(e).__name__}: {e}", file=sys.stderr)
+            return 1
+
+    metrics = compute_metrics(trees if len(trees) > 1 else trees[0], cfg=cfg)
+
+    if args.json:
+        print(json.dumps(metrics, indent=2, default=str))
+    else:
+        print(format_report(metrics, seeds=seeds, species=args.species))
+    return 0
 
 
 def _config_to_dict(cfg: Config) -> dict:
