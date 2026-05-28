@@ -262,3 +262,87 @@ def test_palmate_under_64_verts():
         margin_depth=0.0, margin_count=0,
     )
     assert pos.shape[0] <= 64
+
+
+from palubicki.geom.leaf_blade import _apply_margin
+
+
+def test_apply_margin_entire_is_noop():
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_out = _apply_margin(b, "entire", 0.1, 5, "ovate", 1.0, 0.5)
+    np.testing.assert_array_equal(b, b_out)
+
+
+def test_apply_margin_zero_count_is_noop():
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_out = _apply_margin(b, "serrate", 0.1, 0, "ovate", 1.0, 0.5)
+    np.testing.assert_array_equal(b, b_out)
+
+
+def test_apply_margin_serrate_adds_2N_verts():
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_out = _apply_margin(b, "serrate", 0.08, 8, "ovate", 1.0, 0.5)
+    assert b_out.shape[0] == b.shape[0] + 2 * 8
+
+
+def test_apply_margin_dentate_adds_2N_verts():
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_out = _apply_margin(b, "dentate", 0.08, 6, "ovate", 1.0, 0.5)
+    assert b_out.shape[0] == b.shape[0] + 2 * 6
+
+
+def test_apply_margin_lobed_increases_boundary_variance():
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_lobed = _apply_margin(b, "lobed", 0.35, 5, "ovate", 1.0, 0.5)
+    radii_smooth = np.linalg.norm(b - b.mean(axis=0), axis=1)
+    radii_lobed = np.linalg.norm(b_lobed - b_lobed.mean(axis=0), axis=1)
+    assert radii_lobed.var() > radii_smooth.var()
+
+
+def test_apply_margin_serrate_teeth_point_forward():
+    """For serrate, peak verts should have higher mean v than valley verts."""
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_out = _apply_margin(b, "serrate", 0.08, 8, "ovate", 1.0, 0.5)
+    # New verts are inserted in pairs (valley, peak) — find them by diffing.
+    # Easier: re-run with depth=0 to get same count but no perturbation, then
+    # compare. With depth=0 the inserted verts coincide with the midpoints.
+    b_flat = _apply_margin(b, "serrate", 0.0, 8, "ovate", 1.0, 0.5)
+    # Verts that moved are the toothed ones; pair them up by index parity.
+    # We expect 8 valleys + 8 peaks. By construction (valley before peak in
+    # insertion order), even-indexed extras are valleys, odd-indexed are peaks.
+    diff = np.linalg.norm(b_out - b_flat, axis=1)
+    moved_idx = np.where(diff > 1e-9)[0]
+    valleys_v = b_out[moved_idx[0::2], 1]
+    peaks_v = b_out[moved_idx[1::2], 1]
+    assert peaks_v.mean() > valleys_v.mean()
+
+
+def test_apply_margin_lobed_lower_count_than_serrate():
+    """Lobed defaults bias toward fewer, deeper teeth.
+    This test just checks that lobed with depth=0.35, count=5 produces an
+    outline whose radial-max-minus-radial-min is larger than serrate's at
+    depth=0.05, count=15 (same total insertions)."""
+    b, _ = _outline_ovate(L=1.0, W=0.5)
+    b_lobed = _apply_margin(b, "lobed", 0.35, 5, "ovate", 1.0, 0.5)
+    b_serr = _apply_margin(b, "serrate", 0.05, 15, "ovate", 1.0, 0.5)
+    def radial_range(b):
+        c = b.mean(axis=0)
+        r = np.linalg.norm(b - c, axis=1)
+        return r.max() - r.min()
+    assert radial_range(b_lobed) > radial_range(b_serr)
+
+
+def test_build_blade_ovate_serrate_birch_under_64():
+    pos, _, _, _ = build_blade(
+        length=1.0, width=0.7, shape="ovate", margin="serrate",
+        margin_depth=0.08, margin_count=12,
+    )
+    assert pos.shape[0] <= 64
+
+
+def test_build_blade_ovate_lobed_oak_under_64():
+    pos, _, _, _ = build_blade(
+        length=1.0, width=0.7, shape="ovate", margin="lobed",
+        margin_depth=0.35, margin_count=7,
+    )
+    assert pos.shape[0] <= 64

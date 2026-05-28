@@ -250,14 +250,103 @@ def _triangulate_fan(
     return positions, indices
 
 
+_MARGIN_PARAMS = {
+    # (peak_offset_fraction_of_period, valley_pull_factor)
+    # peak_offset > 0 = forward (toward apex/tip-end)
+    "serrate": (0.5, 1.0),
+    "dentate": (0.0, 0.5),
+    "lobed": (0.0, 1.0),
+}
+
+
 def _apply_margin(
     boundary: np.ndarray, margin: str, depth: float, count: int,
     shape: str, length: float, width: float,
 ) -> np.ndarray:
-    """No-op for now; subsequent task implements serrate/dentate/lobed."""
+    """Insert 2*count tooth vertices (valley, peak) along the boundary.
+
+    Teeth are spaced evenly by arc length over the *eligible* arc (excluding
+    the petiole stub for symmetric shapes, the notch for cordate). For each
+    tooth midpoint:
+        valley  = P + n_in * (depth * w_local)
+        peak    = P - n_in * (depth * w_local) + tan * (peak_offset * period)
+    where n_in is the inward unit normal, tan the unit tangent at P, w_local
+    a shape-aware radius scale, and period the spacing between consecutive
+    teeth measured in arc length.
+    """
     if margin == "entire" or count == 0:
         return boundary
-    return boundary  # placeholder; later task adds tooth insertion
+    if margin not in _MARGIN_PARAMS:
+        raise ValueError(f"unknown leaf margin: {margin!r}")
+    peak_off_frac, valley_pull = _MARGIN_PARAMS[margin]
+
+    n = boundary.shape[0]
+    # Arc lengths between consecutive boundary points (with wraparound).
+    diffs = np.diff(boundary, axis=0, append=boundary[:1])
+    seg_lens = np.linalg.norm(diffs, axis=1)
+    cum = np.concatenate(([0.0], np.cumsum(seg_lens)))
+    total_arc = cum[-1]
+
+    # Eligible arc: skip a small petiole stub near v=0 for symmetric shapes
+    # and the basal notch for cordate. For palmate, every lobe edge counts.
+    eligible_start, eligible_end = _eligible_arc_range(shape, boundary, cum, total_arc)
+    eligible_length = eligible_end - eligible_start
+    if eligible_length <= 0:
+        return boundary
+
+    # Tooth positions evenly spaced over eligible arc.
+    # Place midpoints at fractional positions (k + 0.5) / count, k = 0..count-1.
+    positions_arc = eligible_start + (np.arange(count) + 0.5) * (eligible_length / count)
+    period = eligible_length / count
+
+    # Build the new boundary by walking boundary segments and inserting teeth
+    # at the right arc positions.
+    out: list[np.ndarray] = []
+    tooth_idx = 0
+    for i in range(n):
+        out.append(boundary[i])
+        # Check if any teeth fall in segment [cum[i], cum[i+1]].
+        while tooth_idx < count and cum[i] <= positions_arc[tooth_idx] < cum[i + 1]:
+            arc_pos = positions_arc[tooth_idx]
+            t = (arc_pos - cum[i]) / max(seg_lens[i], 1e-12)
+            P = boundary[i] + t * diffs[i]
+            tan = diffs[i] / max(seg_lens[i], 1e-12)
+            # Ensure tangent points toward apex (positive v) for consistent
+            # "forward" direction used by serrate peak offsets.
+            apex_tan = tan if tan[1] >= 0 else -tan
+            n_in = np.array([-tan[1], tan[0]])  # left-hand normal; CCW interior = left
+            # Make sure n_in points inward: compare to vector from P to centroid.
+            centroid = boundary.mean(axis=0)
+            if np.dot(n_in, centroid - P) < 0:
+                n_in = -n_in
+            # Local width: use radial distance from centroid to P.
+            w_local = float(np.linalg.norm(P - centroid))
+            valley_pull_amt = depth * w_local * valley_pull
+            peak_push_amt = depth * w_local
+            peak_tangent_offset = peak_off_frac * period
+            valley = P + n_in * valley_pull_amt
+            peak = P - n_in * peak_push_amt + apex_tan * peak_tangent_offset
+            out.append(valley)
+            out.append(peak)
+            tooth_idx += 1
+    return np.array(out, dtype=np.float64)
+
+
+def _eligible_arc_range(
+    shape: str, boundary: np.ndarray, cum: np.ndarray, total_arc: float
+) -> tuple[float, float]:
+    """Skip the petiole stub for symmetric shapes; include everything else.
+
+    For symmetric shapes (linear/elliptic/lanceolate/ovate), the petiole is
+    the segment crossing y≈0 at the very start of the boundary. We skip the
+    first and last 2% of the total arc to avoid placing teeth at the petiole.
+    For cordate, the basal notch is included in that skip range. For palmate,
+    every arc point is eligible.
+    """
+    if shape == "palmate":
+        return 0.0, total_arc
+    skip = 0.02 * total_arc
+    return skip, total_arc - skip
 
 
 _OUTLINE_FNS = {
