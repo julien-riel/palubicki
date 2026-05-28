@@ -67,6 +67,7 @@ class SimConfig:
     sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
     shade_mortality: "ShadeMortalityConfig" = field(default_factory=lambda: ShadeMortalityConfig())
     elongation: "ElongationConfig" = field(default_factory=lambda: ElongationConfig())
+    bud_break_bias: "BudBreakConfig" = field(default_factory=lambda: BudBreakConfig())
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,27 @@ class ShadeMortalityConfig:
     )
     n_consecutive_steps: int = field(
         default=3, metadata={"ui": {"min": 1, "max": 10, "step": 1}}
+    )
+
+
+@dataclass(frozen=True)
+class BudBreakConfig:
+    """Per-species lateral-quality bias by node position along parent axis.
+
+    ``mode``:
+      * ``uniform`` — all positions equal (default; preserves legacy behavior).
+      * ``acrotonic`` — tip-end laterals favored (strong apical dominance).
+      * ``basitonic`` — base-end laterals favored (shrubs, multi-stem clumps).
+      * ``mesotonic`` — middle-axis laterals favored.
+
+    ``strength`` in [0, 1]: 0 = no bias, 1 = full bias (the disfavored end
+    receives 0 quality multiplier). Independent of ``lambda_apical``.
+    """
+    mode: Literal["uniform", "acrotonic", "basitonic", "mesotonic"] = field(
+        default="uniform", metadata={"ui": {"label": "Mode"}}
+    )
+    strength: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}}
     )
 
 
@@ -341,6 +363,16 @@ class Config:
             raise ConfigError(
                 f"sim.elongation.age_factor_decay must be >= 0, got {e.age_factor_decay}"
             )
+        bb = s.bud_break_bias
+        if bb.mode not in ("uniform", "acrotonic", "basitonic", "mesotonic"):
+            raise ConfigError(
+                f"sim.bud_break_bias.mode must be one of "
+                f"'uniform'|'acrotonic'|'basitonic'|'mesotonic', got {bb.mode!r}"
+            )
+        if not (0.0 <= bb.strength <= 1.0):
+            raise ConfigError(
+                f"sim.bud_break_bias.strength must be in [0, 1], got {bb.strength}"
+            )
         if s.max_iterations < 0:
             raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
 
@@ -489,6 +521,15 @@ def load_config(
                     f"unknown keys in section 'sim.elongation': {sorted(elong_unknown)}"
                 )
             sec_data = {**sec_data, "elongation": ElongationConfig(**elong_data)}
+        if name == "sim" and isinstance(sec_data.get("bud_break_bias"), dict):
+            bb_data = sec_data["bud_break_bias"]
+            bb_allowed = {f.name for f in fields(BudBreakConfig)}
+            bb_unknown = set(bb_data) - bb_allowed
+            if bb_unknown:
+                raise ConfigError(
+                    f"unknown keys in section 'sim.bud_break_bias': {sorted(bb_unknown)}"
+                )
+            sec_data = {**sec_data, "bud_break_bias": BudBreakConfig(**bb_data)}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:
