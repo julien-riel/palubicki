@@ -221,6 +221,18 @@ class GeomConfig:
     bark_color: tuple[float, float, float] = (0.35, 0.22, 0.12)
     bark_texture: Path | None = None
     leaf_cluster_count: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
+    leaf_shape: Literal["linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"] = field(
+        default="ovate", metadata={"ui": {"label": "Leaf shape"}}
+    )
+    leaf_margin: Literal["entire", "serrate", "dentate", "lobed"] = field(
+        default="entire", metadata={"ui": {"label": "Leaf margin"}}
+    )
+    leaf_margin_depth: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}}
+    )
+    leaf_margin_count: int = field(
+        default=0, metadata={"ui": {"min": 0, "max": 30, "step": 1}}
+    )
     leaf_aspect: float = field(default=1.0, metadata={"ui": {"min": 0.02, "max": 4.0, "step": 0.005}})
     leaf_splay_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}})
     enable_leaves: bool = field(default=True, metadata={"ui": {"label": "Enable leaves"}})
@@ -433,6 +445,25 @@ class Config:
         if not (0.0 <= g.leaf_sun_shade_k <= 2.0):
             raise ConfigError(
                 f"geom.leaf_sun_shade_k must be in [0, 2], got {g.leaf_sun_shade_k}"
+            )
+        if g.leaf_shape not in ("linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"):
+            raise ConfigError(
+                f"geom.leaf_shape must be one of "
+                f"'linear'|'elliptic'|'lanceolate'|'ovate'|'cordate'|'palmate', "
+                f"got {g.leaf_shape!r}"
+            )
+        if g.leaf_margin not in ("entire", "serrate", "dentate", "lobed"):
+            raise ConfigError(
+                f"geom.leaf_margin must be one of "
+                f"'entire'|'serrate'|'dentate'|'lobed', got {g.leaf_margin!r}"
+            )
+        if not (0.0 <= g.leaf_margin_depth <= 1.0):
+            raise ConfigError(
+                f"geom.leaf_margin_depth must be in [0, 1], got {g.leaf_margin_depth}"
+            )
+        if g.leaf_margin_count < 0:
+            raise ConfigError(
+                f"geom.leaf_margin_count must be >= 0, got {g.leaf_margin_count}"
             )
 
         light = self.light
