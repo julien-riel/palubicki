@@ -62,6 +62,10 @@ geom:
   leaf_texture: "proc:birch_leaf"
   leaf_size: 0.05
   leaf_aspect: 0.7
+  leaf_shape: ovate
+  leaf_margin: serrate
+  leaf_margin_depth: 0.08
+  leaf_margin_count: 12
   leaf_cluster_count: 3
   leaf_splay_deg: 20
   foliage_depth: 3

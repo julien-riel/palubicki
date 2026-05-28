@@ -48,6 +48,10 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             splay_deg=cfg.geom.leaf_splay_deg,
             foliage_depth=cfg.geom.foliage_depth,
             sun_shade_k=cfg.geom.leaf_sun_shade_k,
+            leaf_shape=cfg.geom.leaf_shape,
+            leaf_margin=cfg.geom.leaf_margin,
+            leaf_margin_depth=cfg.geom.leaf_margin_depth,
+            leaf_margin_count=cfg.geom.leaf_margin_count,
         )
         primitives.append(leaf_prim)
 

@@ -49,3 +49,6 @@ tests/golden/*.actual.glb
 # Claude Code local state
 .claude/worktrees
 .claude/**/*.lock
+
+# Generated tree artifacts — large binaries, regenerate via palubicki generate
+out/*.glb

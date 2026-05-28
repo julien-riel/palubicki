@@ -63,7 +63,11 @@ geom:
   bark_texture: "proc:oak_bark"
   leaf_texture: "proc:oak_leaf"
   leaf_size: 0.14
-  leaf_aspect: 1.0
+  leaf_aspect: 0.7
+  leaf_shape: ovate
+  leaf_margin: lobed
+  leaf_margin_depth: 0.35
+  leaf_margin_count: 7
   leaf_cluster_count: 3
   leaf_splay_deg: 25
   foliage_depth: 4
