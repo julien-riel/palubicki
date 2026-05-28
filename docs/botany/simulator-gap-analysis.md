@@ -95,15 +95,15 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Monopodial branching | ✅ | = | `Internode.is_main_axis` | — | — | — |
 | Sympodial branching | ✅ | ⬆ Implemented | `sim/sympodial.py::promote_lateral_if_failing` (Phase 2A) — when terminal bud `low_quality_steps` ≥ threshold, the best lateral is promoted to terminal, axis_order inherited. `Node.sympodial_fork` flag records each event. | — | — | **DONE** (with caveat) — current trigger is *quality failure*, not deliberate apex termination. Adequate for broadleaf woody trees; will need a second pathway (`apex differentiated to flower → terminate`) when flowering lands. |
 | Apical dominance | ✅ | = | `sim/bh.py` Borchert–Honda; `lambda_apical` per species | — | — | — |
-| Acrotony (apex-favoring bud break) | 🟡 | = | Still emergent via quality attenuation, not explicit | M | L | **IMPROVE** — make explicit when shrubs reach the roadmap. |
-| Basitony (base-favoring) | ❌ | = | — | H (shrubs) | L | **ADD** — gate for shrub presets. Couple with the explicit `bud_break_bias` parameter from acrotony work. |
+| Acrotony (apex-favoring bud break) | ✅ | ⬆ Implemented | `sim/bud_break_bias.py::position_weight` + `cfg.sim.bud_break_bias` (mode + strength). Default `uniform`/`strength=0` is a no-op; `acrotonic` linearly boosts tip-side lateral quality before BH allocation. | — | — | **DONE** — tunable per species. |
+| Basitony (base-favoring) | ✅ | ⬆ Implemented | Same `bud_break_bias` axis, `mode="basitonic"`. Linearly boosts base-side lateral quality. Mesotonic mode (midpoint peak) also available. | — | — | **DONE** — gates shrub presets; lilac / dogwood / blueberry can land as a follow-up species PR. |
 | Orthotropy | ✅ | = | `sim/tropisms.py` `w_orthotropy_main/_lateral` with `axis_decay^order` | — | — | — |
 | Plagiotropy (horizontal lateral axis) | ✅ | ⬆ Promoted | `sim/tropisms.py:44–67` `w_plagiotropism_main/_lateral` (Phase 2A) — projects current direction onto XY plane, blends, safely skipped near-vertical | — | — | **DONE** — true plagiotropic horizontal sprays now possible (key for maple-like crowns, fir-like flat tiers). |
 | Plagiotropy via epinasty (time-dependent bend) | ❌ | = | Current plagiotropism is per-step blend, not "starts vertical then bends down over years" | M | L | **ADD** with Phase 1 (seasonal/time axis) — needs a meaningful concept of branch age. |
 | Per-order branching angles | ✅ | ⬆ Promoted | `phyllotaxy.branch_angle_by_order` (Phase 2A) — list indexed by axis order (oak: 60°, 40°, 30°, 25°) | — | — | **DONE** |
 | Hallé–Oldeman model selection | ❌ | = | — | L (labels) / H (constraints) | L | **SKIP labels** — current parameter dimensions (mono/sympodial × ortho/plagio × per-order angles) already cover most of what Hallé–Oldeman describes. |
 
-**Verdict.** This section is now the **strongest area of the simulator**. The three Phase-2A items (sympodial, plagiotropism, per-order angles) collectively change what species can be modeled. Remaining work: basitony (cheap, gates shrubs) and epinasty (couple with seasonal cycles).
+**Verdict.** This section is now the **strongest area of the simulator**. The four landed Phase-2A items (sympodial, plagiotropism, per-order angles, explicit `bud_break_bias`) collectively change what species can be modeled. Only remaining work here: epinasty (couple with seasonal cycles).
 
 ---
 
@@ -195,7 +195,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Conifers (pine) | ✅ (richer) | ⬆ Strengthened | True distichous needles on plagiotropic branches; fascicles; cones (close-up only). Plagiotropism from Phase 2A now enables flat tiered sprays in principle. | Add `"distichous"` phyllotaxis mode and `fascicle` parameter to unlock visibly correct conifers. |
 | Grasses (Poaceae) | ❌ | = | Intercalary meristems, tillering, distichous phyllotaxis, fibrous root, no secondary growth | **Big gap.** Still requires a tillering/intercalary system architecturally separate from the apical-tip growth currently implemented. |
 | Herbaceous forbs (dandelion, sunflower, mint…) | ❌ | = | Determinate growth ending in inflorescence; rosettes (zero-length internodes); no secondary growth | **LATER** — needs determinate + inflorescences + zero-length-internode handling. |
-| Shrubs (lilac, dogwood, blueberry) | 🟡 | ⬆ Strengthened | Basitonic bud break (multiple stems from base), limited secondary growth. Reiteration from reserves (Phase 2B) already mimics some shrub-like recovery behavior. | **ADD basitony** as the per-species bud-break-bias parameter; with sympodial already in place, this is the smallest remaining piece. |
+| Shrubs (lilac, dogwood, blueberry) | 🟡 | ⬆ Strengthened | Basitonic bud break now available via `cfg.sim.bud_break_bias.mode="basitonic"` (Phase 2 follow-up). Reiteration from reserves (Phase 2B) already mimics some shrub-like recovery behavior. | **ADD species presets** (lilac / dogwood / blueberry YAML) — the mechanism is in; remaining work is parameter tuning + a preset PR. |
 | Vines / lianas | ❌ | = | Climbing strategies, support-finding | **LATER** — substantial new system. |
 | Bulbs / rosettes / succulents | ❌ | = | Compressed internodes, photosynthetic stems, spines | **LATER** |
 
@@ -229,7 +229,7 @@ These are the items where the realism payoff is high and the implementation cost
 1. **Parametric leaf blade + margins** (§6) — replace the cross-quad with a real blade silhouette. Doubles the visible species range; no architectural dependency.
 2. **Compound leaves** (§6) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
 3. **True distichous (180°) phyllotaxis mode** (§5) — one new branch in `phyllotaxy.py`. Required for grass leaves and for visibly correct conifer side-sprays. No dependency.
-4. **Basitonic bud break** (§4) — explicit `bud_break_bias` parameter on the species preset. Gates shrub presets; tiny code change.
+4. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
 5. **Root flare at trunk base** (§7) — one swept-profile mesh. Very high visibility, no simulation dependency.
 6. **Diagnostic / validation harness** (§11) — print Strahler ratio, mean divergence, per-order insertion angles, sympodial fork count, leaf-area density per generated tree. Speeds up all future tuning.
 7. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems.
