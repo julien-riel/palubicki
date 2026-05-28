@@ -129,6 +129,8 @@ def reserve_bud_directions(
     return out
 
 
+# Keep in sync with sim/diagnostics.py:_frame_perpendicular_to (duplicated
+# for in-plane basis consistency with the diagnostics harness).
 def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return any (right, up) orthonormal basis perpendicular to unit vector d."""
     canonical = np.array([1.0, 0.0, 0.0]) if abs(d[0]) < 0.9 else np.array([0.0, 1.0, 0.0])

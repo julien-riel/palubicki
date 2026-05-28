@@ -8,6 +8,24 @@ from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.tree import BudState, Internode, Node, Tree
 
 
+def compute_effective_leaf_size(
+    internode: Internode | None,
+    leaf_size: float,
+    sun_shade_k: float,
+) -> float:
+    """Effective per-site leaf edge length under sun/shade scaling.
+
+    Shared by build_leaves_primitive (renderer) and sim/diagnostics.py
+    (total_leaf_area). Keeps the harness from drifting from what the .glb
+    actually contains.
+    """
+    lf = internode.light_factor if internode is not None else 1.0
+    if sun_shade_k > 0.0:
+        eff = leaf_size * (1.0 + sun_shade_k * (1.0 - lf))
+        return max(0.5 * leaf_size, min(2.0 * leaf_size, eff))
+    return leaf_size
+
+
 def build_leaves_primitive(
     tree: Tree,
     *,
@@ -51,16 +69,9 @@ def build_leaves_primitive(
     indices = np.empty((n * idx_per_site,), dtype=np.uint32)
 
     splay_rad = math.radians(splay_deg)
-    min_size = 0.5 * leaf_size
-    max_size = 2.0 * leaf_size
 
     for i, (center, direction, source_iod) in enumerate(sites):
-        lf = source_iod.light_factor if source_iod is not None else 1.0
-        if sun_shade_k > 0.0:
-            eff_size = leaf_size * (1.0 + sun_shade_k * (1.0 - lf))
-            eff_size = max(min_size, min(max_size, eff_size))
-        else:
-            eff_size = leaf_size
+        eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
 
         v_start = i * verts_per_site
         i_start = i * idx_per_site
