@@ -37,25 +37,37 @@ def lateral_bud_directions(
     g = g / np.linalg.norm(g)
     right, up = _frame_perpendicular_to(g)
 
-    if cfg.mode == "alternate":
-        k = 1
-    elif cfg.mode == "opposite":
-        k = 2
-    elif cfg.mode == "whorled":
-        k = max(1, cfg.whorl_count)
-    elif cfg.mode == "decussate":
-        k = 2
+    # Effective mode: the flag promotes lateral axes (axis_order > 0) to
+    # distichous regardless of cfg.mode.
+    if cfg.distichous_on_plagiotropic and axis_order > 0:
+        effective_mode = "distichous"
     else:
-        raise ValueError(f"unknown phyllotaxy mode: {cfg.mode!r}")
+        effective_mode = cfg.mode
+
+    if effective_mode == "alternate":
+        k = 1
+    elif effective_mode == "opposite":
+        k = 2
+    elif effective_mode == "whorled":
+        k = max(1, cfg.whorl_count)
+    elif effective_mode == "decussate":
+        k = 2
+    elif effective_mode == "distichous":
+        k = 1
+    else:
+        raise ValueError(f"unknown phyllotaxy mode: {effective_mode!r}")
 
     angles = cfg.branch_angle_by_order
     idx = min(int(axis_order), len(angles) - 1)
 
-    if cfg.mode == "decussate":
+    if effective_mode == "decussate":
         base_azimuth = (
             math.radians(cfg.divergence_angle_deg) * node_index
             + (math.pi / 2.0) * (node_index % 2)
         )
+    elif effective_mode == "distichous":
+        # Fixed 180° flip per node; divergence_angle_deg is ignored here.
+        base_azimuth = math.pi * node_index
     else:
         base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
 

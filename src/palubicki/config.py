@@ -107,7 +107,7 @@ class TropismConfig:
 
 @dataclass(frozen=True)
 class PhyllotaxyConfig:
-    mode: Literal["alternate", "opposite", "whorled", "decussate"] = field(
+    mode: Literal["alternate", "opposite", "whorled", "decussate", "distichous"] = field(
         default="alternate", metadata={"ui": {"label": "Mode"}}
     )
     whorl_count: int = field(default=3, metadata={"ui": {"min": 2, "max": 8, "step": 1}})
@@ -127,6 +127,10 @@ class PhyllotaxyConfig:
     branch_angle_jitter_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
     dormant_reserve_count: int = field(
         default=0, metadata={"ui": {"min": 0, "max": 5, "step": 1}}
+    )
+    distichous_on_plagiotropic: bool = field(
+        default=False,
+        metadata={"ui": {"label": "Distichous on lateral axes"}},
     )
 
 
