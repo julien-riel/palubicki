@@ -194,10 +194,9 @@ def _insertion_angle_metrics(
 # ── Axis chains and divergence ────────────────────────────────────────────
 
 def _walk_axis_chains(root: Node) -> list[list[Internode]]:
-    """Return list of chains. Each chain = maximal sequence of internodes
-    linked by is_main_axis=True continuation. A chain starts when an
-    internode either has no parent_internode (root's child) or is itself a
-    lateral (is_main_axis=False).
+    """Return chains so divergence azimuths are measured along a single
+    anatomical axis. Each chain = maximal sequence of internodes linked by
+    is_main_axis=True continuation.
     """
     chains: list[list[Internode]] = []
     visited: set[int] = set()
@@ -239,10 +238,9 @@ def _divergence_angle_metrics(
     chains: list[list[Internode]],
     axis_orders: dict[int, int],
 ) -> dict:
-    """For each chain, walk in order, collect lateral children in chain
-    order, and compute consecutive azimuth deltas (mod 360°) in the basis
-    perpendicular to the chain tangent at the lateral's parent node.
-    Group by the LATERAL's axis_order.
+    """Consecutive azimuth deltas (mod 360°) between lateral pairs along
+    each axis chain, measured in the basis perpendicular to the chain
+    tangent. Grouped by the LATERAL's axis_order (not the chain's).
     """
     by_order: dict[int, list[float]] = defaultdict(list)
     for chain in chains:
