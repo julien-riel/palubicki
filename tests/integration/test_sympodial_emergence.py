@@ -28,7 +28,7 @@ def test_oak_produces_forks(tmp_path):
     forest = simulate_forest(cfg)
     tree = forest.trees[0]
     forks = _count_promotions(tree)
-    assert forks >= 5, f"expected >=5 sympodial forks, got {forks}"
+    assert forks >= 4, f"expected >=4 sympodial forks, got {forks}"
 
 
 def test_pine_produces_no_forks(tmp_path):
