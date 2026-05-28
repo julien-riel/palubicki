@@ -152,8 +152,8 @@ For `list[Tree]`, every scalar leaf wraps to `{"mean", "stddev", "per_seed": [..
 
 7. **Total leaf area**: walks `_collect_foliage_sites(tree, cfg.geom.foliage_depth)` from `geom/leaves.py`. Per site:
    - `eff_size = compute_effective_leaf_size(source_internode, cfg.geom.leaf_size, cfg.geom.leaf_sun_shade_k)`
-   - per-site area = `2 * cfg.geom.leaf_cluster_count * eff_size² * cfg.geom.leaf_aspect`
-     (2 quads per cluster × cluster_count clusters; quad u-dim = `size * aspect`, v-dim = `size`).
+   - per-site area = `cfg.geom.leaf_cluster_count * eff_size² * cfg.geom.leaf_aspect * (1 + cos(splay_rad))`.
+     Each cluster emits two quads. Quad B's axes (`rot_axis_w`, `leaf_up`) are orthogonal → area `size² * aspect`. Quad A's axes (`rot_axis_u`, `leaf_up`) have dot product `sin(splay)` (Quad A is splay-sheared) → area `size² * aspect * cos(splay)`. Per-cluster sum = `size² * aspect * (1 + cos(splay))`. At default `leaf_splay_deg = 30°` the multiplier is ~1.866, not 2.
    - Sum across sites.
    When `cfg is None`, returns `0.0` and the report shows `total_leaf_area  — (leaf cfg not provided)`.
 
