@@ -126,3 +126,82 @@ def test_strahler_empty_tree():
     assert m["strahler_order_histogram"] == {}
     assert m["horton_bifurcation_ratio"] == {}
     assert math.isnan(m["horton_bifurcation_ratio_mean"])
+
+
+def _make_trunk_with_lateral(branch_dir: np.ndarray,
+                              branch_is_main_axis: bool = False) -> Tree:
+    """Trunk along +Y; one lateral at the trunk's child node, pointing in
+    `branch_dir` (any non-zero vector — gets normalized to position the
+    lateral end node 1 unit from mid)."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    branch_dir = np.asarray(branch_dir, dtype=np.float64)
+    branch_dir = branch_dir / np.linalg.norm(branch_dir)
+    lat_end = mid.position + branch_dir
+    lat_node = Node(position=lat_end)
+    tree = Tree(root=root)
+    trunk = _link(root, mid, is_main_axis=True)
+    lat = _link(mid, lat_node, is_main_axis=branch_is_main_axis)
+    tree.all_internodes.extend([trunk, lat])
+    return tree
+
+
+def test_insertion_angle_vs_parent_45():
+    tree = _make_trunk_with_lateral(
+        branch_dir=np.array([math.sin(math.radians(45.0)),
+                              math.cos(math.radians(45.0)), 0.0]),
+    )
+    m = compute_metrics(tree)
+    assert 1 in m["insertion_angle_deg_vs_parent"]
+    stats = m["insertion_angle_deg_vs_parent"][1]
+    assert stats["mean"] == pytest.approx(45.0, abs=1e-6)
+    assert stats["stddev"] == pytest.approx(0.0, abs=1e-9)
+    assert stats["n"] == 1
+
+
+def test_insertion_angle_vs_main_sibling_60():
+    """Trunk +Y up to mid; mid has a main-axis continuation also at +Y, plus
+    a lateral at 60° from that direction. Angle vs parent = 60°, and angle
+    vs main_sibling = 60° (parent and main_sibling happen to be colinear)."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    top = Node(position=np.array([0.0, 2.0, 0.0]))
+    angle = math.radians(60.0)
+    lat_dir = np.array([math.sin(angle), math.cos(angle), 0.0])
+    lat_node = Node(position=mid.position + lat_dir)
+
+    tree = Tree(root=root)
+    trunk = _link(root, mid, is_main_axis=True)
+    cont = _link(mid, top, is_main_axis=True)
+    lat = _link(mid, lat_node, is_main_axis=False)
+    tree.all_internodes.extend([trunk, cont, lat])
+
+    m = compute_metrics(tree)
+    p_stats = m["insertion_angle_deg_vs_parent"][1]
+    s_stats = m["insertion_angle_deg_vs_main_sibling"][1]
+    assert p_stats["mean"] == pytest.approx(60.0, abs=1e-6)
+    assert p_stats["n"] == 1
+    assert s_stats["mean"] == pytest.approx(60.0, abs=1e-6)
+    assert s_stats["n"] == 1
+
+
+def test_insertion_angle_vs_main_sibling_differs_from_vs_parent():
+    """Trunk +Y; main-sibling at 30° in +X half-plane; lateral at 30° in -X
+    half-plane → 60° vs main-sibling, but 30° vs parent (trunk)."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    a30 = math.radians(30.0)
+    main_dir = np.array([math.sin(a30), math.cos(a30), 0.0])
+    lat_dir = np.array([-math.sin(a30), math.cos(a30), 0.0])
+    top = Node(position=mid.position + main_dir)
+    lat_node = Node(position=mid.position + lat_dir)
+
+    tree = Tree(root=root)
+    trunk = _link(root, mid, is_main_axis=True)
+    cont = _link(mid, top, is_main_axis=True)
+    lat = _link(mid, lat_node, is_main_axis=False)
+    tree.all_internodes.extend([trunk, cont, lat])
+
+    m = compute_metrics(tree)
+    assert m["insertion_angle_deg_vs_parent"][1]["mean"] == pytest.approx(30.0, abs=1e-6)
+    assert m["insertion_angle_deg_vs_main_sibling"][1]["mean"] == pytest.approx(60.0, abs=1e-6)

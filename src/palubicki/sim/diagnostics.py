@@ -90,6 +90,101 @@ def _strahler_metrics(root: Node) -> dict:
     }
 
 
+# ── Topological axis order ────────────────────────────────────────────────
+
+def _axis_orders(root: Node) -> dict[int, int]:
+    """Return {id(Internode): axis_order} derived from is_main_axis topology.
+
+    Internode has no axis_order field — only Bud does. We reconstruct it
+    from the tree shape: the first internode from root is order 0; each
+    main-axis continuation inherits its parent's order; each lateral
+    (is_main_axis=False) gets parent + 1.
+    """
+    out: dict[int, int] = {}
+    q: deque[Internode] = deque(root.children_internodes)
+    while q:
+        iod = q.popleft()
+        parent_iod = iod.parent_node.parent_internode
+        if parent_iod is None:
+            out[id(iod)] = 0
+        else:
+            base = out[id(parent_iod)]
+            out[id(iod)] = base if iod.is_main_axis else base + 1
+        for c in iod.child_node.children_internodes:
+            q.append(c)
+    return out
+
+
+# ── Geometry helpers ──────────────────────────────────────────────────────
+
+def _tangent(iod: Internode) -> np.ndarray:
+    v = np.asarray(iod.child_node.position - iod.parent_node.position,
+                   dtype=np.float64)
+    n = float(np.linalg.norm(v))
+    if n < 1e-12:
+        return np.array([0.0, 1.0, 0.0])
+    return v / n
+
+
+def _angle_deg(a: np.ndarray, b: np.ndarray) -> float:
+    c = float(np.clip(np.dot(a, b), -1.0, 1.0))
+    return math.degrees(math.acos(c))
+
+
+def _stats(values: list[float]) -> dict:
+    n = len(values)
+    if n == 0:
+        return {"mean": float("nan"), "stddev": float("nan"), "n": 0}
+    arr = np.asarray(values, dtype=np.float64)
+    return {
+        "mean": float(arr.mean()),
+        "stddev": float(arr.std(ddof=0)),
+        "n": n,
+    }
+
+
+# ── Insertion angles ──────────────────────────────────────────────────────
+
+def _insertion_angle_metrics(
+    internodes: list[Internode],
+    axis_orders: dict[int, int],
+) -> dict:
+    """For each internode L:
+      vs_parent      = angle(L_tangent, L.parent_node.parent_internode_tangent),
+                       skipped if parent_node has no incoming internode.
+      vs_main_sibling = angle(L_tangent, sibling_tangent) where sibling is the
+                       unique child of L.parent_node with is_main_axis=True
+                       and not L itself; skipped when no such sibling exists.
+    Both grouped by axis_orders[id(L)].
+    """
+    by_parent: dict[int, list[float]] = defaultdict(list)
+    by_main: dict[int, list[float]] = defaultdict(list)
+
+    for L in internodes:
+        order = axis_orders[id(L)]
+        L_t = _tangent(L)
+        node = L.parent_node
+
+        incoming = node.parent_internode
+        if incoming is not None:
+            by_parent[order].append(_angle_deg(L_t, _tangent(incoming)))
+
+        main_sib: Internode | None = None
+        for c in node.children_internodes:
+            if c is L:
+                continue
+            if c.is_main_axis:
+                main_sib = c
+                break
+        if main_sib is not None:
+            by_main[order].append(_angle_deg(L_t, _tangent(main_sib)))
+
+    return {
+        "insertion_angle_deg_vs_parent": {k: _stats(v) for k, v in by_parent.items()},
+        "insertion_angle_deg_vs_main_sibling": {k: _stats(v) for k, v in by_main.items()},
+    }
+
+
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
@@ -109,6 +204,10 @@ def compute_metrics(
         # Multi-seed path lands in Task 7. Stub for now.
         raise NotImplementedError("multi-seed compute_metrics arrives in Task 7")
 
+    internodes = _walk_internodes(tree.root)
+    axis_orders = _axis_orders(tree.root)
+
     out: dict = {}
     out.update(_strahler_metrics(tree.root))
+    out.update(_insertion_angle_metrics(internodes, axis_orders))
     return out
