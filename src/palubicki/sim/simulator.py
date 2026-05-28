@@ -11,6 +11,7 @@ _ILEN_SALT = int.from_bytes(b"ilen", "big")
 
 from palubicki.config import Config
 from palubicki.sim.bh import allocate, compute_v_subtree
+from palubicki.sim.bud_break_bias import compute_axis_positions, position_weight
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
@@ -138,6 +139,20 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
         quality = {b: res.quality[b] * light_info.light_factor[b] for b in union_buds}
     else:
         quality = dict(res.quality)
+
+    # Bud-break bias: modulate lateral quality by position along parent axis.
+    # Skipped entirely in the default (uniform / strength=0) case to avoid the
+    # per-tree axis walk when the bias is off.
+    bb = cfg.sim.bud_break_bias
+    if bb.mode != "uniform" and bb.strength > 0.0:
+        for tree in forest.trees:
+            positions = compute_axis_positions(tree)
+            for b, (node_index, axis_length) in positions.items():
+                if b not in quality:
+                    continue
+                quality[b] = quality[b] * position_weight(
+                    node_index, axis_length, bb.mode, bb.strength
+                )
 
     new_node_positions: list[np.ndarray] = []
     nodes_created_this_step = 0
