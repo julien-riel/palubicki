@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from palubicki.geom.leaf_blade import build_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.tree import BudState, Internode, Node, Tree
 
@@ -36,15 +37,19 @@ def build_leaves_primitive(
     splay_deg: float = 0.0,
     foliage_depth: int = 1,
     sun_shade_k: float = 0.0,
+    leaf_shape: str = "ovate",
+    leaf_margin: str = "entire",
+    leaf_margin_depth: float = 0.0,
+    leaf_margin_count: int = 0,
 ) -> Primitive:
-    """Emit `cluster_count` cross-quads (8 verts each) at each foliage site.
+    """Emit `cluster_count` x 2 perpendicular triangulated blades per foliage site.
 
     A foliage site is any node within ``foliage_depth`` internode-steps of the
     nearest terminal apex. With foliage_depth=1 this collapses back to
     "apex only" (legacy behavior).
 
-    When ``sun_shade_k > 0`` and the source internode is known, leaf quad
-    edge length scales as
+    When ``sun_shade_k > 0`` and the source internode is known, blade size
+    scales as
         eff_size = leaf_size * (1 + sun_shade_k * (1 - internode.light_factor))
     clamped to [0.5*leaf_size, 2.0*leaf_size]. Sites with no source internode
     (root apex) use light_factor=1.0 → eff_size=leaf_size.
@@ -60,8 +65,17 @@ def build_leaves_primitive(
             material=material,
         )
 
-    verts_per_site = cluster_count * 8
-    idx_per_site = cluster_count * 12
+    # Build blade template once (unit length, width = aspect). Per-site scaling
+    # is applied at lift time via eff_size.
+    blade_pos_unit, _, blade_uv, blade_idx = build_blade(
+        length=1.0, width=aspect, shape=leaf_shape, margin=leaf_margin,
+        margin_depth=leaf_margin_depth, margin_count=leaf_margin_count,
+    )
+    blade_v_count = blade_pos_unit.shape[0]
+    blade_i_count = blade_idx.shape[0]
+
+    verts_per_site = cluster_count * 2 * blade_v_count
+    idx_per_site = cluster_count * 2 * blade_i_count
     n = len(sites)
     positions = np.empty((n * verts_per_site, 3), dtype=np.float32)
     normals = np.empty((n * verts_per_site, 3), dtype=np.float32)
@@ -72,11 +86,11 @@ def build_leaves_primitive(
 
     for i, (center, direction, source_iod) in enumerate(sites):
         eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
-
         v_start = i * verts_per_site
         i_start = i * idx_per_site
         _emit_leaf_cluster(
-            center, direction, eff_size, cluster_count, aspect, splay_rad,
+            center, direction, eff_size, cluster_count, splay_rad,
+            blade_pos_unit, blade_uv, blade_idx,
             positions[v_start : v_start + verts_per_site],
             normals[v_start : v_start + verts_per_site],
             uvs[v_start : v_start + verts_per_site],
@@ -157,33 +171,70 @@ def _collect_foliage_sites(
     return sites
 
 
-def _emit_leaf_cluster(center, direction, size, cluster_count, aspect, splay_rad,
+def _emit_leaf_cluster(center, direction, size, cluster_count, splay_rad,
+                       blade_pos_unit, blade_uv, blade_idx,
                        out_pos, out_norm, out_uv, out_idx, base):
+    """Emit ``cluster_count`` x 2 perpendicular triangulated blades per foliage site.
+
+    The blade is built once in (u, v, 0) local space with length=1, width=aspect.
+    Per cluster member we lift it onto two perpendicular planes (cross-blade) so
+    the leaf is visible from any angle.
+    """
     d = np.asarray(direction, dtype=np.float64)
     d = d / np.linalg.norm(d)
     right, forward = _basis_perpendicular_to(d)
 
-    half_u = size * 0.5 * aspect
-    half_v = size * 0.5
-    petiole_offset = d * (size * 0.3)
-    leaf_center = np.asarray(center, dtype=np.float64) + petiole_offset
+    blade_v_count = blade_pos_unit.shape[0]
+    blade_i_count = blade_idx.shape[0]
+    leaf_center = np.asarray(center, dtype=np.float64)
 
     for k in range(cluster_count):
         az = 2.0 * math.pi * k / cluster_count
         rot_axis_u = math.cos(az) * right + math.sin(az) * forward
-        rot_axis_w = -math.sin(az) * right + math.cos(az) * forward  # in-plane perpendicular
-        # Tilt growth direction outward by splay_rad in the rot_axis_u half-plane.
+        rot_axis_w = -math.sin(az) * right + math.cos(az) * forward
         leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
 
-        v_off = k * 8
-        i_off = k * 12
-        cluster_base = base + v_off
-        # Quad A: (rot_axis_u, leaf_up) plane; normal = rot_axis_w
-        _add_quad(leaf_center, rot_axis_u, leaf_up, half_u, half_v, rot_axis_w,
-                  out_pos, out_norm, out_uv, out_idx, cluster_base, v_off, slot=0, idx_base=i_off)
-        # Quad B: (rot_axis_w, leaf_up) plane; normal = rot_axis_u
-        _add_quad(leaf_center, rot_axis_w, leaf_up, half_u, half_v, rot_axis_u,
-                  out_pos, out_norm, out_uv, out_idx, cluster_base, v_off, slot=4, idx_base=i_off)
+        # Plane A: basis_u = rot_axis_u, basis_v = leaf_up, normal = rot_axis_w
+        slot_a = k * 2 * blade_v_count
+        _lift_blade(
+            blade_pos_unit, blade_uv, blade_idx,
+            leaf_center, rot_axis_u, leaf_up, rot_axis_w, size,
+            out_pos[slot_a : slot_a + blade_v_count],
+            out_norm[slot_a : slot_a + blade_v_count],
+            out_uv[slot_a : slot_a + blade_v_count],
+            out_idx[k * 2 * blade_i_count : k * 2 * blade_i_count + blade_i_count],
+            base + slot_a,
+        )
+        # Plane B: basis_u = rot_axis_w, basis_v = leaf_up, normal = rot_axis_u
+        slot_b = slot_a + blade_v_count
+        _lift_blade(
+            blade_pos_unit, blade_uv, blade_idx,
+            leaf_center, rot_axis_w, leaf_up, rot_axis_u, size,
+            out_pos[slot_b : slot_b + blade_v_count],
+            out_norm[slot_b : slot_b + blade_v_count],
+            out_uv[slot_b : slot_b + blade_v_count],
+            out_idx[k * 2 * blade_i_count + blade_i_count :
+                    k * 2 * blade_i_count + 2 * blade_i_count],
+            base + slot_b,
+        )
+
+
+def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
+                origin, basis_u, basis_v, normal, scale,
+                out_pos, out_norm, out_uv, out_idx, base):
+    """Lift a (u, v, 0) 2D blade into 3D along given basis vectors."""
+    # blade_pos_unit[:, 0] is u, blade_pos_unit[:, 1] is v; scale to physical size.
+    pu = blade_pos_unit[:, 0] * scale
+    pv = blade_pos_unit[:, 1] * scale
+    bu = np.asarray(basis_u, dtype=np.float64)
+    bv = np.asarray(basis_v, dtype=np.float64)
+    pos = origin[np.newaxis, :] + pu[:, np.newaxis] * bu[np.newaxis, :] \
+          + pv[:, np.newaxis] * bv[np.newaxis, :]
+    out_pos[:] = pos.astype(np.float32)
+    n = np.asarray(normal, dtype=np.float32)
+    out_norm[:] = n[np.newaxis, :]
+    out_uv[:] = blade_uv
+    out_idx[:] = blade_idx + np.uint32(base)
 
 
 def _basis_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -192,24 +243,3 @@ def _basis_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     right = right / np.linalg.norm(right)
     forward = np.cross(d, right)
     return right, forward
-
-
-def _add_quad(center, axis_u, axis_v, half_u, half_v, normal,
-              out_pos, out_norm, out_uv, out_idx, base, v_off, slot, idx_base):
-    pos_slot = v_off + slot
-    out_pos[pos_slot + 0] = (center - axis_u * half_u).astype(np.float32)
-    out_pos[pos_slot + 1] = (center + axis_u * half_u).astype(np.float32)
-    out_pos[pos_slot + 2] = (center + axis_u * half_u + axis_v * 2 * half_v).astype(np.float32)
-    out_pos[pos_slot + 3] = (center - axis_u * half_u + axis_v * 2 * half_v).astype(np.float32)
-    n = np.asarray(normal, dtype=np.float32)
-    for j in range(4):
-        out_norm[pos_slot + j] = n
-    out_uv[pos_slot + 0] = (0.0, 0.0)
-    out_uv[pos_slot + 1] = (1.0, 0.0)
-    out_uv[pos_slot + 2] = (1.0, 1.0)
-    out_uv[pos_slot + 3] = (0.0, 1.0)
-    idx_slot = idx_base + (slot // 4) * 6
-    a = base + slot + 0; b = base + slot + 1
-    c = base + slot + 2; d = base + slot + 3
-    out_idx[idx_slot + 0] = a; out_idx[idx_slot + 1] = b; out_idx[idx_slot + 2] = c
-    out_idx[idx_slot + 3] = a; out_idx[idx_slot + 4] = c; out_idx[idx_slot + 5] = d

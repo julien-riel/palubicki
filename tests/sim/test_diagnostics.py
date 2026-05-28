@@ -383,12 +383,11 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
         sun_shade_k=g.leaf_sun_shade_k,
     )
     h = float(np.sum(prim.positions.astype(np.float64) ** 2))
-    # PRE-REFACTOR baseline captured from oak/seed-0 run before the
-    # compute_effective_leaf_size extraction.
-    EXPECTED_HASH = 4392811.55783453  # noqa: N806
+    # Baseline captured from oak/seed-0 run after parametric blade integration
+    # (Task 7: replace cross-quads with leaf_blade.build_blade).
+    EXPECTED_HASH = 18322988.00007069  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
-        f"Pre-refactor hash: {h!r}. If this is the first run before the "
-        f"refactor, replace EXPECTED_HASH with this value and re-run."
+        f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
 
 

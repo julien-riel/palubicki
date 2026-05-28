@@ -320,26 +320,46 @@ def _trunk_base_diameter(root: Node) -> float:
 def _total_leaf_area(tree: Tree, cfg: "Config") -> float:
     """Sum of rendered leaf surface areas across foliage sites.
 
-    Per site, per cluster: two quads in the renderer.
-      * Quad A is parallelogram-sheared by ``splay_deg`` (axes are
-        ``rot_axis_u`` and ``leaf_up`` = cos(splay)·d + sin(splay)·rot_axis_u),
-        so its area is ``eff² · aspect · cos(splay_rad)``.
-      * Quad B is rectangular (axes ``rot_axis_w`` and ``leaf_up`` are
-        orthogonal), with area ``eff² · aspect``.
-    Total per cluster = ``eff² · aspect · (1 + cos(splay_rad))``.
+    Each foliage site emits ``cluster_count`` pairs of perpendicular blades.
+    For each pair:
+      * Plane A: basis_u = rot_axis_u, basis_v = leaf_up.  Because
+        ``leaf_up = cos(splay)·d + sin(splay)·rot_axis_u``, the area of the
+        lifted blade is ``unit_blade_area * cos(splay_rad)``.
+      * Plane B: basis_u = rot_axis_w, basis_v = leaf_up.  rot_axis_w is
+        perpendicular to leaf_up, so the area equals ``unit_blade_area * 1.0``.
+
+    The unit blade area is computed once from ``build_blade(length=1, width=aspect, …)``
+    and then scaled by eff_size² per site.
     """
+    from palubicki.geom.leaf_blade import build_blade
     from palubicki.geom.leaves import _collect_foliage_sites, compute_effective_leaf_size
 
     g = cfg.geom
     sites = _collect_foliage_sites(tree, g.foliage_depth)
     if not sites:
         return 0.0
+
+    # Build unit-blade template once to get its 2D area.
+    blade_pos, _, _, blade_idx = build_blade(
+        length=1.0, width=g.leaf_aspect, shape=g.leaf_shape,
+        margin=g.leaf_margin, margin_depth=g.leaf_margin_depth,
+        margin_count=g.leaf_margin_count,
+    )
+    pos2d = blade_pos.astype(np.float64)
+    tris = blade_idx.reshape(-1, 3)
+    e1 = pos2d[tris[:, 1]] - pos2d[tris[:, 0]]
+    e2 = pos2d[tris[:, 2]] - pos2d[tris[:, 0]]
+    unit_blade_area = float(0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum())
+
     splay_rad = math.radians(g.leaf_splay_deg)
-    cluster_factor = g.leaf_cluster_count * g.leaf_aspect * (1.0 + math.cos(splay_rad))
+    # Plane A area is reduced by cos(splay_rad) due to the shear from splay.
+    # Plane B area is unchanged (basis_u⊥leaf_up always).
+    pair_area = unit_blade_area * (math.cos(splay_rad) + 1.0)
+
     total = 0.0
     for _center, _direction, source_iod in sites:
         eff = compute_effective_leaf_size(source_iod, g.leaf_size, g.leaf_sun_shade_k)
-        total += (eff * eff) * cluster_factor
+        total += g.leaf_cluster_count * pair_area * (eff * eff)
     return total
 
 

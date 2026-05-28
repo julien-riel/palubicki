@@ -23,11 +23,14 @@ def _tree_with_n_terminal_buds(n):
     return tree
 
 
-def test_one_bud_eight_vertices_twelve_indices():
+def test_one_bud_default_shape_vert_count():
+    """Default leaf_shape=ovate (base N=16) + entire margin + cluster=1:
+    per face = 16 boundary + 1 anchor = 17 verts and 48 indices.
+    Two perpendicular faces per cluster member = 34 verts, 96 indices."""
     tree = _tree_with_n_terminal_buds(1)
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
-    assert prim.positions.shape == (8, 3)
-    assert prim.indices.shape == (12,)
+    assert prim.positions.shape == (34, 3)
+    assert prim.indices.shape == (96,)
 
 
 def test_dead_buds_excluded():
@@ -37,11 +40,11 @@ def test_dead_buds_excluded():
     assert prim.positions.shape == (0, 3)
 
 
-def test_three_buds_yields_24_vertices():
+def test_three_buds_yields_3x_default_blade_verts():
     tree = _tree_with_n_terminal_buds(3)
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
-    assert prim.positions.shape == (24, 3)
-    assert prim.indices.shape == (36,)
+    assert prim.positions.shape == (102, 3)
+    assert prim.indices.shape == (288,)
 
 
 def test_indices_within_bounds():
