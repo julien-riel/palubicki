@@ -139,7 +139,7 @@ For `list[Tree]`, every scalar leaf wraps to `{"mean", "stddev", "per_seed": [..
    - Both are grouped by **L's `axis_order`**.
    - Tangent for any internode I = `normalize(I.child_node.position - I.parent_node.position)`. Bent positions (with `sag_offset`) are NOT used here — insertion angles are measured against the topological geometry (the simulator's intent), not the post-sag bent geometry. (Sag distortion of angles is a separate concern.)
 
-4. **Divergence angle**: for each axis (maximal chain of internodes sharing one `axis_order`, linked through `is_main_axis=True` continuation), collect the lateral child internodes that hang off the axis in chain order. For each consecutive lateral pair `(L_i, L_{i+1})`:
+4. **Divergence angle**: for each axis (maximal chain of internodes linked by `is_main_axis=True` continuation — `Internode` itself has no `axis_order` field, so the chain is defined purely topologically; the per-internode axis order is reconstructed from `is_main_axis` via the `_axis_orders(root)` helper for grouping purposes), collect the lateral child internodes that hang off the axis in chain order. For each consecutive lateral pair `(L_i, L_{i+1})`:
    - Let `T` = axis tangent at `L_i`'s parent node, computed as the tangent of the incoming internode at that node (or the chain's first-internode tangent if at the chain's base).
    - Build the in-plane basis `(right, up)` via `_frame_perpendicular_to(T)` — the same helper that `sim/phyllotaxy.py` uses to place lateral buds. This guarantees the harness measures angles in the same basis the simulator generated them in.
    - Project each lateral's tangent onto the `(right, up)` plane; compute its azimuth `az_i = atan2(proj · up, proj · right)`.
@@ -222,7 +222,7 @@ Counts                           mean        stddev
 - Root-only tree → all histograms empty, `strahler_order_max=0`, angle dicts empty, `tree_height=root.position[1]`, all other floats `0.0`.
 - One-internode tree → `strahler_order_max=1`, histogram `{1:1}`, empty bifurcation_ratio dict, no angles.
 - Axis with one lateral → contributes nothing to divergence.
-- Axis order absent from any internode → key absent from angle dicts (not `n=0`).
+- Axis order absent from a tree's internodes → key absent from that tree's per-order dicts (not `n=0`). For multi-seed, see the schema rule above: a per-order key that appears in *some* trees stays present in the aggregate (with `per_seed: [val, None, ...]`); only orders missing from *all* seeds are omitted entirely.
 
 **When `cfg is None`** → `total_leaf_area=0.0` and report shows `— (leaf cfg not provided)`. Other metrics unaffected.
 

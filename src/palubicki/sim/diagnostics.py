@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict, deque
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -473,9 +474,6 @@ def _aggregate(per_tree: list[dict]) -> dict:
 
 
 # ── Reference-range flags and pretty-printer ──────────────────────────────
-
-from dataclasses import dataclass  # localised: only used here
-
 
 @dataclass
 class MetricRanges:
