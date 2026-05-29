@@ -299,3 +299,32 @@ def test_buttress_count_zero_is_axisymmetric():
     rad = _radial_dist(prim, 8)
     base_ring = rad[0:columns]
     np.testing.assert_allclose(base_ring, base_ring[0], atol=1e-9)  # all equal
+
+
+def _seeded_base_radius(seed: int, variation: float = 0.1):
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.6, flare_falloff="linear",
+        buttress_count=0, buttress_amplitude=0.0,
+        flare_variation=variation, seed=seed,
+    )
+    columns = 8 + 1
+    return _radial_dist(prim, 8)[0:columns]
+
+
+def test_variation_differs_by_seed():
+    rad0 = _seeded_base_radius(seed=0)
+    rad1 = _seeded_base_radius(seed=1)
+    assert not np.allclose(rad0, rad1)
+
+
+def test_variation_same_seed_is_deterministic():
+    assert np.allclose(_seeded_base_radius(seed=3), _seeded_base_radius(seed=3))
+
+
+def test_variation_zero_means_identical_flares():
+    rad0 = _seeded_base_radius(seed=0, variation=0.0)
+    rad1 = _seeded_base_radius(seed=99, variation=0.0)
+    # no buttress, no jitter => base radius identical regardless of seed
+    np.testing.assert_allclose(rad0, rad1, atol=1e-12)
