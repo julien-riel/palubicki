@@ -4,9 +4,21 @@
 
 **Code root:** `src/palubicki/`. Species presets currently shipped: **oak**, **birch**, **pine**, **maple**.
 
-**Last reviewed:** 2026-05-28, after parametric leaf blade (issue #4) landed on the issue branch.
+**Last reviewed:** 2026-05-29, after root flare (issue #8), true distichous phyllotaxis (#15), and the diagnostic harness (#13) landed on `main`. Bark variation by trunk radius (#9) is in progress on the current branch.
 
-## What changed since the previous review
+## What changed since the 2026-05-28 review
+
+All merged to `main` via the issue tracker:
+
+- **Diagnostic / validation harness** (`sim/diagnostics.py`, issue #13) — `compute_metrics` over one or many trees: Strahler/Horton bifurcation ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count, height/crown radius, trunk base diameter, total leaf area. Multi-seed aggregation plus literature-range ✓/✗ flagging via `MetricRanges`/`format_report`. This was the highest-priority remaining item in §11.
+- **True distichous phyllotaxis** (`sim/phyllotaxy.py` mode `"distichous"`, issue #15) — single bud per node, 180° alternation between successive nodes. The `distichous_on_plagiotropic` flag auto-switches plagiotropic (order > 0) axes to distichous, so conifer side-sprays form a flat 2-ranked plane — the exact fix §5/§10 flagged.
+- **Root flare at trunk base** (`geom/tubes.py` + `config.py`, issue #8 / PR #21) — per-vertex radius field at the trunk base, optional azimuthal buttress ridges with a welded seam, per-tree variation; `root_flare_height/factor/falloff`, `root_buttress_count/amplitude`, `root_flare_variation` config fields with per-species defaults. Pure render-time; the sim layer is untouched.
+- **Cross-blade leaf fix** (issue #18, follow-up to #4) — cross-blade geometry now only for linear (needle) shapes.
+- **Tooling** (PR #19, non-issue) — ruff config + GitHub Actions CI + simulator refactor.
+
+**In progress:** bark variation by trunk radius (issue #9, current branch) — see §8.
+
+## Earlier — Phases 2A–2D (2026-05-28 review)
 
 Phases 2A–2D were merged. Concretely, the following moved from ❌/🟡 to ✅:
 
@@ -112,14 +124,14 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
-| Distichous (true alternate 2-ranked, 180° with no rotation) | 🟡 | ⬆ Strengthened | `phyllotaxy.py` mode `"opposite"` (k=2) gives static 180° pairs but pairs *both* buds at each node. No mode that produces a *single* alternating bud (left, right, left, right). True distichous still missing as a named mode. | M | L | **ADD** — add a `"distichous"` mode (one bud per node, 180° divergence between successive nodes). Required for grasses and for the leaves on plagiotropic conifer branches. Trivial — one new branch in `phyllotaxy.py`. |
+| Distichous (true alternate 2-ranked, 180° with no rotation) | ✅ | ⬆ Implemented | `phyllotaxy.py` mode `"distichous"` (issue #15) — single bud per node, 180° alternation between successive nodes. The `distichous_on_plagiotropic` flag auto-switches plagiotropic (order > 0) axes to distichous, so conifer side-sprays form a flat 2-ranked plane. | — | — | **DONE** — unblocks grass leaves and visibly-correct conifer sprays. |
 | Opposite-decussate (pairs at 90° to previous pair) | ✅ | ⬆ Strengthened | `phyllotaxy.py:46–58` mode `"decussate"` (Phase 2C) — pair of buds at 180°, pair rotated by π/2 on alternating nodes | — | — | **DONE** — used by maple preset. The previous "opposite" mode was static 180° without alternation, so this was a real upgrade. |
 | Whorled | ✅ | = | `k=whorl_count` (pine: ×5 @ 72°) | — | — | — |
 | Spiral / golden angle (137.508°) | ✅ | = | Default `divergence_angle_deg=137.5` (oak, birch) | — | — | — |
 | Divergence jitter | ✅ | = | Gaussian σ, clamped | — | — | — |
 | Juvenile vs adult phyllotaxis switch | ❌ | = | — | L | L | **SKIP** |
 
-**Verdict.** Almost complete. The one remaining bug is the **missing true distichous mode** — needed for grasses and for plagiotropic conifer side-sprays (without it, a fir branch can have a flat *axis* via plagiotropism but its leaves still spiral instead of forming a 2-ranked flat plane).
+**Verdict.** Complete for the species in scope. True distichous (issue #15) landed and, via `distichous_on_plagiotropic`, fir/pine side-sprays now form a flat 2-ranked plane rather than spiralling. Only the juvenile-vs-adult phyllotaxis switch remains, and it stays **SKIP**.
 
 ---
 
@@ -148,10 +160,10 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
 | Below-ground root architecture | ❌ | = | — | L–M (not visible) | L | **LATER** — only worth it if roots are ever rendered. |
-| Root flare / buttresses / surface root collar | ❌ | = | — | M | L | **ADD** — one swept profile mesh at the trunk base. **Very cheap, very visible.** Still the highest realism-per-effort item in this section. |
+| Root flare / buttresses / surface root collar | ✅ | ⬆ Implemented | `geom/tubes.py` per-vertex radius field at the trunk base + optional azimuthal buttress ridges (welded seam) + per-tree variation; `config.py` `root_flare_height/factor/falloff`, `root_buttress_count/amplitude`, `root_flare_variation`; per-species defaults (issue #8 / PR #21). | — | — | **DONE** — pure render-time, sim layer untouched. |
 | Tropical buttresses, prop roots, aerial roots | ❌ | = | — | M (niche) | M | **SKIP** unless tropical species are planned. |
 
-**Verdict.** Unchanged. **Root flare remains a high-ROI quick win** — independent of all other work.
+**Verdict.** Root flare landed (issue #8) — the high-ROI quick win is banked. Below-ground architecture and tropical buttresses/prop roots stay **LATER/SKIP** until those species or root renders are scoped.
 
 ---
 
@@ -167,9 +179,9 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Annual rings | ❌ | = | — | L | M | **SKIP** |
 | Bark color / texture | ✅ | = | `GeomConfig.bark_color`, `bark_texture` | — | — | — |
 | Bark relief (3D displacement) | ❌ | = | — | M (close-up) | M–H | **LATER** |
-| Bark variation by age / radius along trunk | ❌ | = | One texture per species | L–M | L | **IMPROVE** — blend two bark textures by `Internode.diameter` (smooth at tips, cracked at base). Trivial shader work. |
+| Bark variation by age / radius along trunk | ❌ | = | One texture per species | L–M | L | **IN PROGRESS** (issue #9, current branch) — blend two bark textures by `Internode.diameter` (smooth at tips, cracked at base). Trivial shader work. |
 
-**Verdict.** Phase 2D upgraded this section to **the second-strongest area**. The visible behavior of growth — internodes elongating, trunk thickening, branches sagging in response — now plays out over the iteration sequence rather than being applied once at the end. Only `bark variation by age` remains as a cheap, visible win.
+**Verdict.** Phase 2D upgraded this section to **the second-strongest area**. The visible behavior of growth — internodes elongating, trunk thickening, branches sagging in response — now plays out over the iteration sequence rather than being applied once at the end. The last cheap, visible win in this section — `bark variation by age/radius` — is now in flight (issue #9, current branch).
 
 ---
 
@@ -193,14 +205,14 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Category | Status | Δ | What's missing | Recommendation |
 |---|---|---|---|---|
 | Deciduous broadleaf trees (oak, birch, **maple**) | ✅ (richer) | ⬆ Strengthened | Leaves-on-nodes, parametric blade, compound leaves, deciduousness. Maple added in Phase 2C with decussate + sympodial + plagiotropism + reiteration + sun/shade leaves. | Polish remaining leaf features before adding more presets. |
-| Conifers (pine) | ✅ (richer) | ⬆ Strengthened | True distichous needles on plagiotropic branches; fascicles; cones (close-up only). Plagiotropism from Phase 2A now enables flat tiered sprays in principle. | Add `"distichous"` phyllotaxis mode and `fascicle` parameter to unlock visibly correct conifers. |
-| Grasses (Poaceae) | ❌ | = | Intercalary meristems, tillering, distichous phyllotaxis, fibrous root, no secondary growth | **Big gap.** Still requires a tillering/intercalary system architecturally separate from the apical-tip growth currently implemented. |
+| Conifers (pine) | ✅ (richer) | ⬆ Strengthened | Distichous needles on plagiotropic branches landed (issue #15, `distichous_on_plagiotropic`); flat tiered sprays now render correctly. Remaining: fascicles (clusters of 2–5 needles); cones (close-up only). | Add `fascicle` parameter for close-up correctness; cones when close-up conifer renders matter. |
+| Grasses (Poaceae) | ❌ | = | Intercalary meristems, tillering, fibrous root, no secondary growth (distichous phyllotaxis now available, issue #15) | **Big gap.** Still requires a tillering/intercalary system architecturally separate from the apical-tip growth currently implemented. |
 | Herbaceous forbs (dandelion, sunflower, mint…) | ❌ | = | Determinate growth ending in inflorescence; rosettes (zero-length internodes); no secondary growth | **LATER** — needs determinate + inflorescences + zero-length-internode handling. |
 | Shrubs (lilac, dogwood, blueberry) | 🟡 | ⬆ Strengthened | Basitonic bud break now available via `cfg.sim.bud_break_bias.mode="basitonic"` (Phase 2 follow-up). Reiteration from reserves (Phase 2B) already mimics some shrub-like recovery behavior. | **ADD species presets** (lilac / dogwood / blueberry YAML) — the mechanism is in; remaining work is parameter tuning + a preset PR. |
 | Vines / lianas | ❌ | = | Climbing strategies, support-finding | **LATER** — substantial new system. |
 | Bulbs / rosettes / succulents | ❌ | = | Compressed internodes, photosynthetic stems, spines | **LATER** |
 
-**Verdict.** Coverage of woody dicots has gone from "two similar trees" to "three structurally different presets" (the oak / birch / maple set now spans alternate-spiral / spiral-with-droop / decussate-with-fork). Conifers gained the structural capacity for proper sprays via plagiotropism but still need distichous needles to look correct. Grasses, forbs, vines remain absent.
+**Verdict.** Coverage of woody dicots has gone from "two similar trees" to "three structurally different presets" (the oak / birch / maple set now spans alternate-spiral / spiral-with-droop / decussate-with-fork). Conifers now render proper flat 2-ranked sprays (plagiotropism + distichous, issue #15); only fascicles and cones remain for close-up correctness. Grasses, forbs, vines remain absent.
 
 ---
 
@@ -210,31 +222,30 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 |---|---|---|---|---|---|---|
 | Pipe model / da Vinci scaling | ✅ | = | `sim/radii.py` ~2.49 | — | — | — |
 | Trunk-diameter / height allometry (`H ∝ D^(2/3)`) | ❌ | = | — | L | L | **SKIP** as a constraint; consequence of mechanics. |
-| Strahler / Horton bifurcation ratios | ❌ | = | Not computed | L (constraint), M (diagnostic) | L | **ADD as diagnostic** — see harness below. |
+| Strahler / Horton bifurcation ratios | ✅ | ⬆ Implemented | `sim/diagnostics.py::_strahler_metrics` (issue #13) — Horton bifurcation ratio, flagged against the literature range (3.0–5.0) | — | — | **DONE as diagnostic** |
 | Fractal dimension of crown | ❌ | = | — | M | L–M | **LATER** |
 | Divergence angle | ✅ | = | `phyllotaxy.py` | — | — | — |
 | Insertion angle (base) | ✅ | = | `branch_angle_deg` + jitter | — | — | — |
 | Insertion angle varying by branch order | ✅ | ⬆ Promoted | `phyllotaxy.branch_angle_by_order` (Phase 2A) | — | — | **DONE** |
 | Per-species pipe exponent | ✅ | = | configurable | — | — | — |
 | Sympodial fork rate | ✅ | 🆕 | `Node.sympodial_fork` (Phase 2A) lets you count promotions | — | — | Useful diagnostic seed. |
-| Validation / diagnostic harness | ❌ | = | — | (process value, not visual) | L | **ADD** — Strahler ratio, mean divergence, mean insertion angle per order, leaf-area density, sympodial fork count, % buds in each state. Helps tune presets *much* faster. The `Node.sympodial_fork` flag is already a starter. |
+| Validation / diagnostic harness | ✅ | ⬆ Implemented | `sim/diagnostics.py::compute_metrics` (issue #13) over one or many trees — Strahler/Horton ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count, height/crown radius, trunk base diameter, total leaf area; multi-seed aggregation; literature-range ✓/✗ flagging via `MetricRanges`/`format_report` | — | — | **DONE** — speeds up all preset tuning. |
 
-**Verdict.** Generation side covers most named axes. Only **diagnostic measurement** is still missing — and now that the structural variety is wide enough (3 hardwoods, 1 conifer, multiple bud states), a one-shot diagnostic dump would pay for itself within a day of tuning. **Highest-priority new item in this section.**
+**Verdict.** Both the generation axes and the diagnostic side are now covered: `sim/diagnostics.py` (issue #13) emits Strahler/Horton ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count and leaf-area density, with literature-range flagging. Nothing high-priority remains here; fractal dimension stays **LATER**.
 
 ---
 
 ## Top remaining recommendations (ranked by realism-per-effort)
 
-These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D already delivered.
+These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D and the 2026-05-29 work (root flare #8, distichous #15, diagnostic harness #13) already delivered.
 
-1. **Compound leaves** (§6) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
-2. **True distichous (180°) phyllotaxis mode** (§5) — one new branch in `phyllotaxy.py`. Required for grass leaves and for visibly correct conifer side-sprays. No dependency.
+1. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems. **In progress (issue #9, current branch).**
+2. **Compound leaves** (§6) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
 3. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
-4. **Root flare at trunk base** (§7) — one swept-profile mesh. Very high visibility, no simulation dependency.
-5. **Diagnostic / validation harness** (§11) — print Strahler ratio, mean divergence, per-order insertion angles, sympodial fork count, leaf-area density per generated tree. Speeds up all future tuning.
-6. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems.
-7. **Petiole geometry** (§6) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
-8. **Fascicles of needles** (§6) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
+4. **Petiole geometry** (§6) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
+5. **Fascicles of needles** (§6) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
+
+*Landed since the previous review and removed from this list:* true distichous phyllotaxis (#15), root flare at trunk base (#8), diagnostic/validation harness (#13).
 
 ## Phase 1 — Foundation: time / phenology axis *(at the right moment)*
 
