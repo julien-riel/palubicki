@@ -570,7 +570,9 @@ class Config:
 
 # --- YAML loading ---
 
-from dataclasses import fields  # noqa: E402
+import types  # noqa: E402
+import typing  # noqa: E402
+from dataclasses import fields, is_dataclass  # noqa: E402
 
 import yaml  # noqa: E402
 
@@ -584,6 +586,71 @@ _SECTION_TYPES = {
     "light": LightConfig,
     "sag": SagConfig,
 }
+
+
+def _tuple_element_caster(args: tuple):
+    """Pick the scalar caster for a ``tuple[...]`` annotation's element type.
+
+    ``tuple[float, ...]`` / ``tuple[float, float, float]`` -> float;
+    ``tuple[int, int, int]`` -> int; anything mixed/bare/unknown -> identity.
+    """
+    scalars = [a for a in args if a is not Ellipsis]
+    if scalars and all(a is int for a in scalars):
+        return int
+    if scalars and all(a is float for a in scalars):
+        return float
+    return lambda x: x
+
+
+def _coerce_value(annotation, value, *, path: str):
+    """Coerce one field ``value`` to its ``annotation``: descend into nested
+    dataclasses, normalize sequences to (typed) tuples. Anything else passes
+    through. Values that are already the target type (e.g. a built dataclass
+    instance, or a tuple) are left untouched."""
+    origin = typing.get_origin(annotation)
+    args = typing.get_args(annotation)
+
+    # Optional[...] / `X | None`: keep None, otherwise coerce against the
+    # single non-None member.
+    if origin in (typing.Union, types.UnionType):
+        if value is None:
+            return None
+        non_none = [a for a in args if a is not type(None)]
+        if len(non_none) == 1:
+            return _coerce_value(non_none[0], value, path=path)
+        return value
+
+    if is_dataclass(annotation) and isinstance(value, dict):
+        return _coerce(annotation, value, path=path)
+
+    if origin is tuple and isinstance(value, (list, tuple)):
+        cast = _tuple_element_caster(args)
+        return tuple(cast(x) for x in value)
+
+    return value
+
+
+def _coerce(dc_type, data: dict, *, path: str):
+    """Recursively build a (frozen) dataclass from a nested dict.
+
+    Descends into fields whose annotation is itself a dataclass; normalizes
+    sequence fields to tuples; rejects unknown keys (with the dotted ``path``).
+    One definition shared by ``load_config`` and ``forest.per_tree_config`` so
+    nested coercion can never silently diverge between single-tree and forest
+    entry points.
+    """
+    if not isinstance(data, dict):
+        raise ConfigError(f"section {path!r} must be a mapping, got {type(data).__name__}")
+    allowed = {f.name for f in fields(dc_type)}
+    unknown = set(data) - allowed
+    if unknown:
+        raise ConfigError(f"unknown keys in section {path!r}: {sorted(unknown)}")
+    hints = typing.get_type_hints(dc_type)
+    kwargs = {
+        key: _coerce_value(hints.get(key), value, path=f"{path}.{key}")
+        for key, value in data.items()
+    }
+    return dc_type(**kwargs)
 
 
 def load_config(
@@ -611,47 +678,7 @@ def load_config(
 
     for name, type_ in _SECTION_TYPES.items():
         sec_data = data.get(name, {}) or {}
-        allowed = {f.name for f in fields(type_)}
-        unknown = set(sec_data) - allowed
-        if unknown:
-            raise ConfigError(f"unknown keys in section '{name}': {sorted(unknown)}")
-        if name == "phyllotaxy" and "branch_angle_by_order" in sec_data:
-            v = sec_data["branch_angle_by_order"]
-            if not isinstance(v, (list, tuple)):
-                raise ConfigError(
-                    f"phyllotaxy.branch_angle_by_order must be a list, got {type(v).__name__}"
-                )
-            sec_data = {**sec_data, "branch_angle_by_order": tuple(float(x) for x in v)}
-        if name == "sim" and "sympodial" in sec_data and isinstance(sec_data["sympodial"], dict):
-            sec_data = {**sec_data, "sympodial": SympodialConfig(**sec_data["sympodial"])}
-        if name == "sim" and "shade_mortality" in sec_data and isinstance(sec_data["shade_mortality"], dict):
-            sec_data = {**sec_data, "shade_mortality": ShadeMortalityConfig(**sec_data["shade_mortality"])}
-        if name == "sim" and isinstance(sec_data.get("elongation"), dict):
-            elong_data = sec_data["elongation"]
-            elong_allowed = {f.name for f in fields(ElongationConfig)}
-            elong_unknown = set(elong_data) - elong_allowed
-            if elong_unknown:
-                raise ConfigError(
-                    f"unknown keys in section 'sim.elongation': {sorted(elong_unknown)}"
-                )
-            sec_data = {**sec_data, "elongation": ElongationConfig(**elong_data)}
-        if name == "sim" and isinstance(sec_data.get("bud_break_bias"), dict):
-            bb_data = sec_data["bud_break_bias"]
-            bb_allowed = {f.name for f in fields(BudBreakConfig)}
-            bb_unknown = set(bb_data) - bb_allowed
-            if bb_unknown:
-                raise ConfigError(
-                    f"unknown keys in section 'sim.bud_break_bias': {sorted(bb_unknown)}"
-                )
-            sec_data = {**sec_data, "bud_break_bias": BudBreakConfig(**bb_data)}
-        if name == "sim" and "annual_growth_period" in sec_data:
-            v = sec_data["annual_growth_period"]
-            if not isinstance(v, (list, tuple)) or len(v) != 2:
-                raise ConfigError(
-                    f"sim.annual_growth_period must be a 2-element list, got {v!r}"
-                )
-            sec_data = {**sec_data, "annual_growth_period": tuple(float(x) for x in v)}
-        sections[name] = type_(**sec_data)
+        sections[name] = _coerce(type_, sec_data, path=name)
 
     if "forest" in data:
         sections["forest"] = _load_forest_config(data["forest"])
