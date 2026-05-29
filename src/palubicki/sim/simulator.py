@@ -9,6 +9,7 @@ import numpy as np
 
 from palubicki.config import Config
 from palubicki.sim.bh import allocate, compute_v_subtree
+from palubicki.sim.clock import Clock
 from palubicki.sim.bud_break_bias import compute_axis_positions, position_weight
 from palubicki.sim.elongation import compute_target_with_age, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
@@ -59,10 +60,17 @@ def simulate_forest(cfg: Config) -> Forest:
     no_new_streak = 0
     t0 = time.time()
     state = _SimState()
-    for iteration in range(cfg.sim.max_iterations):
+    clock = Clock(dt=cfg.sim.dt_years)
+    for iteration in range(cfg.sim.num_iterations):
+        clock.t = iteration * cfg.sim.dt_years
         if not any(t.active_buds for t in forest.trees):
             break
-        nodes_created = _iteration_step(forest, cfg, iteration, state, t0)
+        if not clock.in_window(*cfg.sim.annual_growth_period):
+            # Dormant season: age existing structure, emit nothing. Does NOT
+            # count toward the no-growth early-stop (that is for saturation).
+            _apply_temporal_dynamics(forest, cfg, clock.t)
+            continue
+        nodes_created = _iteration_step(forest, cfg, iteration, clock.t, state, t0)
         if nodes_created == 0:
             no_new_streak += 1
         else:
@@ -160,7 +168,7 @@ def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -
     return quality
 
 
-def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimState, t0: float) -> int:
+def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState, t0: float) -> int:
     """One simulation step on the whole forest. Returns total nodes created.
 
     For backward-compat: when len(trees)==1 and obstacles==[], this must produce
@@ -183,7 +191,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
     nodes_created_this_step = 0
     for tree in forest.trees:
         created, positions = _grow_tree(
-            tree, forest, cfg, iteration, state, res, light_info, quality
+            tree, forest, cfg, iteration, t, state, res, light_info, quality
         )
         nodes_created_this_step += created
         new_node_positions.extend(positions)
@@ -194,12 +202,12 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
     for tree in forest.trees:
         shed_low_quality(tree, cfg=cfg.shedding)
 
-    _apply_temporal_dynamics(forest, cfg, iteration)
+    _apply_temporal_dynamics(forest, cfg, t)
 
     logger.info(
-        "[%.1fs] sim/iter %d/%d  trees=%d  nodes_created=%d",
+        "[%.1fs] sim/iter %d/%d  year=%.2f  trees=%d  nodes_created=%d",
         time.time() - t0,
-        iteration + 1, cfg.sim.max_iterations,
+        iteration + 1, cfg.sim.num_iterations, t,
         len(forest.trees),
         nodes_created_this_step,
     )
@@ -207,7 +215,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, state: _SimStat
 
 
 def _grow_tree(
-    tree: Tree, forest: Forest, cfg: Config, iteration: int, state: _SimState,
+    tree: Tree, forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState,
     res, light_info, quality: dict,
 ) -> tuple[int, list[np.ndarray]]:
     """Grow one tree by one iteration. Returns (nodes_created, new_positions).
@@ -285,7 +293,7 @@ def _grow_tree(
                 new_active.append(cur)
                 chain.done = True
                 continue
-            target = _internode_target(cur, cfg, iteration, state)
+            target = _internode_target(cur, cfg, iteration, t, state)
             # Node placed at FINAL geometric position. During sim, length
             # ramps from 0 toward target (transient visual gap closes by
             # the finalization snap at end of simulate()).
@@ -304,7 +312,7 @@ def _grow_tree(
                     continue
 
             new_node, terminal = _emit_node(
-                cur, d, new_pos, target, is_main, light_info, tree, cfg, iteration, state
+                cur, d, new_pos, target, is_main, light_info, tree, cfg, iteration, t, state
             )
             new_positions.append(new_pos)
             nodes_created += 1
@@ -330,7 +338,7 @@ def _grow_tree(
     return nodes_created, new_positions
 
 
-def _internode_target(cur: Bud, cfg: Config, iteration: int, state: _SimState) -> float:
+def _internode_target(cur: Bud, cfg: Config, iteration: int, t: float, state: _SimState) -> float:
     """Length the new internode should reach: base length (optionally jittered)
     passed through the age-dependent elongation ramp.
 
@@ -346,15 +354,15 @@ def _internode_target(cur: Bud, cfg: Config, iteration: int, state: _SimState) -
         base_length = cfg.sim.internode_length * factor
     return compute_target_with_age(
         base_length=base_length,
-        birth_iteration=iteration,
-        max_iterations=cfg.sim.max_iterations,
+        birth_time=t,
+        total_years=cfg.sim.max_simulation_years,
         cfg=cfg.sim.elongation,
     )
 
 
 def _emit_node(
     cur: Bud, d: np.ndarray, new_pos: np.ndarray, target: float, is_main: bool,
-    light_info, tree: Tree, cfg: Config, iteration: int, state: _SimState,
+    light_info, tree: Tree, cfg: Config, iteration: int, t: float, state: _SimState,
 ) -> tuple[Node, Bud]:
     """Create the node + internode + terminal/lateral/reserve buds for one substep
     emission. Mutates tree.all_internodes, state.node_index, cur.parent_node's child
@@ -371,7 +379,7 @@ def _emit_node(
         is_main_axis=is_main,
         window=cfg.shedding.window,
         light_factor=lf,
-        birth_iteration=iteration,
+        birth_time=t,
         length_target=target,
     )
     cur.parent_node.children_internodes.append(iod)
@@ -482,12 +490,12 @@ def _reperceive_substep_terminals(
             chain.current = term
 
 
-def _apply_temporal_dynamics(forest: Forest, cfg: Config, iteration: int) -> None:
-    """Phase 2D per-iteration updates. Order matters: lengths first (sag reads
+def _apply_temporal_dynamics(forest: Forest, cfg: Config, t: float) -> None:
+    """Per-iteration aging updates. Order matters: lengths first (sag reads
     load = length × diameter²), diameters next (sag reads diameter), sag last."""
     if cfg.sim.elongation.enabled:
         for tree in forest.trees:
-            update_lengths(tree, current_iteration=iteration, cfg=cfg.sim.elongation)
+            update_lengths(tree, current_time=t, cfg=cfg.sim.elongation)
     for tree in forest.trees:
         update_diameters_incremental(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
     if cfg.sag.enabled:

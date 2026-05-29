@@ -19,7 +19,7 @@ def _tiny_config(tmp_path):
         sim=SimConfig(
             r_perception=0.3, theta_perception_deg=80.0, r_kill=0.1,
             internode_length=0.1, alpha_basipetal=2.0, lambda_apical=0.55,
-            max_iterations=10,
+            max_simulation_years=10.0,
         ),
         tropism=TropismConfig(w_perception=1.0, w_orthotropy_main=0.2, w_direction_inertia=0.3),
         phyllotaxy=PhyllotaxyConfig(),
@@ -52,7 +52,7 @@ def test_simulate_stops_at_max_iterations(tmp_path):
     # 0 iterations -> just root, no internodes
     cfg_0 = Config(
         envelope=cfg.envelope,
-        sim=SimConfig(max_iterations=0, internode_length=0.1),
+        sim=SimConfig(max_simulation_years=0.0, internode_length=0.1),
         tropism=cfg.tropism, phyllotaxy=cfg.phyllotaxy,
         shedding=cfg.shedding, geom=cfg.geom,
         seed=cfg.seed, output=cfg.output,
@@ -81,7 +81,7 @@ def test_no_spikes_outside_envelope(tmp_path):
     blasting through the envelope."""
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=1000),
-        sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_iterations=15),
+        sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_simulation_years=15.0),
         tropism=TropismConfig(w_perception=1.0, w_orthotropy_main=0.3, w_direction_inertia=0.4),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -111,7 +111,7 @@ def test_deep_tree_no_recursion_error(tmp_path):
     """Regression: default-config tree depth used to exceed Python recursion limit."""
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=5000),
-        sim=SimConfig(max_iterations=20),
+        sim=SimConfig(max_simulation_years=20.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=True),
@@ -153,7 +153,7 @@ def test_simulator_v1_bit_exact_when_light_disabled():
 
     cfg_v1 = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=8),
+        sim=SimConfig(max_simulation_years=8.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(),
@@ -168,7 +168,7 @@ def test_simulator_v1_bit_exact_when_light_disabled():
     # Re-run with light *missing entirely* (default = disabled) — same result.
     cfg_default = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=8),
+        sim=SimConfig(max_simulation_years=8.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(),
@@ -198,7 +198,7 @@ def test_simulator_light_enabled_zero_absorption_equivalent_to_disabled():
 
     base_kwargs = {
         "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        "sim": SimConfig(max_iterations=8),
+        "sim": SimConfig(max_simulation_years=8.0),
         "tropism": TropismConfig(),
         "phyllotaxy": PhyllotaxyConfig(),
         "shedding": SheddingConfig(),
@@ -230,7 +230,7 @@ def test_simulator_light_enabled_reduces_density():
 
     base_kwargs = {
         "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        "sim": SimConfig(max_iterations=10),
+        "sim": SimConfig(max_simulation_years=10.0),
         "tropism": TropismConfig(w_phototropism=0.3),
         "phyllotaxy": PhyllotaxyConfig(),
         "shedding": SheddingConfig(),
@@ -268,7 +268,7 @@ def test_simulator_light_reproducible():
 
     base = {
         "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        "sim": SimConfig(max_iterations=6),
+        "sim": SimConfig(max_simulation_years=6.0),
         "tropism": TropismConfig(w_phototropism=0.3),
         "phyllotaxy": PhyllotaxyConfig(),
         "shedding": SheddingConfig(),
@@ -303,7 +303,7 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=3, ry=5, rz=3, shape="ellipsoid", marker_count=5000),
-        sim=SimConfig(max_iterations=10),
+        sim=SimConfig(max_simulation_years=10.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(),
@@ -350,7 +350,7 @@ def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=3000),
-        sim=SimConfig(max_iterations=8),
+        sim=SimConfig(max_simulation_years=8.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "x.glb", seed=42,
@@ -384,7 +384,7 @@ def test_simulate_forest_reproducible(tmp_path):
     def make_cfg():
         return Config(
             envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
-            sim=SimConfig(max_iterations=6),
+            sim=SimConfig(max_simulation_years=6.0),
             tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
             shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
             output=tmp_path / "x.glb", seed=99,
@@ -421,7 +421,7 @@ def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
-        sim=SimConfig(max_iterations=4, internode_length=0.5),
+        sim=SimConfig(max_simulation_years=4.0, internode_length=0.5),
         tropism=TropismConfig(w_orthotropy_main=0.0),   # don't fight gravity, just go up
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),  # disable shedding for clarity
@@ -461,7 +461,7 @@ def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
     from palubicki.sim.simulator import simulate_forest
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
-        sim=SimConfig(max_iterations=6, internode_length=0.3),
+        sim=SimConfig(max_simulation_years=6.0, internode_length=0.3),
         tropism=TropismConfig(w_orthotropy_main=0.0),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -499,7 +499,7 @@ def test_internode_length_jitter_disabled_keeps_constant_length():
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=300),
         sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1,
-                      internode_length_jitter=0.0, max_iterations=6),
+                      internode_length_jitter=0.0, max_simulation_years=6.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -533,7 +533,7 @@ def test_internode_length_jitter_deterministic_with_seed():
         cfg = Config(
             envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=300),
             sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1,
-                          internode_length_jitter=0.15, max_iterations=6),
+                          internode_length_jitter=0.15, max_simulation_years=6.0),
             tropism=TropismConfig(),
             phyllotaxy=PhyllotaxyConfig(),
             shedding=SheddingConfig(enabled=False),
@@ -575,7 +575,7 @@ def test_simulator_emits_dormant_reserves_when_configured(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=8),
+        sim=SimConfig(max_simulation_years=8.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(mode="alternate", dormant_reserve_count=2),
         shedding=SheddingConfig(enabled=False),
@@ -622,7 +622,7 @@ def test_simulator_no_reserves_when_count_zero(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=5),
+        sim=SimConfig(max_simulation_years=5.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(mode="alternate", dormant_reserve_count=0),
         shedding=SheddingConfig(enabled=False),
@@ -659,7 +659,7 @@ def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(shape="half_ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
         sim=SimConfig(
-            max_iterations=15,
+            max_simulation_years=15.0,
             shade_mortality=ShadeMortalityConfig(
                 enabled=True, light_threshold=0.99, n_consecutive_steps=2,
             ),
@@ -688,7 +688,7 @@ def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
     assert dead > 0, "expected shade mortality to kill at least one bud"
 
 
-def test_internodes_record_birth_iteration_and_length_target(tmp_path):
+def test_internodes_record_birth_time_and_length_target(tmp_path):
     from palubicki.config import (
         Config,
         ElongationConfig,
@@ -703,8 +703,8 @@ def test_internodes_record_birth_iteration_and_length_target(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=2.0, rz=2.0, marker_count=500),
-        sim=SimConfig(max_iterations=5,
-                      elongation=ElongationConfig(enabled=True, tau_iterations=2.0)),
+        sim=SimConfig(max_simulation_years=5.0,
+                      elongation=ElongationConfig(enabled=True, tau_years=2.0)),
         tropism=TropismConfig(w_orthotropy_main=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -715,7 +715,7 @@ def test_internodes_record_birth_iteration_and_length_target(tmp_path):
     tree = simulate(cfg)
     assert len(tree.all_internodes) > 0
     for iod in tree.all_internodes:
-        assert 0 <= iod.birth_iteration < cfg.sim.max_iterations
+        assert 0 <= iod.birth_time < cfg.sim.max_simulation_years
         assert iod.length_target > 0.0
 
 
@@ -735,8 +735,8 @@ def test_finalization_snaps_length_to_target(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=2.0, rz=2.0, marker_count=500),
-        sim=SimConfig(max_iterations=8,
-                      elongation=ElongationConfig(enabled=True, tau_iterations=3.0)),
+        sim=SimConfig(max_simulation_years=8.0,
+                      elongation=ElongationConfig(enabled=True, tau_years=3.0)),
         tropism=TropismConfig(w_orthotropy_main=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -748,6 +748,6 @@ def test_finalization_snaps_length_to_target(tmp_path):
     assert len(tree.all_internodes) > 0
     for iod in tree.all_internodes:
         assert iod.length == iod.length_target, (
-            f"internode born at {iod.birth_iteration}: length={iod.length}, "
+            f"internode born at {iod.birth_time}: length={iod.length}, "
             f"target={iod.length_target}"
         )
