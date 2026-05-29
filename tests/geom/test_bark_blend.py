@@ -50,3 +50,7 @@ def test_degenerate_equal_stops_no_nan():
     )
     out = bark_tint(np.array([0.05, 0.10, 0.20]), stops)
     assert np.isfinite(out).all()
+    # Pin the documented degenerate semantics: below the collapsed stop the lower
+    # segment yields c_young; at/above it the upper segment yields c_mature.
+    np.testing.assert_allclose(out[0], [0.4, 0.4, 0.4], atol=1e-6)
+    np.testing.assert_allclose(out[1], [0.3, 0.3, 0.3], atol=1e-6)
