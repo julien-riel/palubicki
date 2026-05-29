@@ -614,3 +614,21 @@ def test_buttress_amplitude_out_of_range_rejected():
 def test_flare_variation_out_of_range_rejected():
     with pytest.raises(ConfigError, match="root_flare_variation"):
         _geom_cfg(root_flare_variation=1.5)
+
+
+def test_geomconfig_blend_off_by_default():
+    g = GeomConfig()
+    assert g.bark_tint_young is None
+    assert g.bark_tint_mature is None
+    assert g.bark_tint_senescent is None
+    # default stops present and ordered
+    assert g.bark_blend_diameter_young <= g.bark_blend_diameter_mature <= g.bark_blend_diameter_senescent
+
+
+def test_geomconfig_accepts_tints():
+    g = GeomConfig(
+        bark_tint_young=(0.45, 0.38, 0.30),
+        bark_tint_mature=(0.35, 0.22, 0.12),
+        bark_tint_senescent=(0.22, 0.20, 0.16),
+    )
+    assert g.bark_tint_young == (0.45, 0.38, 0.30)

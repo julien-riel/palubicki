@@ -262,6 +262,20 @@ class GeomConfig:
     root_flare_variation: float = field(
         default=0.08, metadata={"ui": {"min": 0.0, "max": 0.9, "step": 0.01}}
     )
+    # Issue #9: three-way bark tint blended by Internode.diameter.
+    # Presence-gated: bark_tint_young is None => blend off, identical to today.
+    bark_tint_young: tuple[float, float, float] | None = None
+    bark_tint_mature: tuple[float, float, float] | None = None      # None => falls back to bark_color
+    bark_tint_senescent: tuple[float, float, float] | None = None   # None => two-way (young->mature)
+    bark_blend_diameter_young: float = field(
+        default=0.02, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
+    )
+    bark_blend_diameter_mature: float = field(
+        default=0.10, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
+    )
+    bark_blend_diameter_senescent: float = field(
+        default=0.30, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.005}}
+    )
 
 
 @dataclass(frozen=True)
