@@ -22,7 +22,9 @@ def _flatten(mesh: Mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     Returns:
         tri:   (T, 3, 3) float32 — T triangles, each as 3 vertices in 3D
         norm:  (T, 3)    float32 — unit-length face normal per triangle
-        col:   (T, 3)    float32 — RGB face color from primitive's base_color
+        col:   (T, 3)    float32 — RGB face color: mean of the triangle's
+               per-vertex colors when the primitive carries them, else the
+               primitive's base_color
     """
     tris: list[np.ndarray] = []
     norms: list[np.ndarray] = []
