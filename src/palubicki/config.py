@@ -267,14 +267,17 @@ class GeomConfig:
     bark_tint_young: tuple[float, float, float] | None = None
     bark_tint_mature: tuple[float, float, float] | None = None      # None => falls back to bark_color
     bark_tint_senescent: tuple[float, float, float] | None = None   # None => two-way (young->mature)
+    # Stops calibrated to the sim's actual internode-diameter scale: 99% of
+    # internodes are 1.6-8.6 cm (median ~2 cm), so the gradient spans the range
+    # branches occupy rather than 2-30 cm where only the trunk lives (#9).
     bark_blend_diameter_young: float = field(
-        default=0.02, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
+        default=0.015, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
     )
     bark_blend_diameter_mature: float = field(
-        default=0.10, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
+        default=0.035, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.005}}
     )
     bark_blend_diameter_senescent: float = field(
-        default=0.30, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.005}}
+        default=0.07, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.005}}
     )
 
 

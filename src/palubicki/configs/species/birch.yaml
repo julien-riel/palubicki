@@ -77,6 +77,6 @@ geom:
   bark_tint_young: [0.90, 0.89, 0.85]
   bark_tint_mature: [0.85, 0.82, 0.75]
   bark_tint_senescent: [0.28, 0.26, 0.24]
-  bark_blend_diameter_young: 0.02
-  bark_blend_diameter_mature: 0.10
-  bark_blend_diameter_senescent: 0.30
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07
