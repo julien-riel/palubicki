@@ -23,7 +23,7 @@ pytestmark = pytest.mark.slow
 def test_end_to_end_per_envelope(tmp_path, shape):
     cfg = Config(
         envelope=EnvelopeConfig(shape=shape, rx=0.5, ry=1.0, rz=0.5, marker_count=400),
-        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_simulation_years=8.0),
+        sim=SimConfig(r_perception=0.3, r_kill=0.1, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=8.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -44,7 +44,7 @@ def test_end_to_end_per_envelope(tmp_path, shape):
 def test_end_to_end_per_envelope_light_enabled(tmp_path, shape):
     cfg = Config(
         envelope=EnvelopeConfig(shape=shape, rx=0.5, ry=1.0, rz=0.5, marker_count=400),
-        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_simulation_years=6.0),
+        sim=SimConfig(r_perception=0.3, r_kill=0.1, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=6.0),
         tropism=TropismConfig(w_phototropism=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),

@@ -60,7 +60,7 @@ def test_light_enabled_raises_centroid():
     shaded by the canopy and shed, while upper growth is favoured. The mean y
     position of internode endpoints should be higher with light enabled.
 
-    Re-tuned for SimConfig.n_substeps_max=1 regime: the per-bud cap means light_factor
+    Each bud now extends a single internode per iteration unconditionally, so light_factor
     no longer scales internode count per iteration, only the dormancy gate (Q*light <1).
     Stronger absorption (k=2.5) is needed so shaded buds reliably cross below the cap,
     and more iterations (30) let the upward bias accumulate. Phototropism weight stays

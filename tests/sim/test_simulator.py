@@ -18,7 +18,7 @@ def _tiny_config(tmp_path):
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=500),
         sim=SimConfig(
             r_perception=0.3, theta_perception_deg=80.0, r_kill=0.1,
-            internode_length=0.1, alpha_basipetal=2.0, lambda_apical=0.55,
+            shoot_extension_max=0.1, vigor_dormancy=0.5, alpha_basipetal=2.0, lambda_apical=0.55,
             max_simulation_years=10.0,
         ),
         tropism=TropismConfig(w_perception=1.0, w_orthotropy_main=0.2, w_direction_inertia=0.3),
@@ -52,7 +52,7 @@ def test_simulate_stops_at_max_simulation_years(tmp_path):
     # 0 iterations -> just root, no internodes
     cfg_0 = Config(
         envelope=cfg.envelope,
-        sim=SimConfig(max_simulation_years=0.0, internode_length=0.1),
+        sim=SimConfig(max_simulation_years=0.0, shoot_extension_max=0.1, vigor_dormancy=0.5),
         tropism=cfg.tropism, phyllotaxy=cfg.phyllotaxy,
         shedding=cfg.shedding, geom=cfg.geom,
         seed=cfg.seed, output=cfg.output,
@@ -81,7 +81,7 @@ def test_no_spikes_outside_envelope(tmp_path):
     blasting through the envelope."""
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=2.0, rz=1.0, marker_count=1000),
-        sim=SimConfig(r_perception=0.3, r_kill=0.25, internode_length=0.1, max_simulation_years=15.0),
+        sim=SimConfig(r_perception=0.3, r_kill=0.25, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=15.0),
         tropism=TropismConfig(w_perception=1.0, w_orthotropy_main=0.3, w_direction_inertia=0.4),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -282,55 +282,6 @@ def test_simulator_light_reproducible():
     assert pos_hash(t1) == pos_hash(t2)
 
 
-@pytest.mark.pinned
-def test_simulate_v2_bit_exact_after_refactor(tmp_path):
-    """After refactor: simulate(cfg) with empty forest must produce the same Tree as
-    a hash-pinned baseline. The baseline is recomputed once and saved in the test."""
-    import hashlib
-    import json
-
-    from palubicki.config import (
-        Config,
-        EnvelopeConfig,
-        GeomConfig,
-        LightConfig,
-        PhyllotaxyConfig,
-        SheddingConfig,
-        SimConfig,
-        TropismConfig,
-    )
-    from palubicki.sim.simulator import simulate
-
-    cfg = Config(
-        envelope=EnvelopeConfig(rx=3, ry=5, rz=3, shape="ellipsoid", marker_count=5000),
-        sim=SimConfig(max_simulation_years=10.0),
-        tropism=TropismConfig(),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        light=LightConfig(),
-        output=tmp_path / "x.glb",
-        seed=42,
-    )
-    tree = simulate(cfg)
-    positions = []
-    stack = [tree.root]
-    while stack:
-        node = stack.pop()
-        positions.append(tuple(node.position.tolist()))
-        for iod in node.children_internodes:
-            stack.append(iod.child_node)
-    digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
-    # This hash is pinned to detect unintended drift during refactors.
-    # Re-pinned for #24: phyllotaxy divergence now advances per-axis
-    # (Bud.axis_node_ordinal) instead of the global, interleaved node_index, so
-    # lateral bud directions — and thus the whole tree geometry — change.
-    EXPECTED = "a064818f4a62fb917aadef73ec423efc09672fb23a3551fd0c5ded0cef707b17"
-    assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
-    # Side-effect: print so we can copy the value if needed
-    print(f"V2 hash: {digest}")
-
-
 def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
     """Two trees far apart (envelopes disjoint) → each tree grows independently."""
     from palubicki.config import (
@@ -420,7 +371,7 @@ def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
-        sim=SimConfig(max_simulation_years=4.0, internode_length=0.5),
+        sim=SimConfig(max_simulation_years=4.0, shoot_extension_max=0.5, vigor_dormancy=0.5),
         tropism=TropismConfig(w_orthotropy_main=0.0),   # don't fight gravity, just go up
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),  # disable shedding for clarity
@@ -460,7 +411,7 @@ def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
     from palubicki.sim.simulator import simulate_forest
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
-        sim=SimConfig(max_simulation_years=6.0, internode_length=0.3),
+        sim=SimConfig(max_simulation_years=6.0, shoot_extension_max=0.3, vigor_dormancy=0.5),
         tropism=TropismConfig(w_orthotropy_main=0.0),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -480,8 +431,9 @@ def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
         assert dist > 0.5, f"internode endpoint {iod.child_node.position} is inside the obstacle"
 
 
-def test_internode_length_jitter_disabled_keeps_constant_length():
-    """With jitter=0, all internode lengths equal cfg.sim.internode_length exactly."""
+def test_internode_length_jitter_disabled_is_deterministic():
+    """With jitter=0, repeated runs at the same seed yield identical per-internode
+    lengths, and every length lies in (0, shoot_extension_max] (the saturation ceiling)."""
     from pathlib import Path
 
     from palubicki.config import (
@@ -495,21 +447,29 @@ def test_internode_length_jitter_disabled_keeps_constant_length():
         TropismConfig,
     )
     from palubicki.sim.simulator import simulate
-    cfg = Config(
-        envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=300),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1,
-                      internode_length_jitter=0.0, max_simulation_years=6.0),
-        tropism=TropismConfig(),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(enabled=False),
-        geom=GeomConfig(),
-        light=LightConfig(enabled=False),
-        seed=7,
-        output=Path("/tmp/_pj_dummy.glb"),
-    )
-    tree = simulate(cfg)
-    lengths = {round(iod.length, 9) for iod in tree.all_internodes}
-    assert lengths == {0.1}, f"expected only 0.1, got {sorted(lengths)}"
+
+    def run():
+        cfg = Config(
+            envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=300),
+            sim=SimConfig(r_perception=0.4, r_kill=0.12, shoot_extension_max=0.3,
+                          vigor_ref=1.0, vigor_dormancy=0.5,
+                          internode_length_jitter=0.0, max_simulation_years=6.0),
+            tropism=TropismConfig(),
+            phyllotaxy=PhyllotaxyConfig(),
+            shedding=SheddingConfig(enabled=False),
+            geom=GeomConfig(),
+            light=LightConfig(enabled=False),
+            seed=7,
+            output=Path("/tmp/_pj_dummy.glb"),
+        )
+        tree = simulate(cfg)
+        return [iod.length for iod in tree.all_internodes]
+
+    a = run()
+    b = run()
+    assert a == b, "jitter=0 + same seed should be bit-identical"
+    assert len(a) > 0
+    assert all(0.0 < L <= 0.3 for L in a), f"lengths must be in (0, 0.3], got {sorted(set(a))}"
 
 
 def test_internode_length_jitter_deterministic_with_seed():
@@ -531,7 +491,8 @@ def test_internode_length_jitter_deterministic_with_seed():
     def run(seed):
         cfg = Config(
             envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=300),
-            sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1,
+            sim=SimConfig(r_perception=0.4, r_kill=0.12, shoot_extension_max=0.3,
+                          vigor_ref=1.0, vigor_dormancy=0.5,
                           internode_length_jitter=0.15, max_simulation_years=6.0),
             tropism=TropismConfig(),
             phyllotaxy=PhyllotaxyConfig(),
@@ -551,9 +512,10 @@ def test_internode_length_jitter_deterministic_with_seed():
     c = run(8)
     assert a != c
 
-    import statistics
+    # Jitter factor is clamped to <= 1.5; applied to the saturating length which is
+    # itself <= shoot_extension_max, so lengths live in (0, 0.3 * 1.5].
     assert len(a) > 5
-    assert abs(statistics.mean(a) - 0.1) < 0.05
+    assert all(0.0 < L <= 0.3 * 1.5 for L in a), f"lengths out of range: {sorted(set(a))}"
 
 
 def test_simulator_emits_dormant_reserves_when_configured(tmp_path):

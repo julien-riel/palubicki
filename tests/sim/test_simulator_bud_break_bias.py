@@ -18,7 +18,7 @@ def _minimal_config(tmp_path, bud_break_bias: BudBreakConfig) -> Config:
         envelope=EnvelopeConfig(rx=2.0, ry=4.0, rz=2.0, marker_count=2000),
         sim=SimConfig(
             max_simulation_years=12.0,
-            internode_length=0.15,
+            shoot_extension_max=0.15, vigor_dormancy=0.5,
             bud_break_bias=bud_break_bias,
         ),
         tropism=TropismConfig(w_orthotropy_main=0.5, w_orthotropy_lateral=0.0),

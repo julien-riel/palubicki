@@ -88,7 +88,7 @@ def test_sim_section_exposes_expected_fields():
     assert "lambda_apical" in names
     assert "r_perception" in names
     assert "r_kill" in names
-    assert "internode_length" in names
+    assert "shoot_extension_max" in names
 
 
 def test_top_level_seed_exposed():
