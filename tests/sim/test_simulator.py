@@ -718,6 +718,18 @@ def test_internodes_record_birth_time_and_length_target(tmp_path):
         assert iod.length_target > 0.0
 
 
+def test_bud_and_internode_have_vigor_fields():
+    import numpy as np
+    from palubicki.sim.tree import Bud, Internode, Node
+    root = Node(position=np.zeros(3))
+    bud = Bud(position=np.zeros(3), direction=np.array([0.0, 1.0, 0.0]),
+              axis_order=0, parent_node=root)
+    assert bud.recent_vigor == 0.0
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=root, child_node=child, length=1.0, is_main_axis=True)
+    assert iod.vigor == 0.0
+
+
 def test_finalization_snaps_length_to_target(tmp_path):
     """After simulate(), every internode must have length == length_target."""
     from palubicki.config import (
