@@ -61,7 +61,8 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--envelope", choices=["sphere", "ellipsoid", "cone", "half_ellipsoid"], default=None)
     g.add_argument("--envelope-radii", nargs=3, type=float, metavar=("RX", "RY", "RZ"), default=None)
     g.add_argument("--marker-count", type=int, default=None)
-    g.add_argument("--iterations", type=int, default=None)
+    g.add_argument("--years", type=float, default=None, dest="years")
+    g.add_argument("--dt-years", type=float, default=None, dest="dt_years")
     g.add_argument("--lambda", dest="lambda_apical", type=float, default=None)
     g.add_argument("--leaf-texture", type=Path, default=None)
     g.add_argument("--no-leaves", action="store_true")
@@ -200,8 +201,10 @@ def _cmd_generate(args) -> int:
         overrides["envelope.rz"] = args.envelope_radii[2]
     if args.marker_count is not None:
         overrides["envelope.marker_count"] = args.marker_count
-    if args.iterations is not None:
-        overrides["sim.max_iterations"] = args.iterations
+    if args.years is not None:
+        overrides["sim.max_simulation_years"] = args.years
+    if args.dt_years is not None:
+        overrides["sim.dt_years"] = args.dt_years
     if args.lambda_apical is not None:
         overrides["sim.lambda_apical"] = args.lambda_apical
     if args.leaf_texture is not None:
@@ -240,7 +243,7 @@ def _cmd_generate(args) -> int:
         asset_meta = {
             "seed": cfg.seed,
             "envelope": cfg.envelope.shape,
-            "iterations": cfg.sim.max_iterations,
+            "simulation_years": cfg.sim.max_simulation_years,
             "config": _config_to_dict(cfg),
         }
         write_glb(mesh, cfg.output, asset_meta=asset_meta)

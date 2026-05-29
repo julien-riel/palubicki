@@ -27,7 +27,7 @@ def test_dump_defaults_yaml_parsable():
     data = yaml.safe_load(res.stdout)
     assert "envelope" in data
     assert "sim" in data
-    assert data["sim"]["max_iterations"] == 30
+    assert data["sim"]["max_simulation_years"] == 30.0
 
 
 @pytest.mark.slow
@@ -38,7 +38,7 @@ def test_generate_minimal(tmp_path):
                "--envelope", "ellipsoid",
                "--envelope-radii", "0.5", "1.0", "0.5",
                "--marker-count", "300",
-               "--iterations", "6",
+               "--years", "6",
                "--seed", "1")
     assert res.returncode == 0, res.stderr
     assert out.exists()
@@ -61,7 +61,7 @@ def test_cli_light_enabled_flag(tmp_path):
                "--envelope", "ellipsoid",
                "--envelope-radii", "0.5", "1.0", "0.5",
                "--marker-count", "300",
-               "--iterations", "4",
+               "--years", "4",
                "--seed", "42",
                "--light-enabled")
     assert res.returncode == 0, res.stderr
@@ -112,7 +112,7 @@ def test_cli_forest_missing_mesh_returns_clean_error(tmp_path, capsys):
 envelope:
   marker_count: 500
 sim:
-  max_iterations: 2
+  max_simulation_years: 2
 forest:
   obstacles:
     - kind: mesh
@@ -134,7 +134,7 @@ def test_generate_species_creates_valid_glb(tmp_path, species):
     out = tmp_path / f"{species}.glb"
     res = _run("generate", "--species", species, "--seed", "42",
                "--marker-count", "500",
-               "--iterations", "8",
+               "--years", "8",
                "-o", str(out))
     assert res.returncode == 0, res.stderr
     assert out.exists()
@@ -167,7 +167,7 @@ def test_preview_smoke(tmp_path):
         "--envelope", "ellipsoid",
         "--envelope-radii", "0.5", "1.0", "0.5",
         "--marker-count", "200",
-        "--iterations", "4",
+        "--years", "4",
     ])
     assert rc == 0
     assert glb.exists()
@@ -223,7 +223,7 @@ def test_preview_renderer_dep_missing_exits_2(tmp_path, capsys, monkeypatch):
         "--envelope", "ellipsoid",
         "--envelope-radii", "0.5", "1.0", "0.5",
         "--marker-count", "200",
-        "--iterations", "4",
+        "--years", "4",
     ])
     assert rc == 0
 
