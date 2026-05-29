@@ -47,3 +47,24 @@ def test_bark_has_positions(tmp_path):
     tree = simulate(cfg)
     mesh = build_mesh(tree, cfg)
     assert mesh.primitives[0].positions.shape[0] > 0
+
+
+def test_build_mesh_applies_flare_from_config():
+    import numpy as np
+
+    def cfg(factor):
+        return Config(
+            envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=400),
+            sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=8),
+            tropism=TropismConfig(),
+            phyllotaxy=PhyllotaxyConfig(),
+            shedding=SheddingConfig(enabled=False),
+            geom=GeomConfig(root_flare_factor=factor, root_flare_height=0.5, root_flare_variation=0.0),
+            seed=7,
+        )
+
+    tree = simulate(cfg(1.0))
+    flat = build_mesh(tree, cfg(1.0)).primitives[0].positions
+    flared = build_mesh(tree, cfg(2.0)).primitives[0].positions
+    # flaring the base must move at least some bark vertices outward
+    assert not np.array_equal(flat, flared)

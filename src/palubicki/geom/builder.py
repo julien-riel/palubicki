@@ -22,7 +22,18 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         alpha_cutoff=0.5,
         double_sided=False,
     )
-    bark_prim = build_bark_primitive(tree, ring_sides=cfg.geom.ring_sides, material=bark_mat)
+    bark_prim = build_bark_primitive(
+        tree,
+        ring_sides=cfg.geom.ring_sides,
+        material=bark_mat,
+        flare_height=cfg.geom.root_flare_height,
+        flare_factor=cfg.geom.root_flare_factor,
+        flare_falloff=cfg.geom.root_flare_falloff,
+        buttress_count=cfg.geom.root_buttress_count,
+        buttress_amplitude=cfg.geom.root_buttress_amplitude,
+        flare_variation=cfg.geom.root_flare_variation,
+        seed=cfg.seed,
+    )
     primitives = [bark_prim]
 
     if cfg.geom.enable_leaves:

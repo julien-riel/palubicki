@@ -69,3 +69,7 @@ geom:
   leaf_splay_deg: 20
   foliage_depth: 3
   leaf_sun_shade_k: 0.0
+  root_flare_height: 0.2
+  root_flare_factor: 1.3
+  root_flare_falloff: linear
+  root_buttress_count: 0

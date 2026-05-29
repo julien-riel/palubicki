@@ -205,3 +205,126 @@ def test_build_bark_primitive_reads_sag_offset():
 
     # The tube tip should have moved downward.
     assert bent_max_y < baseline_max_y - 0.3
+
+
+def test_falloff_linear_identity():
+    from palubicki.geom.tubes import _falloff
+    t = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+    np.testing.assert_allclose(_falloff(t, "linear"), t)
+
+
+def test_falloff_smoothstep_known_values():
+    from palubicki.geom.tubes import _falloff
+    t = np.array([0.0, 0.25, 0.5, 1.0])
+    # 3t^2 - 2t^3
+    expected = np.array([0.0, 0.15625, 0.5, 1.0])
+    np.testing.assert_allclose(_falloff(t, "smoothstep"), expected)
+
+
+def _radial_dist(prim, ring_sides):
+    # radial distance from the +Y axis for each vertex (vertical chain through origin)
+    return np.sqrt(prim.positions[:, 0] ** 2 + prim.positions[:, 2] ** 2)
+
+
+def test_flare_factor_one_is_identity():
+    tree_a = _vertical_chain(n=4, length=0.2, r=0.05)
+    tree_b = _vertical_chain(n=4, length=0.2, r=0.05)
+    base = build_bark_primitive(tree_a, ring_sides=8, material=_mat())
+    # flare_variation defaults to 0.0, so jitter=0 and eff_factor stays exactly 1.0 -> byte-identical
+    flared = build_bark_primitive(
+        tree_b, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.0, flare_falloff="linear",
+    )
+    np.testing.assert_array_equal(base.positions, flared.positions)
+
+
+def test_flare_widens_base_ring_only():
+    # chain nodes at y = 0, 0.2, 0.4, 0.6, 0.8 ; flare_height 0.5 => y>=0.5 untouched
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=2.0, flare_falloff="linear",
+        flare_variation=0.0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]            # y = 0  => t = 1 => scale 2.0
+    top_ring = rad[4 * columns:5 * columns]  # y = 0.8 => t = 0 => scale 1.0
+    np.testing.assert_allclose(base_ring, 0.10, atol=1e-6)   # 0.05 * 2
+    np.testing.assert_allclose(top_ring, 0.05, atol=1e-6)
+
+
+def test_flare_builds_finite_positions():
+    tree = _vertical_chain(n=3, length=0.2, r=0.05)
+    flared = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=2.0,
+    )
+    assert np.isfinite(flared.positions).all()
+
+
+def test_buttress_modulates_base_ring():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5, flare_falloff="linear",
+        buttress_count=4, buttress_amplitude=0.3, flare_variation=0.0, seed=0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]
+    # ridges => base ring radii are NOT all equal
+    assert base_ring.std() > 1e-3
+
+
+def test_buttress_seam_welded():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5,
+        buttress_count=5, buttress_amplitude=0.3, flare_variation=0.0, seed=0,
+    )
+    # column 0 and the duplicated seam column (index ring_sides=8) must coincide in 3D
+    np.testing.assert_allclose(prim.positions[0], prim.positions[8], atol=1e-12)
+
+
+def test_buttress_count_zero_is_axisymmetric():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5,
+        buttress_count=0, buttress_amplitude=0.3, flare_variation=0.0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]
+    np.testing.assert_allclose(base_ring, base_ring[0], atol=1e-9)  # all equal
+
+
+def _seeded_base_radius(seed: int, variation: float = 0.1):
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.6, flare_falloff="linear",
+        buttress_count=0, buttress_amplitude=0.0,
+        flare_variation=variation, seed=seed,
+    )
+    columns = 8 + 1
+    return _radial_dist(prim, 8)[0:columns]
+
+
+def test_variation_differs_by_seed():
+    rad0 = _seeded_base_radius(seed=0)
+    rad1 = _seeded_base_radius(seed=1)
+    assert not np.allclose(rad0, rad1)
+
+
+def test_variation_same_seed_is_deterministic():
+    assert np.allclose(_seeded_base_radius(seed=3), _seeded_base_radius(seed=3))
+
+
+def test_variation_zero_means_identical_flares():
+    rad0 = _seeded_base_radius(seed=0, variation=0.0)
+    rad1 = _seeded_base_radius(seed=99, variation=0.0)
+    # no buttress, no jitter => base radius identical regardless of seed
+    np.testing.assert_allclose(rad0, rad1, atol=1e-12)
