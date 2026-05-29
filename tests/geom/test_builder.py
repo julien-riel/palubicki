@@ -68,3 +68,34 @@ def test_build_mesh_applies_flare_from_config():
     flared = build_mesh(tree, cfg(2.0)).primitives[0].positions
     # flaring the base must move at least some bark vertices outward
     assert not np.array_equal(flat, flared)
+
+
+def _cfg_blend(tmp_path, *, young):
+    return Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=0.5, ry=1.0, rz=0.5, marker_count=200),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=4),
+        tropism=TropismConfig(),
+        phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False),
+        geom=GeomConfig(
+            bark_tint_young=young,
+            bark_tint_mature=(0.35, 0.22, 0.12),
+            bark_tint_senescent=(0.22, 0.20, 0.16),
+        ),
+        seed=1,
+        output=tmp_path / "x.glb",
+    )
+
+
+def test_blend_off_no_colors(tmp_path):
+    cfg = _cfg_blend(tmp_path, young=None)
+    mesh = build_mesh(simulate(cfg), cfg)
+    assert mesh.primitives[0].colors is None
+
+
+def test_blend_on_emits_colors(tmp_path):
+    cfg = _cfg_blend(tmp_path, young=(0.45, 0.38, 0.30))
+    mesh = build_mesh(simulate(cfg), cfg)
+    bark = mesh.primitives[0]
+    assert bark.colors is not None
+    assert bark.colors.shape == (bark.positions.shape[0], 3)

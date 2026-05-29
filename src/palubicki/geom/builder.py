@@ -4,6 +4,7 @@ from pathlib import Path
 
 from palubicki.config import Config, ConfigError
 from palubicki.geom._textures import _PROC_TEXTURES, default_leaf_png
+from palubicki.geom.bark_blend import BarkBlendStops
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
@@ -22,6 +23,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         alpha_cutoff=0.5,
         double_sided=False,
     )
+    stops = _bark_blend_stops(cfg.geom)
     bark_prim = build_bark_primitive(
         tree,
         ring_sides=cfg.geom.ring_sides,
@@ -33,6 +35,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         buttress_amplitude=cfg.geom.root_buttress_amplitude,
         flare_variation=cfg.geom.root_flare_variation,
         seed=cfg.seed,
+        stops=stops,
     )
     primitives = [bark_prim]
 
@@ -67,6 +70,25 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         primitives.append(leaf_prim)
 
     return Mesh(primitives=primitives)
+
+
+def _bark_blend_stops(geom) -> BarkBlendStops | None:
+    """Assemble blend stops from GeomConfig; None when blend is disabled.
+
+    Gated on bark_tint_young. Mature falls back to bark_color; senescent falls
+    back to mature (two-way blend)."""
+    if geom.bark_tint_young is None:
+        return None
+    mature = geom.bark_tint_mature if geom.bark_tint_mature is not None else geom.bark_color
+    senescent = geom.bark_tint_senescent if geom.bark_tint_senescent is not None else mature
+    return BarkBlendStops(
+        d_young=geom.bark_blend_diameter_young,
+        d_mature=geom.bark_blend_diameter_mature,
+        d_senescent=geom.bark_blend_diameter_senescent,
+        c_young=tuple(geom.bark_tint_young),
+        c_mature=tuple(mature),
+        c_senescent=tuple(senescent),
+    )
 
 
 def _resolve_texture(value: Path | str | None) -> bytes | None:
