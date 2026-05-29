@@ -49,7 +49,7 @@ class SimConfig:
     )
     # Fraction of the year [lo, hi) during which growth (new internodes) is
     # active. Default spans the whole year => no seasonal gating. Only bites
-    # when dt_years < 1.0 (sub-annual steps).
+    # when dt_years < 1.0 (sub-annual steps). Not exposed in UI (vec2).
     annual_growth_period: tuple[float, float] = (0.0, 1.0)
     re_perceive_per_substep: bool = field(default=True, metadata={"ui": {"label": "Re-perceive per substep"}})
     # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
