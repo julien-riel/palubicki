@@ -6,7 +6,6 @@ import pytest
 
 from palubicki.cli import main
 
-
 GOLDEN_DIR = Path(__file__).parent / "data"
 pytestmark = pytest.mark.slow
 

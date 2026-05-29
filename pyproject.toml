@@ -21,6 +21,7 @@ dependencies = [
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
+    "ruff>=0.15",
 ]
 render = [
     "matplotlib>=3.7",
@@ -44,9 +45,37 @@ packages = ["src/palubicki"]
 testpaths = ["tests"]
 markers = [
     "slow: integration and golden tests (deselect with -m 'not slow')",
+    "pinned: bit-exact hash pins (textures, sim digests) valid only on the reference numpy/Pillow build; deselect across environments with -m 'not pinned'",
 ]
 addopts = "-ra"
 
 [tool.coverage.run]
 source = ["src/palubicki"]
 branch = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort (import ordering)
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",   # line length is enforced by the formatter, not the linter
+    "B008",   # function calls in argument defaults (FastAPI/typer idiom)
+    "SIM108", # ternary-vs-if is a readability judgement call here
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["palubicki"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E402"]  # tests import lazily inside functions by design

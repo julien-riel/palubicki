@@ -5,7 +5,10 @@ import numpy as np
 
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.obstacles import (
-    AABBObstacle, MeshObstacle, OBBObstacle, SphereObstacle,
+    AABBObstacle,
+    MeshObstacle,
+    OBBObstacle,
+    SphereObstacle,
 )
 
 

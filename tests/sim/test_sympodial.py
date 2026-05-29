@@ -15,7 +15,7 @@ def _make_node_with_terminal_and_laterals(n_laterals: int = 2):
     )
     node.terminal_bud = term
     laterals = []
-    for i in range(n_laterals):
+    for _ in range(n_laterals):
         lat = Bud(
             position=np.zeros(3),
             direction=np.array([1.0, 0.0, 0.0]),

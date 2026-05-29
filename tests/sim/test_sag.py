@@ -6,7 +6,7 @@ import pytest
 
 from palubicki.config import SagConfig
 from palubicki.sim.sag import apply_sag
-from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.tree import Bud, Internode, Node, Tree
 
 
 def _chain_tree(positions: list[np.ndarray], diameters: list[float]) -> Tree:
@@ -200,7 +200,7 @@ def test_apply_sag_idempotent():
         tree.root.children_internodes[0].child_node,
         tree.root.children_internodes[0].child_node.children_internodes[0].child_node,
     )]
-    for a, b in zip(once, twice):
+    for a, b in zip(once, twice, strict=True):
         np.testing.assert_allclose(a, b, atol=1e-12)
 
 

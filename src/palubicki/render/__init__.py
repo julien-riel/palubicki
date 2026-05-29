@@ -7,7 +7,7 @@ deferred to render_mesh() / render_glb() — failures raise RenderDependencyErro
 """
 from __future__ import annotations
 
-from palubicki.render.errors import RenderError, RenderDependencyError
+from palubicki.render.errors import RenderDependencyError, RenderError
 
 
 def render_mesh(mesh, **kwargs):
@@ -29,7 +29,7 @@ def save_png(image, path):
 
 
 # Camera is small and matplotlib-free; eager export is fine.
-from palubicki.render.camera import Camera   # noqa: E402
+from palubicki.render.camera import Camera  # noqa: E402
 
 __all__ = [
     "Camera",

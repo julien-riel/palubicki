@@ -59,12 +59,12 @@ def test_zero_split_when_both_qualities_zero():
     root.children_internodes.append(iod)
     child.parent_internode = iod
     m = Bud(position=child.position, direction=np.array([0, 1, 0]), axis_order=0, parent_node=child)
-    l = Bud(position=child.position, direction=np.array([1, 0, 0]), axis_order=1, parent_node=child)
+    lat = Bud(position=child.position, direction=np.array([1, 0, 0]), axis_order=1, parent_node=child)
     child.terminal_bud = m
-    child.lateral_buds.append(l)
-    tree = Tree(root=root, active_buds=[m, l], all_internodes=[iod])
-    n_by_bud = allocate(tree, quality={m: 0, l: 0}, alpha=2.0, lambda_apical=0.5)
-    assert n_by_bud[m] == 0 and n_by_bud[l] == 0
+    child.lateral_buds.append(lat)
+    tree = Tree(root=root, active_buds=[m, lat], all_internodes=[iod])
+    n_by_bud = allocate(tree, quality={m: 0, lat: 0}, alpha=2.0, lambda_apical=0.5)
+    assert n_by_bud[m] == 0 and n_by_bud[lat] == 0
 
 
 def test_denom_zero_proportional_fallback():

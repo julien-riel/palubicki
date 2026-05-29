@@ -114,7 +114,7 @@ def _add_accessor(
     bv_idx = len(buffer_views) - 1
 
     count = array.shape[0]
-    kwargs = dict(bufferView=bv_idx, componentType=component_type, count=count, type=type_str)
+    kwargs = {"bufferView": bv_idx, "componentType": component_type, "count": count, "type": type_str}
     if with_minmax and array.size > 0:
         kwargs["min"] = array.min(axis=0).tolist()
         kwargs["max"] = array.max(axis=0).tolist()

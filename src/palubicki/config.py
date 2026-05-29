@@ -65,9 +65,9 @@ class SimConfig:
         default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
     )
     sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
-    shade_mortality: "ShadeMortalityConfig" = field(default_factory=lambda: ShadeMortalityConfig())
-    elongation: "ElongationConfig" = field(default_factory=lambda: ElongationConfig())
-    bud_break_bias: "BudBreakConfig" = field(default_factory=lambda: BudBreakConfig())
+    shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
+    elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
+    bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
 
 
 @dataclass(frozen=True)
@@ -486,10 +486,9 @@ class Config:
 
 # --- YAML loading ---
 
-from dataclasses import fields, is_dataclass  # noqa: E402
+from dataclasses import fields  # noqa: E402
 
 import yaml  # noqa: E402
-
 
 _SECTION_TYPES = {
     "envelope": EnvelopeConfig,
@@ -648,7 +647,7 @@ def _load_obstacle(d: dict):
     return type_(**payload)
 
 
-def _load_forest_seed(d: dict) -> "ForestSeed":
+def _load_forest_seed(d: dict) -> ForestSeed:
     if not isinstance(d, dict):
         raise ConfigError(f"forest seed must be a dict, got {type(d).__name__}")
     allowed = {"position", "seed", "species", "overrides"}
@@ -665,7 +664,7 @@ def _load_forest_seed(d: dict) -> "ForestSeed":
     )
 
 
-def _load_forest_config(d: dict) -> "ForestConfig":
+def _load_forest_config(d: dict) -> ForestConfig:
     if not isinstance(d, dict):
         raise ConfigError(f"forest section must be a dict, got {type(d).__name__}")
     allowed = {"seeds", "obstacles", "export_obstacles_geometry"}

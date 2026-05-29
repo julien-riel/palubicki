@@ -1,6 +1,5 @@
 # tests/sim/test_space_competition.py
 import numpy as np
-import pytest
 
 from palubicki.sim.markers import MarkerCloud
 from palubicki.sim.space_competition import PerceptionResult, perceive

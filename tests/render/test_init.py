@@ -2,7 +2,7 @@
 
 
 def test_render_exceptions_are_importable():
-    from palubicki.render import RenderError, RenderDependencyError
+    from palubicki.render import RenderDependencyError, RenderError
     assert issubclass(RenderDependencyError, RenderError)
     assert issubclass(RenderError, Exception)
 

@@ -1,8 +1,14 @@
 import numpy as np
+import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.simulator import simulate
 
@@ -131,10 +137,18 @@ def _all_nodes(tree):
 
 def test_simulator_v1_bit_exact_when_light_disabled():
     """light.enabled=False → tree identical to V1 (same internode positions, count)."""
-    import numpy as np
     from pathlib import Path
-    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
-                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     from palubicki.sim.simulator import simulate
 
     cfg_v1 = Config(
@@ -169,20 +183,29 @@ def test_simulator_v1_bit_exact_when_light_disabled():
 def test_simulator_light_enabled_zero_absorption_equivalent_to_disabled():
     """light.enabled=True with k_absorption=0 → grid transparent → ≈ V1 result."""
     from pathlib import Path
-    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
-                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     from palubicki.sim.simulator import simulate
 
-    base_kwargs = dict(
-        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=8),
-        tropism=TropismConfig(),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        seed=42,
-        output=Path("/tmp/x.glb"),
-    )
+    base_kwargs = {
+        "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        "sim": SimConfig(max_iterations=8),
+        "tropism": TropismConfig(),
+        "phyllotaxy": PhyllotaxyConfig(),
+        "shedding": SheddingConfig(),
+        "geom": GeomConfig(),
+        "seed": 42,
+        "output": Path("/tmp/x.glb"),
+    }
     tree_off = simulate(Config(light=LightConfig(enabled=False), **base_kwargs))
     tree_zerok = simulate(Config(light=LightConfig(enabled=True, k_absorption=0.0), **base_kwargs))
     # Same count (transparent grid → no shadowing)
@@ -192,20 +215,29 @@ def test_simulator_light_enabled_zero_absorption_equivalent_to_disabled():
 def test_simulator_light_enabled_reduces_density():
     """light.enabled=True (with real absorption) → fewer internodes than V1."""
     from pathlib import Path
-    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
-                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     from palubicki.sim.simulator import simulate
 
-    base_kwargs = dict(
-        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=10),
-        tropism=TropismConfig(w_phototropism=0.3),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        seed=42,
-        output=Path("/tmp/x.glb"),
-    )
+    base_kwargs = {
+        "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        "sim": SimConfig(max_iterations=10),
+        "tropism": TropismConfig(w_phototropism=0.3),
+        "phyllotaxy": PhyllotaxyConfig(),
+        "shedding": SheddingConfig(),
+        "geom": GeomConfig(),
+        "seed": 42,
+        "output": Path("/tmp/x.glb"),
+    }
     tree_off = simulate(Config(light=LightConfig(enabled=False), **base_kwargs))
     tree_on = simulate(Config(light=LightConfig(enabled=True, k_absorption=1.0, leaf_area=0.2), **base_kwargs))
     assert len(tree_on.all_internodes) < len(tree_off.all_internodes)
@@ -213,41 +245,59 @@ def test_simulator_light_enabled_reduces_density():
 
 def test_simulator_light_reproducible():
     """Same seed + cfg → identical trees."""
-    from pathlib import Path
     import hashlib
+    from pathlib import Path
+
     import numpy as np
-    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
-                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     from palubicki.sim.simulator import simulate
 
     def pos_hash(tree):
         positions = np.array([iod.child_node.position for iod in tree.all_internodes])
         return hashlib.sha256(positions.tobytes()).hexdigest()
 
-    base = dict(
-        envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=6),
-        tropism=TropismConfig(w_phototropism=0.3),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        light=LightConfig(enabled=True, k_absorption=0.5),
-        seed=42,
-        output=Path("/tmp/x.glb"),
-    )
+    base = {
+        "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
+        "sim": SimConfig(max_iterations=6),
+        "tropism": TropismConfig(w_phototropism=0.3),
+        "phyllotaxy": PhyllotaxyConfig(),
+        "shedding": SheddingConfig(),
+        "geom": GeomConfig(),
+        "light": LightConfig(enabled=True, k_absorption=0.5),
+        "seed": 42,
+        "output": Path("/tmp/x.glb"),
+    }
     t1 = simulate(Config(**base))
     t2 = simulate(Config(**base))
     assert pos_hash(t1) == pos_hash(t2)
 
 
+@pytest.mark.pinned
 def test_simulate_v2_bit_exact_after_refactor(tmp_path):
     """After refactor: simulate(cfg) with empty forest must produce the same Tree as
     a hash-pinned baseline. The baseline is recomputed once and saved in the test."""
     import hashlib
     import json
+
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
 
@@ -285,8 +335,16 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
 def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
     """Two trees far apart (envelopes disjoint) → each tree grows independently."""
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate_forest
 
@@ -310,8 +368,16 @@ def test_simulate_forest_two_distant_trees_grow_independently(tmp_path):
 def test_simulate_forest_reproducible(tmp_path):
     """Two runs with the same cfg produce identical trees."""
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate_forest
 
@@ -330,20 +396,28 @@ def test_simulate_forest_reproducible(tmp_path):
 
     f1 = simulate_forest(make_cfg())
     f2 = simulate_forest(make_cfg())
-    for t1, t2 in zip(f1.trees, f2.trees):
+    for t1, t2 in zip(f1.trees, f2.trees, strict=True):
         assert len(t1.all_internodes) == len(t2.all_internodes)
-        for i1, i2 in zip(t1.all_internodes, t2.all_internodes):
+        for i1, i2 in zip(t1.all_internodes, t2.all_internodes, strict=True):
             np.testing.assert_allclose(i1.child_node.position, i2.child_node.position)
 
 
 def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
     """A wall right above the root → the trunk bud becomes DORMANT after 1 step (cannot grow)."""
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        ObstacleAABB,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate_forest
-    from palubicki.sim.tree import BudState
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, shape="ellipsoid", marker_count=2000),
@@ -372,8 +446,17 @@ def test_simulate_forest_segment_blocked_makes_bud_dormant(tmp_path):
 def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
     """A bud growing into an obstacle (point-inside test, not just segment) → DEAD."""
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        ObstacleSphere, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        ObstacleSphere,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate_forest
     cfg = Config(
@@ -401,9 +484,16 @@ def test_simulate_forest_bud_inside_obstacle_dies(tmp_path):
 def test_internode_length_jitter_disabled_keeps_constant_length():
     """With jitter=0, all internode lengths equal cfg.sim.internode_length exactly."""
     from pathlib import Path
+
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
     cfg = Config(
@@ -426,9 +516,16 @@ def test_internode_length_jitter_disabled_keeps_constant_length():
 def test_internode_length_jitter_deterministic_with_seed():
     """Same seed → same internode length sequence; different seed → different sequence."""
     from pathlib import Path
+
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
 
@@ -464,8 +561,14 @@ def test_simulator_emits_dormant_reserves_when_configured(tmp_path):
     """When phyllotaxy.dormant_reserve_count > 0, every new node carries
     that many RESERVE buds in node.dormant_reserve_buds."""
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
     from palubicki.sim.tree import BudState
@@ -506,8 +609,14 @@ def test_simulator_emits_dormant_reserves_when_configured(tmp_path):
 
 def test_simulator_no_reserves_when_count_zero(tmp_path):
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
 
@@ -534,8 +643,15 @@ def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
     """With shade_mortality enabled and light enabled, a bud forced under
     threshold for N consecutive steps must end up DEAD."""
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-        ShadeMortalityConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        ShadeMortalityConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
     from palubicki.sim.tree import BudState
@@ -574,8 +690,14 @@ def test_simulator_kills_shaded_buds_when_enabled(tmp_path):
 
 def test_internodes_record_birth_iteration_and_length_target(tmp_path):
     from palubicki.config import (
-        Config, ElongationConfig, EnvelopeConfig, GeomConfig, LightConfig,
-        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        ElongationConfig,
+        EnvelopeConfig,
+        GeomConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
 
@@ -600,8 +722,14 @@ def test_internodes_record_birth_iteration_and_length_target(tmp_path):
 def test_finalization_snaps_length_to_target(tmp_path):
     """After simulate(), every internode must have length == length_target."""
     from palubicki.config import (
-        Config, ElongationConfig, EnvelopeConfig, GeomConfig, LightConfig,
-        PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        ElongationConfig,
+        EnvelopeConfig,
+        GeomConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate
 

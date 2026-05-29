@@ -1,6 +1,5 @@
 # tests/sim/test_phyllotaxy.py
 import numpy as np
-import pytest
 
 from palubicki.config import PhyllotaxyConfig
 from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions

@@ -5,7 +5,7 @@ from typing import Protocol
 
 import numpy as np
 
-from palubicki.config import ObstacleAABB, ObstacleSphere, ObstacleOBB, ObstacleMesh
+from palubicki.config import ObstacleAABB, ObstacleMesh, ObstacleOBB, ObstacleSphere
 
 LAI_OPAQUE: float = 1e6
 
@@ -235,10 +235,7 @@ def filter_markers(positions: np.ndarray, obstacles: list) -> np.ndarray:
 
 def segment_blocked(p0: np.ndarray, p1: np.ndarray, obstacles: list) -> bool:
     """True iff any obstacle blocks the segment [p0, p1]."""
-    for o in obstacles:
-        if o.segment_intersects(p0, p1):
-            return True
-    return False
+    return any(o.segment_intersects(p0, p1) for o in obstacles)
 
 
 def any_contains(point: np.ndarray, obstacles: list) -> bool:
@@ -246,10 +243,7 @@ def any_contains(point: np.ndarray, obstacles: list) -> bool:
     if len(obstacles) == 0:
         return False
     pts = np.asarray(point, dtype=np.float64).reshape(1, 3)
-    for o in obstacles:
-        if bool(o.contains(pts)[0]):
-            return True
-    return False
+    return any(bool(o.contains(pts)[0]) for o in obstacles)
 
 
 def _voxelize_via_centers(grid, contains_callable) -> np.ndarray:

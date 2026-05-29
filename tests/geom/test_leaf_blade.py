@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 
 from palubicki.geom.leaf_blade import (
-    _outline_linear, _triangulate_fan, build_blade,
+    _outline_linear,
+    _triangulate_fan,
+    build_blade,
 )
 
 
@@ -145,7 +147,10 @@ def test_build_blade_rejects_negative_margin_count():
 
 
 from palubicki.geom.leaf_blade import (
-    _outline_elliptic, _outline_lanceolate, _outline_ovate, _outline_cordate,
+    _outline_cordate,
+    _outline_elliptic,
+    _outline_lanceolate,
+    _outline_ovate,
 )
 
 
@@ -157,10 +162,7 @@ def _segments_intersect(a, b, c, d) -> bool:
     d2 = cross(c, d, b)
     d3 = cross(a, b, c)
     d4 = cross(a, b, d)
-    if ((d1 > 0 and d2 < 0) or (d1 < 0 and d2 > 0)) and \
-       ((d3 > 0 and d4 < 0) or (d3 < 0 and d4 > 0)):
-        return True
-    return False
+    return bool((d1 > 0 and d2 < 0 or d1 < 0 and d2 > 0) and (d3 > 0 and d4 < 0 or d3 < 0 and d4 > 0))
 
 
 def _is_star_shape_from(anchor: np.ndarray, boundary: np.ndarray) -> bool:

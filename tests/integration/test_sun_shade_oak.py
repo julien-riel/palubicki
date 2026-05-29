@@ -6,7 +6,6 @@ from palubicki.config import load_config
 from palubicki.geom.leaves import _collect_foliage_sites
 from palubicki.sim.simulator import simulate
 
-
 pytestmark = pytest.mark.slow
 
 

@@ -1,9 +1,6 @@
 # tests/integration/test_shade_carves_canopy.py
 import pytest
 
-from palubicki.cli import main
-
-
 pytestmark = pytest.mark.slow
 
 

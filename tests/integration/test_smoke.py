@@ -1,16 +1,20 @@
 # tests/integration/test_smoke.py
-import numpy as np
 import pygltflib
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.export.gltf import write_glb
 from palubicki.geom.builder import build_mesh
 from palubicki.sim.simulator import simulate
-
 
 pytestmark = pytest.mark.slow
 
@@ -61,11 +65,20 @@ def test_end_to_end_per_envelope_light_enabled(tmp_path, shape):
 @pytest.mark.slow
 def test_smoke_forest_two_trees_with_obstacle(tmp_path):
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        ObstacleAABB,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
-    from palubicki.sim.simulator import simulate_forest
     from palubicki.export.gltf import write_glb_forest
+    from palubicki.sim.simulator import simulate_forest
 
     cfg = Config(
         envelope=EnvelopeConfig(marker_count=1000),

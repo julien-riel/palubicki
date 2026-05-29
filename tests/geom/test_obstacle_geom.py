@@ -1,13 +1,16 @@
 from pathlib import Path
-import numpy as np
 
 from palubicki.config import (
-    ObstacleAABB, ObstacleSphere, ObstacleOBB, ObstacleMesh,
+    ObstacleAABB,
+    ObstacleMesh,
+    ObstacleSphere,
 )
 from palubicki.geom.mesh import Material
 from palubicki.geom.obstacle_geom import build_obstacle_primitive
 from palubicki.sim.obstacles import (
-    AABBObstacle, SphereObstacle, OBBObstacle, MeshObstacle,
+    AABBObstacle,
+    MeshObstacle,
+    SphereObstacle,
 )
 
 

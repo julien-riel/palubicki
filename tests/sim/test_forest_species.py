@@ -1,8 +1,14 @@
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig,
-    LightConfig, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestSeed,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
     load_config,
 )
 from palubicki.sim.forest import per_tree_config

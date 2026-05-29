@@ -195,8 +195,9 @@ def test_preview_parses_size_flag(tmp_path):
 
 
 def test_preview_size_flag_rejects_garbage():
-    from palubicki.cli import _parse_size
     import argparse
+
+    from palubicki.cli import _parse_size
     with pytest.raises(argparse.ArgumentTypeError):
         _parse_size("not-a-size")
     with pytest.raises(argparse.ArgumentTypeError):
@@ -282,15 +283,14 @@ def test_cli_diagnose_bad_seed_list():
 
 @pytest.mark.slow
 def test_edit_server_boots_and_serves_schema():
-    import socket
     import threading
     import time
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     from palubicki.cli import _find_free_port
-    from palubicki.edit.server import create_app
     from palubicki.config import load_config
+    from palubicki.edit.server import create_app
 
     port = _find_free_port(9000)
     assert port is not None

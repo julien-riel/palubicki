@@ -97,7 +97,7 @@ def test_shed_activates_reserves_when_branch_shed():
 
     root = Node(position=np.zeros(3))
     # Attach two children: one healthy, one starved.
-    for i, q in enumerate([5, 0]):
+    for i, _q in enumerate([5, 0]):
         child = Node(position=np.array([float(i), 1.0, 0.0]))
         iod = Internode(parent_node=root, child_node=child, length=1.0,
                         is_main_axis=(i == 0), window=3)

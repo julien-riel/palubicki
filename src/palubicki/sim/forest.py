@@ -1,20 +1,24 @@
 # src/palubicki/sim/forest.py
 from __future__ import annotations
 
-from dataclasses import fields, replace
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, fields, replace
 
 import numpy as np
 
 from palubicki.config import (
-    Config, ConfigError, ElongationConfig, EnvelopeConfig, ForestSeed, SympodialConfig,
-    _SECTION_TYPES, _load_packaged_species,
+    _SECTION_TYPES,
+    Config,
+    ConfigError,
+    ElongationConfig,
+    EnvelopeConfig,
+    ForestSeed,
+    SympodialConfig,
+    _load_packaged_species,
 )
-
-if TYPE_CHECKING:
-    from palubicki.sim.markers import MarkerCloud
-    from palubicki.sim.tree import Tree
-
+from palubicki.sim.envelope import sample_markers
+from palubicki.sim.markers import MarkerCloud
+from palubicki.sim.obstacles import build_obstacles, filter_markers
+from palubicki.sim.tree import Bud, Node, Tree
 
 _SECTION_FIELDS = {
     "envelope", "sim", "tropism", "phyllotaxy", "shedding", "geom", "light", "sag",
@@ -107,14 +111,6 @@ def _envelope_aabb(env: EnvelopeConfig) -> tuple[np.ndarray, np.ndarray]:
     raise ValueError(f"unknown envelope shape: {env.shape}")
 
 
-from dataclasses import dataclass, field as _dc_field
-
-from palubicki.sim.markers import MarkerCloud
-from palubicki.sim.envelope import sample_markers
-from palubicki.sim.obstacles import build_obstacles, filter_markers
-from palubicki.sim.tree import Bud, Node, Tree
-
-
 @dataclass
 class Forest:
     trees: list[Tree]
@@ -156,7 +152,7 @@ def build_forest(cfg: Config) -> Forest:
     # Sample markers per-tree using each tree's own RNG/envelope
     marker_chunks: list[np.ndarray] = []
     trees: list[Tree] = []
-    for tree_index, ptc in enumerate(per_tree_cfgs):
+    for _tree_index, ptc in enumerate(per_tree_cfgs):
         rng = np.random.default_rng(ptc.seed)
         marker_chunks.append(sample_markers(ptc.envelope, rng))
 

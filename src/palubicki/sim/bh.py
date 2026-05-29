@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 
-from palubicki.sim.tree import Bud, Internode, Node, Tree
+from palubicki.sim.tree import Bud, Node, Tree
 
 
 def allocate(
@@ -23,7 +23,7 @@ def allocate(
     v_total = alpha * v_subtree[id(tree.root)]
 
     # Acropetal pass: distribute v_total downward
-    n_by_bud: dict[Bud, int] = {b: 0 for b in tree.active_buds}
+    n_by_bud: dict[Bud, int] = dict.fromkeys(tree.active_buds, 0)
     _distribute(tree.root, v_total, quality, v_subtree, lambda_apical, n_by_bud)
     return n_by_bud
 

@@ -269,7 +269,8 @@ def _transport_frame(
 
 
 def _rotate_vec(v: np.ndarray, axis: np.ndarray, angle: float) -> np.ndarray:
-    cos_a = math.cos(angle); sin_a = math.sin(angle)
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
     return (v * cos_a + _cross3(axis, v) * sin_a + axis * np.dot(axis, v) * (1 - cos_a))
 
 

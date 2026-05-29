@@ -4,22 +4,29 @@ from pathlib import Path
 import pytest
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig, load_config,
+    Config,
+    ConfigError,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
+    load_config,
 )
 
 
 def _make_config(**overrides):
     from palubicki.config import LightConfig
-    base = dict(
-        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=1.0, rz=1.0),
-        sim=SimConfig(),
-        tropism=TropismConfig(),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        light=LightConfig(),
-    )
+    base = {
+        "envelope": EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=1.0, rz=1.0),
+        "sim": SimConfig(),
+        "tropism": TropismConfig(),
+        "phyllotaxy": PhyllotaxyConfig(),
+        "shedding": SheddingConfig(),
+        "geom": GeomConfig(),
+        "light": LightConfig(),
+    }
     base.update(overrides)
     return Config(**base)
 
@@ -90,9 +97,17 @@ def test_light_config_defaults():
 
 
 def test_light_config_validation_rejects_zero_rays(tmp_path):
-    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
-                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
-                                  GeomConfig, LightConfig)
+    from palubicki.config import (
+        Config,
+        ConfigError,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     with pytest.raises(ConfigError, match="n_rays"):
         Config(
             envelope=EnvelopeConfig(),
@@ -107,9 +122,17 @@ def test_light_config_validation_rejects_zero_rays(tmp_path):
 
 
 def test_light_config_validation_rejects_negative_k_absorption(tmp_path):
-    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
-                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
-                                  GeomConfig, LightConfig)
+    from palubicki.config import (
+        Config,
+        ConfigError,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     with pytest.raises(ConfigError, match="k_absorption"):
         Config(
             envelope=EnvelopeConfig(),
@@ -124,8 +147,16 @@ def test_light_config_validation_rejects_negative_k_absorption(tmp_path):
 
 
 def test_config_default_light_is_disabled(tmp_path):
-    from palubicki.config import (Config, EnvelopeConfig, SimConfig, TropismConfig,
-                                  PhyllotaxyConfig, SheddingConfig, GeomConfig, LightConfig)
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     c = Config(
         envelope=EnvelopeConfig(), sim=SimConfig(), tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(), shedding=SheddingConfig(), geom=GeomConfig(),
@@ -136,9 +167,17 @@ def test_config_default_light_is_disabled(tmp_path):
 
 
 def test_light_config_validation_rejects_zero_light_direction(tmp_path):
-    from palubicki.config import (Config, ConfigError, EnvelopeConfig, SimConfig,
-                                  TropismConfig, PhyllotaxyConfig, SheddingConfig,
-                                  GeomConfig, LightConfig)
+    from palubicki.config import (
+        Config,
+        ConfigError,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     with pytest.raises(ConfigError, match="light_direction"):
         Config(
             envelope=EnvelopeConfig(),
@@ -178,8 +217,9 @@ def test_obstacle_obb_defaults():
 
 
 def test_obstacle_mesh_defaults():
-    from palubicki.config import ObstacleMesh
     from pathlib import Path
+
+    from palubicki.config import ObstacleMesh
     o = ObstacleMesh(path=Path("foo.obj"))
     assert o.kind == "mesh"
     assert o.path == Path("foo.obj")
@@ -204,11 +244,18 @@ def test_forest_config_defaults():
 
 
 def test_config_default_forest_is_empty():
-    from palubicki.config import (
-        Config, EnvelopeConfig, SimConfig, TropismConfig, PhyllotaxyConfig,
-        SheddingConfig, GeomConfig, LightConfig, ForestConfig,
-    )
     from pathlib import Path
+
+    from palubicki.config import (
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        LightConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
+    )
     c = Config(
         envelope=EnvelopeConfig(), sim=SimConfig(), tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(), shedding=SheddingConfig(), geom=GeomConfig(),
@@ -447,7 +494,7 @@ def test_elongation_defaults_disabled():
 
 
 def test_sim_config_has_elongation_subdataclass():
-    from palubicki.config import SimConfig, ElongationConfig
+    from palubicki.config import ElongationConfig, SimConfig
     s = SimConfig()
     assert isinstance(s.elongation, ElongationConfig)
     assert s.elongation.enabled is False

@@ -6,8 +6,17 @@ import numpy as np
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-    ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestConfig,
+    ForestSeed,
+    GeomConfig,
+    LightConfig,
+    ObstacleAABB,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.export.gltf import write_glb, write_glb_forest
 from palubicki.geom.builder import build_mesh

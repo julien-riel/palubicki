@@ -40,7 +40,7 @@ def perceive(
     idx_lists = markers.query_radius_batch(bud_positions, r_perception)
     per_bud_kept_idx: list[np.ndarray] = []
     per_bud_kept_dist: list[np.ndarray] = []
-    for bud, idx in zip(buds, idx_lists):
+    for bud, idx in zip(buds, idx_lists, strict=True):
         if len(idx) == 0:
             per_bud_kept_idx.append(np.empty(0, dtype=np.intp))
             per_bud_kept_dist.append(np.empty(0, dtype=np.float64))
@@ -86,7 +86,9 @@ def perceive(
         ordered_winning_mid = _unique_mids[order_by_insertion]
         ordered_winning_bi = winning_bi_by_mid[order_by_insertion]
         bud_to_markers: list[list[int]] = [[] for _ in range(len(buds))]
-        for bi_val, mid_val in zip(ordered_winning_bi.tolist(), ordered_winning_mid.tolist()):
+        for bi_val, mid_val in zip(
+            ordered_winning_bi.tolist(), ordered_winning_mid.tolist(), strict=True
+        ):
             bud_to_markers[bi_val].append(mid_val)
     else:
         bud_to_markers = [[] for _ in range(len(buds))]

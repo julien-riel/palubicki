@@ -3,12 +3,19 @@ from pathlib import Path
 import numpy as np
 
 from palubicki.config import (
-    LightConfig, ObstacleAABB, ObstacleSphere, ObstacleOBB, ObstacleMesh,
     EnvelopeConfig,
+    LightConfig,
+    ObstacleAABB,
+    ObstacleMesh,
+    ObstacleOBB,
+    ObstacleSphere,
 )
 from palubicki.sim.light import LightGrid
 from palubicki.sim.obstacles import (
-    AABBObstacle, SphereObstacle, OBBObstacle, MeshObstacle,
+    AABBObstacle,
+    MeshObstacle,
+    OBBObstacle,
+    SphereObstacle,
 )
 
 

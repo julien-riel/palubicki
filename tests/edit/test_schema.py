@@ -1,9 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
-import pytest
-
-from palubicki.edit.schema import build_schema, _field_descriptor, _type_info
+from palubicki.edit.schema import _field_descriptor, _type_info, build_schema
 
 
 def test_build_schema_returns_sections_and_species():

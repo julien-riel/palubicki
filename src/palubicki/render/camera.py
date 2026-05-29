@@ -32,7 +32,7 @@ class Camera:
     margin: float = _DEFAULT_MARGIN
 
     @staticmethod
-    def fit(mesh: "Mesh", **overrides) -> "Camera":
+    def fit(mesh: Mesh, **overrides) -> Camera:
         """Auto-fit camera to mesh bbox. Concatenates all primitives' positions
         to compute the bbox, then sets target = bbox center and distance from
         the bbox extent (with `margin` padding)."""

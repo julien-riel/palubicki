@@ -264,7 +264,7 @@ def test_sample_transmission_empty_grid_returns_one():
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     # No LAI injected at all
     T = grid.sample_transmission(np.array([5.0, 5.0, 5.0]), np.array([0.0, 1.0, 0.0]), k=0.5)
-    assert T == pytest.approx(1.0)
+    assert pytest.approx(1.0) == T
 
 
 def test_sample_transmission_uniform_lai():
@@ -281,7 +281,7 @@ def test_sample_transmission_uniform_lai():
     k = 0.5
     T = grid.sample_transmission(np.array([5.0, 0.001, 5.0]), np.array([0.0, 1.0, 0.0]), k=k)
     expected = np.exp(-k * L * 10.0)
-    assert T == pytest.approx(expected, rel=1e-2)
+    assert pytest.approx(expected, rel=1e-2) == T
 
 
 def test_sample_transmission_starts_outside_grid():
@@ -294,7 +294,7 @@ def test_sample_transmission_starts_outside_grid():
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     grid.lai.fill(0.0)   # explicit
     T = grid.sample_transmission(np.array([-5.0, 5.0, 5.0]), np.array([1.0, 0.0, 0.0]), k=0.5)
-    assert T == pytest.approx(1.0)
+    assert pytest.approx(1.0) == T
 
 
 def test_sample_transmission_zero_direction():
@@ -306,7 +306,7 @@ def test_sample_transmission_zero_direction():
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     T = grid.sample_transmission(np.array([5.0, 5.0, 5.0]), np.array([0.0, 0.0, 0.0]), k=0.5)
-    assert T == pytest.approx(1.0)
+    assert pytest.approx(1.0) == T
 
 
 def test_sample_hemisphere_open_sky_returns_full_light():
@@ -377,7 +377,7 @@ def test_sample_transmission_half_step_offset():
     # The ray should pass through ONLY the cells ABOVE (5,5,5), not (5,5,5) itself.
     # All other cells have LAI=0, so T ≈ 1.0.
     T = grid.sample_transmission(np.array([0.55, 0.55, 0.55]), np.array([0.0, 1.0, 0.0]), k=0.5)
-    assert T == pytest.approx(1.0, rel=1e-3)
+    assert pytest.approx(1.0, rel=1e-3) == T
 
 
 def test_sample_transmission_outside_origin_marches_into_grid():
@@ -394,7 +394,7 @@ def test_sample_transmission_outside_origin_marches_into_grid():
     k = 0.5
     T = grid.sample_transmission(np.array([-5.0, 5.0, 5.0]), np.array([1.0, 0.0, 0.0]), k=k)
     expected = np.exp(-k * L * 10.0)
-    assert T == pytest.approx(expected, rel=0.1)   # generous tolerance — exact entry depends on discretization
+    assert pytest.approx(expected, rel=0.1) == T   # generous tolerance — exact entry depends on discretization
 
 
 def test_sample_hemisphere_gradient_points_to_open_side():
@@ -424,11 +424,11 @@ def test_rebuild_from_forest_two_trees_lai_sums():
     same cells; we make this trivial by giving each tree a single leaf at a
     distinct cell)."""
     from palubicki.config import (
-        EnvelopeConfig, ForestConfig, ForestSeed, LightConfig,
+        EnvelopeConfig,
+        LightConfig,
     )
-    from palubicki.sim.forest import build_forest
     from palubicki.sim.light import LightGrid
-    from palubicki.sim.tree import Bud, BudState, Node, Tree
+    from palubicki.sim.tree import Bud, Node, Tree
 
     # Build a forest manually: 2 trees, each with a single terminal-bud leaf
     # at a known position.
@@ -472,9 +472,10 @@ def test_rebuild_from_forest_two_trees_lai_sums():
 
 def test_rebuild_from_forest_applies_obstacle_mask():
     from palubicki.config import (
-        EnvelopeConfig, ForestConfig, ForestSeed, LightConfig, ObstacleAABB,
+        EnvelopeConfig,
+        LightConfig,
+        ObstacleAABB,
     )
-    from palubicki.sim.forest import build_forest
     from palubicki.sim.light import LightGrid
     from palubicki.sim.obstacles import LAI_OPAQUE
 

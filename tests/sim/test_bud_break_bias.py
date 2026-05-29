@@ -3,7 +3,6 @@ import pytest
 from palubicki.sim.bud_break_bias import position_weight
 
 
-
 def test_uniform_returns_one_regardless_of_position_or_strength():
     assert position_weight(0, 5, "uniform", 0.0) == 1.0
     assert position_weight(2, 5, "uniform", 1.0) == 1.0
@@ -41,12 +40,12 @@ def test_mesotonic_mid_full_ends_zero_at_strength_one():
 
 def test_acrotonic_monotonic_increasing_with_index():
     weights = [position_weight(i, 10, "acrotonic", 0.6) for i in range(10)]
-    assert all(a <= b for a, b in zip(weights, weights[1:]))
+    assert all(a <= b for a, b in zip(weights, weights[1:], strict=False))
 
 
 def test_basitonic_monotonic_decreasing_with_index():
     weights = [position_weight(i, 10, "basitonic", 0.6) for i in range(10)]
-    assert all(a >= b for a, b in zip(weights, weights[1:]))
+    assert all(a >= b for a, b in zip(weights, weights[1:], strict=False))
 
 
 def test_mesotonic_peak_at_middle():
@@ -71,7 +70,7 @@ def test_invalid_mode_raises():
 import numpy as np
 
 from palubicki.sim.bud_break_bias import compute_axis_positions
-from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.tree import Bud, Internode, Node, Tree
 
 
 def _linear_chain(length: int) -> Tree:

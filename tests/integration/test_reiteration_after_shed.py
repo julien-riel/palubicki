@@ -3,18 +3,15 @@ from unittest.mock import patch
 
 import pytest
 
-from palubicki.cli import main
-
-
 pytestmark = pytest.mark.slow
 
 
 def test_reiteration_produces_activations(tmp_path):
     """With reserves > 0 and reactivation > 0, shed-driven activations occur.
     With reserves == 0, activations must be zero even if many sheds happen."""
+    import palubicki.sim.shedding as shedding_mod
     from palubicki.config import load_config
     from palubicki.sim.simulator import simulate
-    import palubicki.sim.shedding as shedding_mod
 
     counter = {"calls": 0, "activations": 0}
     real = shedding_mod.activate_reserves_on_shed

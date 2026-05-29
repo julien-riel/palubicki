@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 
 from palubicki.geom.mesh import Mesh
-from palubicki.render.errors import RenderDependencyError, RenderError
 from palubicki.render.camera import Camera
+from palubicki.render.errors import RenderDependencyError, RenderError
 
 _LOG = logging.getLogger("palubicki.render")
 _MAX_PIXELS = 50_000_000  # guard against --size 99999x99999
