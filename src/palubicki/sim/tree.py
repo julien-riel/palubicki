@@ -20,7 +20,6 @@ class Bud:
     direction: np.ndarray
     axis_order: int
     parent_node: Node
-    age: int = 0
     state: BudState = BudState.ACTIVE
     low_quality_steps: int = 0
     low_light_steps: int = 0
@@ -50,7 +49,7 @@ class Internode:
     diameter: float = 0.0
     window: int = 5
     light_factor: float = 1.0
-    birth_iteration: int = 0
+    birth_time: float = 0.0
     length_target: float = 0.0
     quality_history: deque[float] = field(init=False)
 
