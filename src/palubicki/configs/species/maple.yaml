@@ -79,3 +79,9 @@ geom:
   root_flare_falloff: linear
   root_buttress_count: 3
   root_buttress_amplitude: 0.10
+  bark_tint_young: [0.55, 0.52, 0.46]
+  bark_tint_mature: [0.40, 0.28, 0.18]
+  bark_tint_senescent: [0.26, 0.24, 0.22]
+  bark_blend_diameter_young: 0.02
+  bark_blend_diameter_mature: 0.10
+  bark_blend_diameter_senescent: 0.30
