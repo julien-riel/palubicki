@@ -9,8 +9,8 @@ import numpy as np
 
 from palubicki.config import Config
 from palubicki.sim.bh import allocate, compute_v_subtree
-from palubicki.sim.clock import Clock
 from palubicki.sim.bud_break_bias import compute_axis_positions, position_weight
+from palubicki.sim.clock import Clock
 from palubicki.sim.elongation import compute_target_with_age, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
 from palubicki.sim.light import LightGrid

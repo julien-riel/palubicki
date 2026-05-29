@@ -34,7 +34,7 @@ def test_growth_confined_to_first_half_year(tmp_path):
     fractions = [_year_fraction(iod.birth_time) for iod in tree.all_internodes]
     assert fractions, "expected some internodes"
     # Every internode is born in the growth window [0.0, 0.5).
-    assert all(0.0 <= f < 0.5 for f in fractions), sorted(set(round(f, 3) for f in fractions))
+    assert all(0.0 <= f < 0.5 for f in fractions), sorted({round(f, 3) for f in fractions})
 
 
 def test_no_internodes_born_in_dormant_half(tmp_path):
