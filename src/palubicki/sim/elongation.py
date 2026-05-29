@@ -20,17 +20,17 @@ from palubicki.sim.tree import Tree
 
 def compute_target_with_age(
     base_length: float,
-    birth_iteration: int,
-    max_iterations: int,
+    birth_time: float,
+    total_years: float,
     cfg: ElongationConfig,
 ) -> float:
-    """target_length = base_length × age_factor(birth_iteration)."""
-    if not cfg.enabled or max_iterations <= 0:
+    """target_length = base_length × age_factor(birth_time / total_years)."""
+    if not cfg.enabled or total_years <= 0:
         return base_length
     decay = cfg.age_factor_decay
     if decay <= 0:
         return base_length
-    t_norm = min(1.0, birth_iteration / max_iterations)
+    t_norm = min(1.0, birth_time / total_years)
     base = math.exp(-decay * t_norm)
     base_at_one = math.exp(-decay)
     factor = (
@@ -40,22 +40,22 @@ def compute_target_with_age(
     return base_length * factor
 
 
-def update_lengths(tree: Tree, current_iteration: int, cfg: ElongationConfig) -> None:
+def update_lengths(tree: Tree, current_time: float, cfg: ElongationConfig) -> None:
     """Recompute Internode.length in-place via sigmoid ramp.
 
     length(t) = length_target * sigmoid((elapsed - tau) / (tau/2))
-    where elapsed = max(0, current_iteration - birth_iteration).
+    where elapsed = max(0.0, current_time - birth_time) and tau = tau_years.
 
-    No-op if cfg.enabled is False or cfg.tau_iterations <= 0.
+    No-op if cfg.enabled is False or cfg.tau_years <= 0.
     """
     if not cfg.enabled:
         return
-    tau = cfg.tau_iterations
+    tau = cfg.tau_years
     if tau <= 0:
         return
     half_tau = tau / 2.0
     for iod in tree.all_internodes:
-        elapsed = max(0, current_iteration - iod.birth_iteration)
+        elapsed = max(0.0, current_time - iod.birth_time)
         x = (elapsed - tau) / half_tau
         sigma = 1.0 / (1.0 + math.exp(-x))
         iod.length = iod.length_target * sigma
