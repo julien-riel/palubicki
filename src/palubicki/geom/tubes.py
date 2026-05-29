@@ -16,6 +16,18 @@ class _ChainBuild:
     radii: list[float]
 
 
+@dataclass
+class _FlareSpec:
+    """Render-time flare descriptor for the trunk chain. Ground reference is the
+    chain's own first-node Y (computed inside ``_emit_chain_tube``)."""
+    height: float
+    factor: float            # already jittered + clamped to >= 1.0 by build_bark_primitive
+    falloff: str             # "linear" | "smoothstep"
+    buttress_count: int
+    buttress_amplitude: float
+    buttress_phase: float
+
+
 def _falloff(t: np.ndarray, mode: str) -> np.ndarray:
     """Flare blend weight on ``t`` in [0, 1] (1 at base, 0 at top of flare zone).
 
@@ -26,8 +38,36 @@ def _falloff(t: np.ndarray, mode: str) -> np.ndarray:
     return t
 
 
-def build_bark_primitive(tree: Tree, *, ring_sides: int, material: Material) -> Primitive:
+def build_bark_primitive(
+    tree: Tree,
+    *,
+    ring_sides: int,
+    material: Material,
+    flare_height: float = 0.0,
+    flare_factor: float = 1.0,
+    flare_falloff: str = "linear",
+    buttress_count: int = 0,
+    buttress_amplitude: float = 0.0,
+    flare_variation: float = 0.0,
+    seed: int = 0,
+) -> Primitive:
     chains = _collect_chains(tree)
+
+    # Per-tree variation: phase rotates buttress ridges, jitter perturbs the factor.
+    # Two draws in fixed order keep seed -> output deterministic.
+    rng = np.random.default_rng(seed)
+    buttress_phase = float(rng.uniform(0.0, 2.0 * np.pi))
+    jitter = float(rng.uniform(-1.0, 1.0)) * flare_variation
+    eff_factor = max(1.0, flare_factor * (1.0 + jitter))
+
+    flare = _FlareSpec(
+        height=flare_height,
+        factor=eff_factor,
+        falloff=flare_falloff,
+        buttress_count=buttress_count,
+        buttress_amplitude=buttress_amplitude,
+        buttress_phase=buttress_phase,
+    )
 
     pos_parts: list[np.ndarray] = []
     nor_parts: list[np.ndarray] = []
@@ -35,8 +75,9 @@ def build_bark_primitive(tree: Tree, *, ring_sides: int, material: Material) -> 
     idx_parts: list[np.ndarray] = []
     vertex_offset = 0
 
-    for chain in chains:
-        p, n, u, idx = _emit_chain_tube(chain, ring_sides, vertex_offset)
+    for i, chain in enumerate(chains):
+        chain_flare = flare if i == 0 else None  # trunk chain only
+        p, n, u, idx = _emit_chain_tube(chain, ring_sides, vertex_offset, chain_flare)
         if p.shape[0]:
             pos_parts.append(p)
             nor_parts.append(n)
@@ -121,10 +162,34 @@ def _avg_radius_at_node(node: Node) -> float:
     return sum(rs) / len(rs)
 
 
+def _flare_radius_field(
+    node_positions: np.ndarray,   # (N, 3) bent positions
+    radii_arr: np.ndarray,        # (N,)
+    angles: np.ndarray,           # (columns,)
+    flare: _FlareSpec | None,
+) -> np.ndarray:
+    """Effective per-vertex radius. ``(N, 1)`` (broadcasts over columns) when no
+    flare, ``(N, columns)`` when the trunk chain carries a ``_FlareSpec``.
+
+    Radial (axisymmetric) component only is added here; buttress is layered on in
+    a later task. Ground reference is the chain's own first node ``node_positions[0, 1]``.
+    """
+    if flare is None or flare.height <= 0.0:
+        return radii_arr[:, None]
+
+    base_y = node_positions[0, 1]
+    y = node_positions[:, 1] - base_y                         # (N,)
+    t = np.clip((flare.height - y) / flare.height, 0.0, 1.0)  # 1 at base, 0 at top
+    f = _falloff(t, flare.falloff)                            # (N,)
+    radial = 1.0 + (flare.factor - 1.0) * f                   # (N,)
+    return (radii_arr * radial)[:, None]                      # (N, 1)
+
+
 def _emit_chain_tube(
     chain: _ChainBuild,
     ring_sides: int,
     vertex_offset: int,
+    flare: _FlareSpec | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Emit a tube along ``chain``. Returns ``(positions, normals, uvs, indices)``.
 
@@ -180,7 +245,8 @@ def _emit_chain_tube(
 
     # radials[i, k] = cos_a[k] * rights[i] + sin_a[k] * ups[i]  →  (N, columns, 3)
     radials = cos_a[None, :, None] * rights[:, None, :] + sin_a[None, :, None] * ups[:, None, :]
-    positions = node_positions[:, None, :] + radii_arr[:, None, None] * radials
+    r_eff = _flare_radius_field(node_positions, radii_arr, angles, flare)
+    positions = node_positions[:, None, :] + r_eff[:, :, None] * radials
     normals = radials  # already unit length: |cos²+sin²|·|right⊥up|=1
 
     u_row = k_indices.astype(np.float32) / np.float32(ring_sides)

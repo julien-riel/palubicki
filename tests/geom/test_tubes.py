@@ -219,3 +219,44 @@ def test_falloff_smoothstep_known_values():
     # 3t^2 - 2t^3
     expected = np.array([0.0, 0.15625, 0.5, 1.0])
     np.testing.assert_allclose(_falloff(t, "smoothstep"), expected)
+
+
+def _radial_dist(prim, ring_sides):
+    # radial distance from the +Y axis for each vertex (vertical chain through origin)
+    return np.sqrt(prim.positions[:, 0] ** 2 + prim.positions[:, 2] ** 2)
+
+
+def test_flare_factor_one_is_identity():
+    tree_a = _vertical_chain(n=4, length=0.2, r=0.05)
+    tree_b = _vertical_chain(n=4, length=0.2, r=0.05)
+    base = build_bark_primitive(tree_a, ring_sides=8, material=_mat())
+    flared = build_bark_primitive(
+        tree_b, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.0, flare_falloff="linear",
+    )
+    np.testing.assert_array_equal(base.positions, flared.positions)
+
+
+def test_flare_widens_base_ring_only():
+    # chain nodes at y = 0, 0.2, 0.4, 0.6, 0.8 ; flare_height 0.5 => y>=0.5 untouched
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=2.0, flare_falloff="linear",
+        flare_variation=0.0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]            # y = 0  => t = 1 => scale 2.0
+    top_ring = rad[4 * columns:5 * columns]  # y = 0.8 => t = 0 => scale 1.0
+    np.testing.assert_allclose(base_ring, 0.10, atol=1e-6)   # 0.05 * 2
+    np.testing.assert_allclose(top_ring, 0.05, atol=1e-6)
+
+
+def test_flare_builds_finite_positions():
+    tree = _vertical_chain(n=3, length=0.2, r=0.05)
+    flared = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=2.0,
+    )
+    assert np.isfinite(flared.positions).all()
