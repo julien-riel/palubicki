@@ -121,14 +121,26 @@ def _circular_dist(a, b):
     return min(d, 360.0 - d)
 
 
-def _assert_mode(mode, extra, expected_deg):
+def _assert_mode(mode, extra, expected_deg, symmetric_180=False):
+    """Assert every measured divergence step is within TOL of expected_deg.
+
+    ``symmetric_180``: for decussate, each node carries a 180°-opposite pair, so
+    measuring ``lateral_buds[0]`` reads the alternation as +expected on even→odd
+    nodes and (expected+180) on odd→even nodes (e.g. 90° then 270°). Both encode
+    the same physical 90° pair-rotation, so accept either. (origin/main's axes
+    were too short to ever measure the back-step; the vigor model #20 grows axes
+    long enough to expose it — a measurement artifact, not a chirality defect.)
+    """
     checked = 0
     offenders = []
     for seed in SEEDS:
         steps = _divergence_steps(simulate(_make_cfg(mode, extra, seed)))
         for s in steps:
             checked += 1
-            if _circular_dist(s, expected_deg) > TOL_DEG:
+            dist = _circular_dist(s, expected_deg)
+            if symmetric_180:
+                dist = min(dist, _circular_dist(s, expected_deg + 180.0))
+            if dist > TOL_DEG:
                 offenders.append(f"seed={seed} step={s:.2f}° (expected {expected_deg}°)")
     assert checked > 5, f"{mode}: too few measurable steps ({checked})"
     assert not offenders, (
@@ -144,7 +156,7 @@ def test_spiral_divergence_137_on_every_axis():
 
 def test_decussate_alternates_90_on_every_axis():
     """Decussate (maple): successive same-axis nodes rotate the pair ~90°."""
-    _assert_mode("decussate", {"divergence_angle_deg": 0.0}, 90.0)
+    _assert_mode("decussate", {"divergence_angle_deg": 0.0}, 90.0, symmetric_180=True)
 
 
 def test_distichous_flips_180_on_every_axis():
