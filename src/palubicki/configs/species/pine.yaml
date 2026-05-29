@@ -6,16 +6,18 @@ envelope:
   rz: 2.5
   marker_count: 18000
 sim:
-  internode_length: 0.18
+  shoot_extension_max: 0.18
+  vigor_ref: 1.0
+  vigor_dormancy: 0.3
+  vigor_smoothing: 0.7
+  vigor_diameter_gain: 0.5
   internode_length_jitter: 0.10
-  lambda_apical: 0.85
+  lambda_apical: 0.65
   alpha_basipetal: 2.5
   max_simulation_years: 50
   elongation:
     enabled: true
     tau_years: 2.5
-    age_factor_min: 0.4
-    age_factor_decay: 0.7
   sympodial:
     enabled: false
   shade_mortality:
