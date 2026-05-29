@@ -41,3 +41,33 @@ def test_mesh_holds_multiple_primitives():
     )
     mesh = Mesh(primitives=[p, p])
     assert len(mesh.primitives) == 2
+
+
+def _bare_mat():
+    return Material(name="bark", base_color=(1, 1, 1, 1), metallic=0.0, roughness=1.0,
+                    base_color_texture_png=None, alpha_mode="OPAQUE",
+                    alpha_cutoff=0.5, double_sided=False)
+
+
+def test_primitive_colors_defaults_none():
+    p = Primitive(
+        positions=np.zeros((3, 3), np.float32),
+        normals=np.zeros((3, 3), np.float32),
+        uvs=np.zeros((3, 2), np.float32),
+        indices=np.array([0, 1, 2], np.uint32),
+        material=_bare_mat(),
+    )
+    assert p.colors is None
+
+
+def test_primitive_accepts_colors():
+    cols = np.ones((3, 3), np.float32)
+    p = Primitive(
+        positions=np.zeros((3, 3), np.float32),
+        normals=np.zeros((3, 3), np.float32),
+        uvs=np.zeros((3, 2), np.float32),
+        indices=np.array([0, 1, 2], np.uint32),
+        material=_bare_mat(),
+        colors=cols,
+    )
+    assert p.colors is cols

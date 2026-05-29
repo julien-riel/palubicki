@@ -26,6 +26,7 @@ class Primitive:
     uvs: np.ndarray        # (V, 2) float32
     indices: np.ndarray    # (M,)   uint32
     material: Material
+    colors: np.ndarray | None = None  # (V, 3) float32 per-vertex RGB; None = no vertex color
 
 
 @dataclass
