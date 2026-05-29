@@ -206,7 +206,7 @@ class SagConfig:
 class ElongationConfig:
     """Progressive internode elongation (S-curve) + age_factor on target length.
 
-    Each Internode records its birth_iteration and length_target at creation.
+    Each Internode records its birth_time and length_target at creation.
     Its effective ``length`` ramps from 0 toward ``length_target`` via a sigmoid
     centered at ``tau_years`` after birth (so length ≈ 0.5 * target at
     age=tau, ≈ 0.88 * target at age=2*tau).
