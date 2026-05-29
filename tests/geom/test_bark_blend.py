@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from palubicki.geom.bark_blend import BarkBlendStops, bark_tint
 
@@ -41,6 +42,14 @@ def test_midpoint_mature_to_senescent_is_halfway():
     out = bark_tint(np.array([0.20]), _stops())
     expected = 0.5 * np.array([0.35, 0.22, 0.12]) + 0.5 * np.array([0.22, 0.20, 0.16])
     np.testing.assert_allclose(out[0], expected, atol=1e-6)
+
+
+def test_out_of_order_stops_raises():
+    with pytest.raises(ValueError, match="ordered"):
+        BarkBlendStops(
+            d_young=0.30, d_mature=0.10, d_senescent=0.02,
+            c_young=(0.4, 0.4, 0.4), c_mature=(0.3, 0.3, 0.3), c_senescent=(0.2, 0.2, 0.2),
+        )
 
 
 def test_degenerate_equal_stops_no_nan():

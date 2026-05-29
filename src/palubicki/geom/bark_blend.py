@@ -21,6 +21,14 @@ class BarkBlendStops:
     c_mature: RGB
     c_senescent: RGB
 
+    def __post_init__(self) -> None:
+        if not (self.d_young <= self.d_mature <= self.d_senescent):
+            raise ValueError(
+                "bark blend diameters must be ordered "
+                f"d_young <= d_mature <= d_senescent, got "
+                f"{self.d_young}, {self.d_mature}, {self.d_senescent}"
+            )
+
 
 def _lerp_segment(
     d: np.ndarray, lo: float, hi: float, c_lo: np.ndarray, c_hi: np.ndarray
