@@ -47,7 +47,7 @@ def test_simulate_is_deterministic(tmp_path):
     np.testing.assert_array_equal(pos_a, pos_b)
 
 
-def test_simulate_stops_at_max_iterations(tmp_path):
+def test_simulate_stops_at_max_simulation_years(tmp_path):
     cfg = _tiny_config(tmp_path)
     # 0 iterations -> just root, no internodes
     cfg_0 = Config(

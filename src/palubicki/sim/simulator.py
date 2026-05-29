@@ -312,7 +312,7 @@ def _grow_tree(
                     continue
 
             new_node, terminal = _emit_node(
-                cur, d, new_pos, target, is_main, light_info, tree, cfg, iteration, t, state
+                cur, d, new_pos, target, is_main, light_info, tree, cfg, t, state
             )
             new_positions.append(new_pos)
             nodes_created += 1
@@ -346,6 +346,7 @@ def _internode_target(cur: Bud, cfg: Config, iteration: int, t: float, state: _S
     draw is reproducible and independent of perception/light ordering."""
     base_length = cfg.sim.internode_length
     if cfg.sim.internode_length_jitter > 0:
+        # iteration is the integer loop index, used only for RNG seeding (not biological time).
         ss = np.random.SeedSequence(
             [cfg.seed, _ILEN_SALT, iteration, state.node_index]
         )
@@ -362,7 +363,7 @@ def _internode_target(cur: Bud, cfg: Config, iteration: int, t: float, state: _S
 
 def _emit_node(
     cur: Bud, d: np.ndarray, new_pos: np.ndarray, target: float, is_main: bool,
-    light_info, tree: Tree, cfg: Config, iteration: int, t: float, state: _SimState,
+    light_info, tree: Tree, cfg: Config, t: float, state: _SimState,
 ) -> tuple[Node, Bud]:
     """Create the node + internode + terminal/lateral/reserve buds for one substep
     emission. Mutates tree.all_internodes, state.node_index, cur.parent_node's child
