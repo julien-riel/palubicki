@@ -6,6 +6,8 @@
 
 **Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)), and the **time / phenology foundation** ([#10](https://github.com/julien-riel/palubicki/issues/10)) all landed on `main`.
 
+> **Cross-cutting review (2026-05-29, [../2026-05-29-codebase-review.md](../2026-05-29-codebase-review.md)).** Surfaced a **phyllotaxis per-axis delivery defect**: the divergence azimuth is keyed on a *global* `node_index` shared across all bud chains, so successive-node divergence is scrambled on the real tree even though each mode is correct in the function. Filed as [#24](https://github.com/julien-riel/palubicki/issues/24) (fix) + [#25](https://github.com/julien-riel/palubicki/issues/25) (per-axis regression test). See §5. (The review also filed the software-side [#26](https://github.com/julien-riel/palubicki/issues/26) — recursive config loader — out of scope for this botanical doc.)
+
 ## What changed since the 2026-05-28 review
 
 All merged to `main` via the issue tracker:
@@ -123,6 +125,8 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 ## §5 — Phyllotaxis
 
+> ⚠️ **Correctness caveat (2026-05-29).** Every mode below is correct *inside* `lateral_bud_directions`, but its azimuth is driven by a **global `node_index`** shared across all bud chains and interleaved between them (`sim/simulator.py:227`), so successive-node divergence is **not delivered per-axis on the real tree** (spiral scrambled; decussate/distichous parity collapses). The ✅ in this table mean *implemented in the function*, not *delivered per-axis*. Fix: [#24](https://github.com/julien-riel/palubicki/issues/24); per-axis regression test: [#25](https://github.com/julien-riel/palubicki/issues/25).
+
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
 | Distichous (true alternate 2-ranked, 180° with no rotation) | ✅ | ⬆ Implemented | `phyllotaxy.py` mode `"distichous"` ([issue #15](https://github.com/julien-riel/palubicki/issues/15)) — single bud per node, 180° alternation between successive nodes. The `distichous_on_plagiotropic` flag auto-switches plagiotropic (order > 0) axes to distichous, so conifer side-sprays form a flat 2-ranked plane. | — | — | **DONE** — unblocks grass leaves and visibly-correct conifer sprays. |
@@ -130,9 +134,10 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Whorled | ✅ | = | `k=whorl_count` (pine: ×5 @ 72°) | — | — | — |
 | Spiral / golden angle (137.508°) | ✅ | = | Default `divergence_angle_deg=137.5` (oak, birch) | — | — | — |
 | Divergence jitter | ✅ | = | Gaussian σ, clamped | — | — | — |
+| **Per-axis delivery of the above modes** (azimuth advances correctly *along each axis*) | 🟡 | 🆕 | global `node_index` shared across chains (`sim/simulator.py:227`) → successive-node divergence scrambled on the real tree; correct only in the unit function | H | L | **FIX** ([#24](https://github.com/julien-riel/palubicki/issues/24)) + test ([#25](https://github.com/julien-riel/palubicki/issues/25)) |
 | Juvenile vs adult phyllotaxis switch | ❌ | = | — | L | L | **SKIP** |
 
-**Verdict.** Complete for the species in scope. True distichous ([issue #15](https://github.com/julien-riel/palubicki/issues/15)) landed and, via `distichous_on_plagiotropic`, fir/pine side-sprays now form a flat 2-ranked plane rather than spiralling. Only the juvenile-vs-adult phyllotaxis switch remains, and it stays **SKIP**.
+**Verdict.** Each mode is implemented correctly *in the function*, but a cross-cutting defect undercuts this section on the real tree: the divergence azimuth is keyed on a **global `node_index`**, not a per-axis ordinal, so successive-node divergence is scrambled — subtle for spiral, structural for decussate/distichous (see the caveat above, [#24](https://github.com/julien-riel/palubicki/issues/24) / [#25](https://github.com/julien-riel/palubicki/issues/25)). Once that lands, the section is complete for the species in scope: true distichous ([issue #15](https://github.com/julien-riel/palubicki/issues/15)) + `distichous_on_plagiotropic` give flat 2-ranked conifer sprays, and only the juvenile-vs-adult phyllotaxis switch remains (**SKIP**).
 
 ---
 
