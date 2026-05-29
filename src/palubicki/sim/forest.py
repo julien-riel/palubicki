@@ -9,10 +9,9 @@ from palubicki.config import (
     _SECTION_TYPES,
     Config,
     ConfigError,
-    ElongationConfig,
     EnvelopeConfig,
     ForestSeed,
-    SympodialConfig,
+    _coerce,
     _load_packaged_species,
 )
 from palubicki.sim.envelope import sample_markers
@@ -27,33 +26,13 @@ _SECTION_FIELDS = {
 
 def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Config:
     """Return a new Config: cfg with species preset (if any) + seed_entry.overrides
-    applied (dotted keys) and envelope.center translated to seed_entry.position."""
-    if seed_entry.species is not None:
-        preset = _load_packaged_species(seed_entry.species)
-        new_sections: dict = {}
-        for section_name, type_ in _SECTION_TYPES.items():
-            cur_section = getattr(cfg, section_name)
-            cur_dict = {f.name: getattr(cur_section, f.name) for f in fields(type_)}
-            preset_section = preset.get(section_name, {}) or {}
-            allowed = {f.name for f in fields(type_)}
-            unknown = set(preset_section) - allowed
-            if unknown:
-                raise ConfigError(
-                    f"unknown keys in species preset section '{section_name}': {sorted(unknown)}"
-                )
-            cur_dict.update(preset_section)
-            if section_name == "sim" and "sympodial" in cur_dict and isinstance(cur_dict["sympodial"], dict):
-                cur_dict["sympodial"] = SympodialConfig(**cur_dict["sympodial"])
-            if section_name == "sim" and "shade_mortality" in cur_dict and isinstance(cur_dict["shade_mortality"], dict):
-                from palubicki.config import ShadeMortalityConfig
-                cur_dict["shade_mortality"] = ShadeMortalityConfig(**cur_dict["shade_mortality"])
-            if section_name == "sim" and isinstance(cur_dict.get("elongation"), dict):
-                cur_dict["elongation"] = ElongationConfig(**cur_dict["elongation"])
-            if section_name == "phyllotaxy" and "branch_angle_by_order" in cur_dict and isinstance(cur_dict["branch_angle_by_order"], list):
-                cur_dict["branch_angle_by_order"] = tuple(float(x) for x in cur_dict["branch_angle_by_order"])
-            new_sections[section_name] = type_(**cur_dict)
-    else:
-        new_sections = {s: getattr(cfg, s) for s in _SECTION_FIELDS}
+    applied (dotted keys) and envelope.center translated to seed_entry.position.
+
+    Per-section, the current values, the species preset, and the per-seed
+    overrides are merged into one dict and built through the shared recursive
+    ``_coerce`` loader, so nested-dataclass / sequence coercion matches
+    single-tree ``load_config`` exactly (no subset to forget)."""
+    preset = _load_packaged_species(seed_entry.species) if seed_entry.species is not None else {}
 
     section_updates: dict[str, dict] = {s: {} for s in _SECTION_FIELDS}
     top_updates: dict[str, object] = {}
@@ -67,9 +46,13 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
                 raise ConfigError(f"unknown section in override: {dotted!r}")
             section_updates[section][key] = value
 
-    for s in _SECTION_FIELDS:
-        if section_updates[s]:
-            new_sections[s] = replace(new_sections[s], **section_updates[s])
+    new_sections: dict = {}
+    for section_name, type_ in _SECTION_TYPES.items():
+        cur_section = getattr(cfg, section_name)
+        merged = {f.name: getattr(cur_section, f.name) for f in fields(type_)}
+        merged.update(preset.get(section_name, {}) or {})
+        merged.update(section_updates[section_name])
+        new_sections[section_name] = _coerce(type_, merged, path=section_name)
 
     if "envelope.center" not in seed_entry.overrides:
         new_sections["envelope"] = replace(new_sections["envelope"], center=tuple(seed_entry.position))
