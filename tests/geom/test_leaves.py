@@ -26,11 +26,12 @@ def _tree_with_n_terminal_buds(n):
 def test_one_bud_default_shape_vert_count():
     """Default leaf_shape=ovate (base N=16) + entire margin + cluster=1:
     per face = 16 boundary + 1 anchor = 17 verts and 48 indices.
-    Two perpendicular faces per cluster member = 34 verts, 96 indices."""
+    Ovate is parametric → n_planes=1 (single plane, no cross-blade sliver)
+    → 17 verts, 48 indices."""
     tree = _tree_with_n_terminal_buds(1)
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
-    assert prim.positions.shape == (34, 3)
-    assert prim.indices.shape == (96,)
+    assert prim.positions.shape == (17, 3)
+    assert prim.indices.shape == (48,)
 
 
 def test_dead_buds_excluded():
@@ -41,10 +42,11 @@ def test_dead_buds_excluded():
 
 
 def test_three_buds_yields_3x_default_blade_verts():
+    """3 buds × 17 verts (ovate, n_planes=1) = 51 verts; 3 × 48 = 144 indices."""
     tree = _tree_with_n_terminal_buds(3)
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
-    assert prim.positions.shape == (102, 3)
-    assert prim.indices.shape == (288,)
+    assert prim.positions.shape == (51, 3)
+    assert prim.indices.shape == (144,)
 
 
 def test_indices_within_bounds():
@@ -135,6 +137,22 @@ def test_leaf_size_clamped_low():
     t_ref = _tree_one_apex_with_internode(light_factor=1.0)
     p_ref = build_leaves_primitive(t_ref, leaf_size=0.1, material=_mat(), sun_shade_k=0.0)
     assert _leaf_extent(p) >= 0.5 * _leaf_extent(p_ref) - 1e-6
+
+
+def test_linear_shape_keeps_cross_blade():
+    """leaf_shape=linear should still emit cross-blade (n_planes=2) so needles
+    don't disappear when viewed edge-on. Linear blade has 4 boundary verts +
+    1 anchor = 5 verts/face and 12 indices/face; cross-blade → 10 verts and
+    24 indices per cluster member.
+    1 bud × cluster_count=1 × 2 planes = 10 verts, 24 indices.
+    """
+    tree = _tree_with_n_terminal_buds(1)
+    prim = build_leaves_primitive(
+        tree, leaf_size=0.06, material=_mat(),
+        leaf_shape="linear",
+    )
+    assert prim.positions.shape == (10, 3)
+    assert prim.indices.shape == (24,)
 
 
 def test_leaves_follow_sag_offset_at_apex():

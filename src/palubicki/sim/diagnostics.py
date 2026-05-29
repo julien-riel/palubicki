@@ -352,9 +352,15 @@ def _total_leaf_area(tree: Tree, cfg: "Config") -> float:
     unit_blade_area = float(0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum())
 
     splay_rad = math.radians(g.leaf_splay_deg)
+    # n_planes mirrors the logic in build_leaves_primitive: cross-blade only
+    # for linear (needle) shapes; single plane for all parametric shapes.
+    n_planes = 2 if g.leaf_shape == "linear" else 1
     # Plane A area is reduced by cos(splay_rad) due to the shear from splay.
-    # Plane B area is unchanged (basis_u⊥leaf_up always).
-    pair_area = unit_blade_area * (math.cos(splay_rad) + 1.0)
+    # Plane B area is unchanged (basis_u⊥leaf_up always), but only present
+    # when n_planes == 2.
+    plane_a_factor = math.cos(splay_rad)
+    plane_b_factor = 1.0 if n_planes == 2 else 0.0
+    pair_area = unit_blade_area * (plane_a_factor + plane_b_factor)
 
     total = 0.0
     for _center, _direction, source_iod in sites:

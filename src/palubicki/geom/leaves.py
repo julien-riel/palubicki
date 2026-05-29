@@ -42,7 +42,13 @@ def build_leaves_primitive(
     leaf_margin_depth: float = 0.0,
     leaf_margin_count: int = 0,
 ) -> Primitive:
-    """Emit `cluster_count` x 2 perpendicular triangulated blades per foliage site.
+    """Emit ``cluster_count`` x ``n_planes`` triangulated blades per foliage site.
+
+    ``n_planes`` is 2 (cross-blade) when ``leaf_shape == "linear"`` and 1
+    otherwise. Cross-blade is only needed for shapes whose silhouette collapses
+    when viewed edge-on (linear needles / rectangles). Parametric shapes
+    (ovate, palmate, etc.) use a single plane per cluster member to avoid the
+    perpendicular-plane sliver artifact.
 
     A foliage site is any node within ``foliage_depth`` internode-steps of the
     nearest terminal apex. With foliage_depth=1 this collapses back to
@@ -74,8 +80,15 @@ def build_leaves_primitive(
     blade_v_count = blade_pos_unit.shape[0]
     blade_i_count = blade_idx.shape[0]
 
-    verts_per_site = cluster_count * 2 * blade_v_count
-    idx_per_site = cluster_count * 2 * blade_i_count
+    # Cross-blade (two perpendicular planes per cluster member) only makes
+    # sense for shapes whose silhouette disappears when viewed edge-on
+    # (linear needles / rectangles). For parametric shapes with rich
+    # boundaries the perpendicular plane shows as a confusing sliver — see
+    # issue #4 follow-up.
+    n_planes = 2 if leaf_shape == "linear" else 1
+
+    verts_per_site = cluster_count * n_planes * blade_v_count
+    idx_per_site = cluster_count * n_planes * blade_i_count
     n = len(sites)
     positions = np.empty((n * verts_per_site, 3), dtype=np.float32)
     normals = np.empty((n * verts_per_site, 3), dtype=np.float32)
@@ -89,7 +102,7 @@ def build_leaves_primitive(
         v_start = i * verts_per_site
         i_start = i * idx_per_site
         _emit_leaf_cluster(
-            center, direction, eff_size, cluster_count, splay_rad,
+            center, direction, eff_size, cluster_count, splay_rad, n_planes,
             blade_pos_unit, blade_uv, blade_idx,
             positions[v_start : v_start + verts_per_site],
             normals[v_start : v_start + verts_per_site],
@@ -171,14 +184,14 @@ def _collect_foliage_sites(
     return sites
 
 
-def _emit_leaf_cluster(center, direction, size, cluster_count, splay_rad,
+def _emit_leaf_cluster(center, direction, size, cluster_count, splay_rad, n_planes,
                        blade_pos_unit, blade_uv, blade_idx,
                        out_pos, out_norm, out_uv, out_idx, base):
-    """Emit ``cluster_count`` x 2 perpendicular triangulated blades per foliage site.
+    """Emit ``cluster_count * n_planes`` triangulated blades per foliage site.
 
-    The blade is built once in (u, v, 0) local space with length=1, width=aspect.
-    Per cluster member we lift it onto two perpendicular planes (cross-blade) so
-    the leaf is visible from any angle.
+    ``n_planes``: 1 = single plane per cluster member (parametric shapes —
+    avoids the cross-blade sliver artifact); 2 = cross-blade (linear shapes,
+    where a single plane viewed edge-on is invisible).
     """
     d = np.asarray(direction, dtype=np.float64)
     d = d / np.linalg.norm(d)
@@ -195,28 +208,30 @@ def _emit_leaf_cluster(center, direction, size, cluster_count, splay_rad,
         leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
 
         # Plane A: basis_u = rot_axis_u, basis_v = leaf_up, normal = rot_axis_w
-        slot_a = k * 2 * blade_v_count
+        slot_a = k * n_planes * blade_v_count
+        idx_a = k * n_planes * blade_i_count
         _lift_blade(
             blade_pos_unit, blade_uv, blade_idx,
             leaf_center, rot_axis_u, leaf_up, rot_axis_w, size,
             out_pos[slot_a : slot_a + blade_v_count],
             out_norm[slot_a : slot_a + blade_v_count],
             out_uv[slot_a : slot_a + blade_v_count],
-            out_idx[k * 2 * blade_i_count : k * 2 * blade_i_count + blade_i_count],
+            out_idx[idx_a : idx_a + blade_i_count],
             base + slot_a,
         )
-        # Plane B: basis_u = rot_axis_w, basis_v = leaf_up, normal = rot_axis_u
-        slot_b = slot_a + blade_v_count
-        _lift_blade(
-            blade_pos_unit, blade_uv, blade_idx,
-            leaf_center, rot_axis_w, leaf_up, rot_axis_u, size,
-            out_pos[slot_b : slot_b + blade_v_count],
-            out_norm[slot_b : slot_b + blade_v_count],
-            out_uv[slot_b : slot_b + blade_v_count],
-            out_idx[k * 2 * blade_i_count + blade_i_count :
-                    k * 2 * blade_i_count + 2 * blade_i_count],
-            base + slot_b,
-        )
+        if n_planes == 2:
+            # Plane B: basis_u = rot_axis_w, basis_v = leaf_up, normal = rot_axis_u
+            slot_b = slot_a + blade_v_count
+            idx_b = idx_a + blade_i_count
+            _lift_blade(
+                blade_pos_unit, blade_uv, blade_idx,
+                leaf_center, rot_axis_w, leaf_up, rot_axis_u, size,
+                out_pos[slot_b : slot_b + blade_v_count],
+                out_norm[slot_b : slot_b + blade_v_count],
+                out_uv[slot_b : slot_b + blade_v_count],
+                out_idx[idx_b : idx_b + blade_i_count],
+                base + slot_b,
+            )
 
 
 def _lift_blade(blade_pos_unit, blade_uv, blade_idx,

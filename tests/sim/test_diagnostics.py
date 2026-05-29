@@ -389,8 +389,9 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     h = float(np.sum(prim.positions.astype(np.float64) ** 2))
     # Baseline captured from oak/seed-0 run after parametric leaf blade changes
     # (Task 9: update golden tests and diagnostic baselines after leaf shape/margin integration).
-    # Updated with leaf_shape/leaf_margin parameters now passed to build_leaves_primitive.
-    EXPECTED_HASH = 33392697.220862743  # noqa: N806
+    # Updated: cross-blade removed for non-linear shapes (n_planes=1), halving
+    # vertex count for ovate (oak default). Hash updated accordingly.
+    EXPECTED_HASH = 16696335.565137442  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
