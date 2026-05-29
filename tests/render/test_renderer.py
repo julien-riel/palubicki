@@ -196,3 +196,37 @@ def test_render_mesh_produces_non_background_pixels():
     delta = np.abs(img[:, :, :3].astype(int) - 255).max(axis=2)
     nonbg_ratio = (delta > 8).mean()
     assert nonbg_ratio > 0.005, f"expected >0.5% non-bg pixels, got {nonbg_ratio:.4%}"
+
+
+# ---------------------------------------------------------------------------
+# Per-vertex color tests (#9)
+# ---------------------------------------------------------------------------
+
+def _mat(base):
+    return Material(name="bark", base_color=base, metallic=0.0, roughness=1.0,
+                    base_color_texture_png=None, alpha_mode="OPAQUE",
+                    alpha_cutoff=0.5, double_sided=False)
+
+
+def _one_tri(colors=None):
+    return Primitive(
+        positions=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32),
+        normals=np.tile([0, 0, 1], (3, 1)).astype(np.float32),
+        uvs=np.zeros((3, 2), np.float32),
+        indices=np.array([0, 1, 2], np.uint32),
+        material=_mat((0.9, 0.1, 0.1, 1.0)),
+        colors=colors,
+    )
+
+
+def test_flatten_uses_base_color_without_vertex_colors():
+    from palubicki.render.renderer import _flatten
+    _, _, cols = _flatten(Mesh(primitives=[_one_tri()]))
+    np.testing.assert_allclose(cols[0], [0.9, 0.1, 0.1], atol=1e-6)
+
+
+def test_flatten_uses_mean_vertex_color():
+    from palubicki.render.renderer import _flatten
+    vc = np.array([[0.0, 0.0, 0.0], [0.6, 0.6, 0.6], [0.6, 0.6, 0.6]], np.float32)
+    _, _, cols = _flatten(Mesh(primitives=[_one_tri(colors=vc)]))
+    np.testing.assert_allclose(cols[0], [0.4, 0.4, 0.4], atol=1e-6)
