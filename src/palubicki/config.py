@@ -208,11 +208,11 @@ class ElongationConfig:
 
     Each Internode records its birth_iteration and length_target at creation.
     Its effective ``length`` ramps from 0 toward ``length_target`` via a sigmoid
-    centered at ``tau_iterations`` after birth (so length ≈ 0.5 * target at
+    centered at ``tau_years`` after birth (so length ≈ 0.5 * target at
     age=tau, ≈ 0.88 * target at age=2*tau).
     """
     enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
-    tau_iterations: float = field(
+    tau_years: float = field(
         default=3.0, metadata={"ui": {"min": 0.5, "max": 10.0, "step": 0.1}}
     )
     age_factor_min: float = field(
@@ -412,8 +412,8 @@ class Config:
                 "sim.shade_mortality.enabled=True requires light.enabled=True"
             )
         e = self.sim.elongation
-        if e.tau_iterations <= 0:
-            raise ConfigError(f"sim.elongation.tau_iterations must be > 0, got {e.tau_iterations}")
+        if e.tau_years <= 0:
+            raise ConfigError(f"sim.elongation.tau_years must be > 0, got {e.tau_years}")
         if not (0.1 <= e.age_factor_min <= 1.0):
             raise ConfigError(
                 f"sim.elongation.age_factor_min must be in [0.1, 1.0], got {e.age_factor_min}"

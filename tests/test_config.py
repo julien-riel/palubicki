@@ -488,7 +488,7 @@ def test_elongation_defaults_disabled():
     from palubicki.config import ElongationConfig
     cfg = ElongationConfig()
     assert cfg.enabled is False
-    assert cfg.tau_iterations == 3.0
+    assert cfg.tau_years == 3.0
     assert cfg.age_factor_min == 0.5
     assert cfg.age_factor_decay == 0.5
 
@@ -503,8 +503,8 @@ def test_sim_config_has_elongation_subdataclass():
 def test_elongation_validation_tau_must_be_positive(tmp_path):
     from palubicki.config import ConfigError, load_config
     yaml_path = tmp_path / "bad.yaml"
-    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    tau_iterations: 0.0\n")
-    with pytest.raises(ConfigError, match="tau_iterations"):
+    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    tau_years: 0.0\n")
+    with pytest.raises(ConfigError, match="tau_years"):
         load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
 
 
