@@ -583,10 +583,6 @@ def test_bud_break_bias_rejects_unknown_key(tmp_path: Path) -> None:
 
 
 def _geom_cfg(**geom_kwargs):
-    from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
-    )
     return Config(
         envelope=EnvelopeConfig(), sim=SimConfig(), tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(), shedding=SheddingConfig(),
@@ -606,21 +602,15 @@ def test_flare_defaults_present():
 
 
 def test_flare_factor_below_one_rejected():
-    import pytest
-    from palubicki.config import ConfigError
     with pytest.raises(ConfigError, match="root_flare_factor"):
         _geom_cfg(root_flare_factor=0.9)  # raises in __post_init__
 
 
 def test_buttress_amplitude_out_of_range_rejected():
-    import pytest
-    from palubicki.config import ConfigError
     with pytest.raises(ConfigError, match="root_buttress_amplitude"):
         _geom_cfg(root_buttress_amplitude=1.0)
 
 
 def test_flare_variation_out_of_range_rejected():
-    import pytest
-    from palubicki.config import ConfigError
     with pytest.raises(ConfigError, match="root_flare_variation"):
         _geom_cfg(root_flare_variation=1.5)

@@ -489,7 +489,7 @@ class Config:
             )
         if g.root_flare_height < 0.0:
             raise ConfigError(
-                f"geom.root_flare_height must be >= 0, got {g.root_flare_height}"
+                f"geom.root_flare_height must be >= 0.0, got {g.root_flare_height}"
             )
         if g.root_flare_falloff not in ("linear", "smoothstep"):
             raise ConfigError(
