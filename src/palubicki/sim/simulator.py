@@ -79,7 +79,10 @@ def simulate_forest(cfg: Config) -> Forest:
             for iod in tree.all_internodes:
                 iod.length = iod.length_target
     for tree in forest.trees:
-        update_diameters_incremental(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
+        update_diameters_incremental(
+            tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
+            vigor_ref=cfg.sim.vigor_ref, vigor_diameter_gain=cfg.sim.vigor_diameter_gain,
+        )
     if cfg.sag.enabled:
         for tree in forest.trees:
             apply_sag(tree, cfg=cfg.sag)
@@ -390,7 +393,10 @@ def _apply_temporal_dynamics(forest: Forest, cfg: Config, t: float) -> None:
         for tree in forest.trees:
             update_lengths(tree, current_time=t, cfg=cfg.sim.elongation)
     for tree in forest.trees:
-        update_diameters_incremental(tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent)
+        update_diameters_incremental(
+            tree, r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
+            vigor_ref=cfg.sim.vigor_ref, vigor_diameter_gain=cfg.sim.vigor_diameter_gain,
+        )
     if cfg.sag.enabled:
         for tree in forest.trees:
             apply_sag(tree, cfg=cfg.sag)
