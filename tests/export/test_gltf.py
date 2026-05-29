@@ -115,3 +115,32 @@ def test_write_glb_to_bytes_empty_raises():
     mesh = Mesh(primitives=[empty])
     with pytest.raises(ExportError):
         write_glb_to_bytes(mesh, asset_meta={})
+
+
+def _tinted_cube():
+    prim = _cube_primitive()
+    prim.colors = np.tile(np.array([0.2, 0.3, 0.4], dtype=np.float32), (8, 1))
+    return prim
+
+
+def test_color0_emitted_and_basecolor_neutralized(tmp_path):
+    mesh = Mesh(primitives=[_tinted_cube()])
+    out = tmp_path / "tinted.glb"
+    write_glb(mesh, out, asset_meta={"seed": 1})
+    loaded = pygltflib.GLTF2().load(str(out))
+    prim = loaded.meshes[0].primitives[0]
+    assert prim.attributes.COLOR_0 is not None
+    mat = loaded.materials[prim.material]
+    assert list(mat.pbrMetallicRoughness.baseColorFactor) == [1.0, 1.0, 1.0, 1.0]
+
+
+def test_no_color0_when_untinted(tmp_path):
+    mesh = Mesh(primitives=[_cube_primitive()])
+    out = tmp_path / "plain.glb"
+    write_glb(mesh, out, asset_meta={"seed": 1})
+    loaded = pygltflib.GLTF2().load(str(out))
+    prim = loaded.meshes[0].primitives[0]
+    assert prim.attributes.COLOR_0 is None
+    mat = loaded.materials[prim.material]
+    # base_color preserved (0.5, 0.3, 0.1, 1.0) from _cube_primitive's material
+    np.testing.assert_allclose(mat.pbrMetallicRoughness.baseColorFactor, [0.5, 0.3, 0.1, 1.0], atol=1e-6)
