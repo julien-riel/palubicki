@@ -33,7 +33,7 @@ def _make_config(**overrides):
 
 def test_config_with_defaults_is_valid(tmp_path):
     cfg = _make_config(output=tmp_path / "out.glb")
-    assert cfg.sim.max_iterations == 30
+    assert cfg.sim.max_simulation_years == 30.0
     assert cfg.tropism.w_orthotropy_main == 0.3
     assert cfg.tropism.w_orthotropy_lateral == 0.1
     assert cfg.tropism.w_gravitropism_main == 0.0
@@ -632,3 +632,42 @@ def test_geomconfig_accepts_tints():
         bark_tint_senescent=(0.22, 0.20, 0.16),
     )
     assert g.bark_tint_young == (0.45, 0.38, 0.30)
+
+
+def test_sim_config_time_defaults():
+    from palubicki.config import SimConfig
+    s = SimConfig()
+    assert s.dt_years == 1.0
+    assert s.max_simulation_years == 30.0
+    assert s.annual_growth_period == (0.0, 1.0)
+    assert s.num_iterations == 30
+
+
+def test_num_iterations_quarterly():
+    from palubicki.config import SimConfig
+    s = SimConfig(dt_years=0.25, max_simulation_years=10.0)
+    assert s.num_iterations == 40
+
+
+def test_dt_years_must_be_positive(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    p = tmp_path / "bad.yaml"
+    p.write_text("sim:\n  dt_years: 0.0\n")
+    with pytest.raises(ConfigError, match="dt_years"):
+        load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+
+
+def test_annual_growth_period_must_be_ordered(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    p = tmp_path / "bad.yaml"
+    p.write_text("sim:\n  annual_growth_period: [0.6, 0.3]\n")
+    with pytest.raises(ConfigError, match="annual_growth_period"):
+        load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+
+
+def test_annual_growth_period_parsed_from_yaml(tmp_path):
+    from palubicki.config import load_config
+    p = tmp_path / "ok.yaml"
+    p.write_text("sim:\n  annual_growth_period: [0.25, 0.55]\n")
+    cfg = load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+    assert cfg.sim.annual_growth_period == (0.25, 0.55)

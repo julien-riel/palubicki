@@ -43,7 +43,14 @@ class SimConfig:
     internode_length: float = field(default=0.1, metadata={"ui": {"min": 0.02, "max": 0.5, "step": 0.01}})
     alpha_basipetal: float = field(default=2.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     lambda_apical: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}})
-    max_iterations: int = field(default=30, metadata={"ui": {"min": 1, "max": 80, "step": 1}})
+    dt_years: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 2.0, "step": 0.05}})
+    max_simulation_years: float = field(
+        default=30.0, metadata={"ui": {"min": 1.0, "max": 80.0, "step": 1.0}}
+    )
+    # Fraction of the year [lo, hi) during which growth (new internodes) is
+    # active. Default spans the whole year => no seasonal gating. Only bites
+    # when dt_years < 1.0 (sub-annual steps).
+    annual_growth_period: tuple[float, float] = (0.0, 1.0)
     re_perceive_per_substep: bool = field(default=True, metadata={"ui": {"label": "Re-perceive per substep"}})
     # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
     # is sitting at the envelope boundary (markers only behind/below). It goes
@@ -68,6 +75,11 @@ class SimConfig:
     shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
     elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
     bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
+
+    @property
+    def num_iterations(self) -> int:
+        """Iteration budget derived from the time budget."""
+        return round(self.max_simulation_years / self.dt_years)
 
 
 @dataclass(frozen=True)
@@ -420,8 +432,18 @@ class Config:
             raise ConfigError(
                 f"sim.bud_break_bias.strength must be in [0, 1], got {bb.strength}"
             )
-        if s.max_iterations < 0:
-            raise ConfigError(f"sim.max_iterations must be >= 0, got {s.max_iterations}")
+        if s.dt_years <= 0:
+            raise ConfigError(f"sim.dt_years must be > 0, got {s.dt_years}")
+        if s.max_simulation_years < 0:
+            raise ConfigError(
+                f"sim.max_simulation_years must be >= 0, got {s.max_simulation_years}"
+            )
+        lo, hi = s.annual_growth_period
+        if not (0.0 <= lo < hi <= 1.0):
+            raise ConfigError(
+                f"sim.annual_growth_period must satisfy 0.0 <= lo < hi <= 1.0, "
+                f"got {s.annual_growth_period}"
+            )
 
         t = self.tropism
         for fname in (
@@ -622,6 +644,13 @@ def load_config(
                     f"unknown keys in section 'sim.bud_break_bias': {sorted(bb_unknown)}"
                 )
             sec_data = {**sec_data, "bud_break_bias": BudBreakConfig(**bb_data)}
+        if name == "sim" and "annual_growth_period" in sec_data:
+            v = sec_data["annual_growth_period"]
+            if not isinstance(v, (list, tuple)) or len(v) != 2:
+                raise ConfigError(
+                    f"sim.annual_growth_period must be a 2-element list, got {v!r}"
+                )
+            sec_data = {**sec_data, "annual_growth_period": tuple(float(x) for x in v)}
         sections[name] = type_(**sec_data)
 
     if "forest" in data:
