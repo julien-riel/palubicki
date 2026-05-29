@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 
 from palubicki.sim.bh import allocate
@@ -17,14 +18,14 @@ def test_single_bud_n_equals_alpha_times_q():
     tree, bud = _single_bud_tree()
     quality = {bud: 4}
     n_by_bud = allocate(tree, quality=quality, alpha=2.0, lambda_apical=0.5)
-    assert n_by_bud[bud] == 8
+    assert n_by_bud[bud] == pytest.approx(8.0)
 
 
 def test_zero_quality_yields_zero_growth():
     tree, bud = _single_bud_tree()
     quality = {bud: 0}
     n_by_bud = allocate(tree, quality=quality, alpha=2.0, lambda_apical=0.5)
-    assert n_by_bud[bud] == 0
+    assert n_by_bud[bud] == pytest.approx(0.0)
 
 
 def test_split_main_lateral_with_lambda():
@@ -44,12 +45,11 @@ def test_split_main_lateral_with_lambda():
     quality = {main_bud: 4, lat_bud: 2}
     n_by_bud = allocate(tree, quality=quality, alpha=1.0, lambda_apical=0.7)
     # v_root = Q_main + Q_lat = 6; v_total = alpha * 6 = 6
-    # split: v_main = 6 * (0.7*4)/(0.7*4 + 0.3*2) = 6 * 2.8/3.4 = 4.941...
+    # v_main = 6 * (0.7*4)/(0.7*4 + 0.3*2) = 6 * 2.8/3.4 = 4.941...
     # v_lat = 6 - 4.941 = 1.058...
-    # floor: 4 and 1
-    assert n_by_bud[main_bud] == 4
-    assert n_by_bud[lat_bud] == 1
-    assert n_by_bud[main_bud] + n_by_bud[lat_bud] <= 6
+    assert n_by_bud[main_bud] == pytest.approx(4.9411764, rel=1e-5)
+    assert n_by_bud[lat_bud] == pytest.approx(1.0588235, rel=1e-5)
+    assert n_by_bud[main_bud] + n_by_bud[lat_bud] == pytest.approx(6.0)
 
 
 def test_zero_split_when_both_qualities_zero():
@@ -64,7 +64,7 @@ def test_zero_split_when_both_qualities_zero():
     child.lateral_buds.append(lat)
     tree = Tree(root=root, active_buds=[m, lat], all_internodes=[iod])
     n_by_bud = allocate(tree, quality={m: 0, lat: 0}, alpha=2.0, lambda_apical=0.5)
-    assert n_by_bud[m] == 0 and n_by_bud[lat] == 0
+    assert n_by_bud[m] == pytest.approx(0.0) and n_by_bud[lat] == pytest.approx(0.0)
 
 
 def test_denom_zero_proportional_fallback():
@@ -79,7 +79,15 @@ def test_denom_zero_proportional_fallback():
     tree = Tree(root=root, active_buds=[bud])
     quality = {bud: 5}
     # lambda_apical=0 makes denom = 0*5 + 1*0 = 0 with only terminal bud
-    # total_q=5>0 so we enter proportional fallback: floor(v_here * 5 / 5) = floor(v_here)
+    # total_q=5>0 so we enter proportional fallback: v_here * 5 / 5 = v_here
     n_by_bud = allocate(tree, quality=quality, alpha=1.0, lambda_apical=0.0)
-    # v_total = alpha * 5 = 5; proportional: floor(5 * 5/5) = 5
-    assert n_by_bud[bud] == 5
+    # v_total = alpha * 5 = 5; proportional: 5 * 5/5 = 5.0
+    assert n_by_bud[bud] == pytest.approx(5.0)
+
+
+def test_fractional_flux_is_not_floored():
+    tree, bud = _single_bud_tree()
+    quality = {bud: 1}
+    n_by_bud = allocate(tree, quality=quality, alpha=1.5, lambda_apical=0.5)
+    # v_b = 1.5 — must NOT be floored to 1
+    assert n_by_bud[bud] == pytest.approx(1.5)
