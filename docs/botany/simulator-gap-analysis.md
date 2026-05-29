@@ -4,19 +4,19 @@
 
 **Code root:** `src/palubicki/`. Species presets currently shipped: **oak**, **birch**, **pine**, **maple**.
 
-**Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), and the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)) landed on `main`. Bark variation by trunk radius ([#9](https://github.com/julien-riel/palubicki/issues/9)) is in progress on the current branch.
+**Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), and bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)) all landed on `main`.
 
 ## What changed since the 2026-05-28 review
 
 All merged to `main` via the issue tracker:
 
+- **Bark variation by `Internode.diameter`** (`geom/bark_blend.py` + `config.py` + `export/gltf.py`, [issue #9](https://github.com/julien-riel/palubicki/issues/9) / [PR #22](https://github.com/julien-riel/palubicki/pull/22)) — three-way bark tint (young → mature → senescent) carried as a per-vertex `COLOR_0` blend over the single bark texture, driven solely by `Internode.diameter`: pale smooth bark on thin twigs, dark fissured bark on thick limbs. Stops calibrated to the sim's actual internode-diameter scale (~1.5–8.6 cm). Presence-gated (off ⇒ byte-identical output); on by default for all five species, with mature tint = each species' prior `bark_color`.
 - **Diagnostic / validation harness** (`sim/diagnostics.py`, [issue #13](https://github.com/julien-riel/palubicki/issues/13)) — `compute_metrics` over one or many trees: Strahler/Horton bifurcation ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count, height/crown radius, trunk base diameter, total leaf area. Multi-seed aggregation plus literature-range ✓/✗ flagging via `MetricRanges`/`format_report`. This was the highest-priority remaining item in §11.
 - **True distichous phyllotaxis** (`sim/phyllotaxy.py` mode `"distichous"`, [issue #15](https://github.com/julien-riel/palubicki/issues/15)) — single bud per node, 180° alternation between successive nodes. The `distichous_on_plagiotropic` flag auto-switches plagiotropic (order > 0) axes to distichous, so conifer side-sprays form a flat 2-ranked plane — the exact fix §5/§10 flagged.
 - **Root flare at trunk base** (`geom/tubes.py` + `config.py`, [issue #8](https://github.com/julien-riel/palubicki/issues/8) / [PR #21](https://github.com/julien-riel/palubicki/pull/21)) — per-vertex radius field at the trunk base, optional azimuthal buttress ridges with a welded seam, per-tree variation; `root_flare_height/factor/falloff`, `root_buttress_count/amplitude`, `root_flare_variation` config fields with per-species defaults. Pure render-time; the sim layer is untouched.
 - **Cross-blade leaf fix** ([issue #18](https://github.com/julien-riel/palubicki/issues/18), follow-up to [#4](https://github.com/julien-riel/palubicki/issues/4)) — cross-blade geometry now only for linear (needle) shapes.
 - **Tooling** ([PR #19](https://github.com/julien-riel/palubicki/pull/19), non-issue) — ruff config + GitHub Actions CI + simulator refactor.
 
-**In progress:** bark variation by trunk radius ([issue #9](https://github.com/julien-riel/palubicki/issues/9), current branch) — see §8.
 
 ## Earlier — Phases 2A–2D (2026-05-28 review)
 
@@ -179,9 +179,9 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Annual rings | ❌ | = | — | L | M | **SKIP** |
 | Bark color / texture | ✅ | = | `GeomConfig.bark_color`, `bark_texture` | — | — | — |
 | Bark relief (3D displacement) | ❌ | = | — | M (close-up) | M–H | **LATER** |
-| Bark variation by age / radius along trunk | ❌ | = | One texture per species | L–M | L | **IN PROGRESS** ([issue #9](https://github.com/julien-riel/palubicki/issues/9), current branch) — blend two bark textures by `Internode.diameter` (smooth at tips, cracked at base). Trivial shader work. |
+| Bark variation by age / radius along trunk | ✅ | ⬆ Implemented | `geom/bark_blend.py` — three-way `COLOR_0` tint (young → mature → senescent) over the single bark texture, blended by `Internode.diameter`; `config.py` `bark_tint_young/mature/senescent` + `bark_blend_diameter_*`; also written into glTF export (`export/gltf.py`). Stops calibrated to the ~1.5–8.6 cm internode scale; on by default for all five species ([issue #9](https://github.com/julien-riel/palubicki/issues/9) / [PR #22](https://github.com/julien-riel/palubicki/pull/22)). | — | — | **DONE** — pale smooth twigs → dark fissured trunk; presence-gated, render-time only. |
 
-**Verdict.** Phase 2D upgraded this section to **the second-strongest area**. The visible behavior of growth — internodes elongating, trunk thickening, branches sagging in response — now plays out over the iteration sequence rather than being applied once at the end. The last cheap, visible win in this section — `bark variation by age/radius` — is now in flight ([issue #9](https://github.com/julien-riel/palubicki/issues/9), current branch).
+**Verdict.** Phase 2D upgraded this section to **the second-strongest area**. The visible behavior of growth — internodes elongating, trunk thickening, branches sagging in response — now plays out over the iteration sequence rather than being applied once at the end. The last cheap, visible win in this section — `bark variation by age/radius` — also landed ([issue #9](https://github.com/julien-riel/palubicki/issues/9)): a diameter-driven three-way `COLOR_0` tint takes twigs from pale smooth bark to dark fissured trunk. Only `bark relief` (3D displacement) remains in this section, and it stays **LATER**.
 
 ---
 
@@ -237,15 +237,14 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 ## Top remaining recommendations (ranked by realism-per-effort)
 
-These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D and the 2026-05-29 work (root flare [#8](https://github.com/julien-riel/palubicki/issues/8), distichous [#15](https://github.com/julien-riel/palubicki/issues/15), diagnostic harness [#13](https://github.com/julien-riel/palubicki/issues/13)) already delivered.
+These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D and the 2026-05-29 work (root flare [#8](https://github.com/julien-riel/palubicki/issues/8), distichous [#15](https://github.com/julien-riel/palubicki/issues/15), diagnostic harness [#13](https://github.com/julien-riel/palubicki/issues/13), bark variation [#9](https://github.com/julien-riel/palubicki/issues/9)) already delivered.
 
-1. **Bark variation by trunk radius** (§8) — blend two bark textures based on `Internode.diameter`. Trivial shader work; visible against young vs. mature stems. **In progress ([issue #9](https://github.com/julien-riel/palubicki/issues/9), current branch).**
-2. **Compound leaves** (§6, [#6](https://github.com/julien-riel/palubicki/issues/6)) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
-3. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
-4. **Petiole geometry** (§6, [#5](https://github.com/julien-riel/palubicki/issues/5)) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
-5. **Fascicles of needles** (§6, [#7](https://github.com/julien-riel/palubicki/issues/7)) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
+1. **Compound leaves** (§6, [#6](https://github.com/julien-riel/palubicki/issues/6)) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
+2. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
+3. **Petiole geometry** (§6, [#5](https://github.com/julien-riel/palubicki/issues/5)) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
+4. **Fascicles of needles** (§6, [#7](https://github.com/julien-riel/palubicki/issues/7)) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
 
-*Landed since the previous review and removed from this list:* true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), root flare at trunk base ([#8](https://github.com/julien-riel/palubicki/issues/8)), diagnostic/validation harness ([#13](https://github.com/julien-riel/palubicki/issues/13)).
+*Landed since the previous review and removed from this list:* true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), root flare at trunk base ([#8](https://github.com/julien-riel/palubicki/issues/8)), diagnostic/validation harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)).
 
 ## Phase 1 — Foundation: time / phenology axis ([#10](https://github.com/julien-riel/palubicki/issues/10)) *(at the right moment)*
 
