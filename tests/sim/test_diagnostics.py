@@ -392,7 +392,10 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # (Task 9: update golden tests and diagnostic baselines after leaf shape/margin integration).
     # Updated: cross-blade removed for non-linear shapes (n_planes=1), halving
     # vertex count for ovate (oak default). Hash updated accordingly.
-    EXPECTED_HASH = 16696335.565137442  # noqa: N806
+    # Re-pinned for #24: per-axis phyllotaxy ordinal rotated oak lateral
+    # directions, shifting leaf-blade positions (vertex counts unchanged; the
+    # blade geometry moved, so this sum-of-squares changed).
+    EXPECTED_HASH = 15789108.22025858  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )

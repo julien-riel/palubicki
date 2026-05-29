@@ -41,7 +41,11 @@ class _SubstepChain:
 
 
 class _SimState:
-    """Mutable counters shared across iterations: node_index for phyllotaxy."""
+    """Mutable counters shared across iterations.
+
+    node_index is a global per-emission counter used for RNG salting (internode
+    length jitter) and node identity. It is NOT used for phyllotaxy divergence —
+    that is driven by the per-axis Bud.axis_node_ordinal (#24)."""
     def __init__(self):
         self.node_index = 0
 
@@ -225,8 +229,11 @@ def _grow_tree(
     _reperceive_substep_terminals). This differs from a bud-major loop in two ways
     vs. the pre-refactor singleton path:
       - state.node_index assignments are interleaved across chains within each
-        substep level (not all-of-A before any-of-B), so lateral phyllotaxy angles
-        at substep-created nodes differ → small tree-shape drift vs. pre-refactor
+        substep level (not all-of-A before any-of-B). This is fine for phyllotaxy:
+        divergence azimuths are driven by the PER-AXIS Bud.axis_node_ordinal, not
+        the global node_index (#24), so each axis advances by a constant step
+        regardless of interleaving. node_index still salts the internode-length
+        RNG, so its ordering causes only minor length-jitter drift vs. pre-refactor
         goldens. The qualitative biology (apical dominance, light-driven curvature,
         marker competition) is preserved.
       - The batched perceive() introduces cross-bud competition between substep
@@ -387,22 +394,32 @@ def _emit_node(
     new_node.parent_internode = iod
     tree.all_internodes.append(iod)
 
+    # The terminal continues ``cur``'s axis, so it carries the next phyllotactic
+    # ordinal along that lineage.
     terminal = Bud(
         position=new_pos.copy(), direction=d,
         axis_order=cur.axis_order, parent_node=new_node,
         low_quality_steps=cur.low_quality_steps,
         low_light_steps=cur.low_light_steps,
+        axis_node_ordinal=cur.axis_node_ordinal + 1,
     )
     new_node.terminal_bud = terminal
 
-    node_idx = state.node_index
+    # Phyllotaxy azimuth is driven by the PER-AXIS ordinal (cur.axis_node_ordinal),
+    # not the global node_index (#24). The global counter is interleaved across
+    # chains by the step-major substep loop, so feeding it here scrambled the
+    # divergence delivered along any single axis. node_index is still bumped below
+    # for RNG salting (internode length jitter) / identity only.
+    axis_ord = cur.axis_node_ordinal
     lateral_dirs = lateral_bud_directions(
         d, cfg.phyllotaxy,
-        node_index=node_idx,
+        node_index=axis_ord,
         seed=cfg.seed,
         axis_order=cur.axis_order,
     )
     state.node_index += 1
+    # Laterals each begin a NEW axis → their phyllotactic ordinal restarts at 0
+    # (the Bud default), so each branch axis advances divergence from its own base.
     for ld in lateral_dirs:
         lat = Bud(
             position=new_pos.copy(), direction=ld,
@@ -414,7 +431,7 @@ def _emit_node(
     if cfg.phyllotaxy.dormant_reserve_count > 0:
         reserve_dirs = reserve_bud_directions(
             d, cfg.phyllotaxy,
-            node_index=node_idx,
+            node_index=axis_ord,
             seed=cfg.seed,
             count=cfg.phyllotaxy.dormant_reserve_count,
         )
