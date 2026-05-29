@@ -720,6 +720,7 @@ def test_internodes_record_birth_time_and_length_target(tmp_path):
 
 def test_bud_and_internode_have_vigor_fields():
     import numpy as np
+
     from palubicki.sim.tree import Bud, Internode, Node
     root = Node(position=np.zeros(3))
     bud = Bud(position=np.zeros(3), direction=np.array([0.0, 1.0, 0.0]),
@@ -762,3 +763,56 @@ def test_finalization_snaps_length_to_target(tmp_path):
             f"internode born at {iod.birth_time}: length={iod.length}, "
             f"target={iod.length_target}"
         )
+
+
+def test_each_bud_emits_at_most_one_internode_per_iteration(tmp_path):
+    from palubicki.config import Config, EnvelopeConfig, SimConfig
+    from palubicki.sim.simulator import simulate
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=400),
+        sim=SimConfig(max_simulation_years=1.0, shoot_extension_max=0.3, vigor_ref=1.0,
+                      vigor_dormancy=0.5),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False), geom=GeomConfig(),
+        seed=7, output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    assert len(tree.all_internodes) <= 2
+
+
+def test_internode_records_vigor(tmp_path):
+    from palubicki.config import Config, EnvelopeConfig, SimConfig
+    from palubicki.sim.simulator import simulate
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
+        sim=SimConfig(max_simulation_years=8.0, shoot_extension_max=0.3, vigor_ref=1.0,
+                      vigor_dormancy=0.5),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False), geom=GeomConfig(),
+        seed=7, output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    assert tree.all_internodes
+    assert all(iod.vigor > 0 for iod in tree.all_internodes)
+
+
+def test_length_scales_with_vigor(tmp_path):
+    from palubicki.config import Config, EnvelopeConfig, SimConfig
+    from palubicki.sim.diagnostics import _axis_orders, _walk_internodes
+    from palubicki.sim.simulator import simulate
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=3.0, rz=1.0, marker_count=4000),
+        sim=SimConfig(max_simulation_years=20.0, shoot_extension_max=0.3, vigor_ref=1.0,
+                      vigor_dormancy=0.5),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(enabled=False), geom=GeomConfig(),
+        seed=7, output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    iods = _walk_internodes(tree.root)
+    orders = _axis_orders(tree.root)
+    order0 = [iod.length_target for iod in iods if orders[id(iod)] == 0]
+    high = max(orders.values())
+    distal = [iod.length_target for iod in iods if orders[id(iod)] == high]
+    assert order0 and distal
+    assert (sum(order0) / len(order0)) > (sum(distal) / len(distal))
