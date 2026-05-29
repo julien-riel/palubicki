@@ -34,6 +34,7 @@ root_flare_factor: float = 1.6       # radius multiplier at the very base (1.0 =
 root_flare_falloff: Literal["linear", "smoothstep"] = "linear"
 root_buttress_count: int = 0         # 0 = smooth; 3–6 for ridged species
 root_buttress_amplitude: float = 0.15
+root_flare_variation: float = 0.08   # per-tree ± fractional jitter on factor (0 = identical flares)
 ```
 
 Validation (in the existing `validate`/`ConfigError` path in `config.py`):
@@ -42,6 +43,7 @@ Validation (in the existing `validate`/`ConfigError` path in `config.py`):
 - `root_flare_height >= 0`
 - `root_buttress_count >= 0`
 - `0 <= root_buttress_amplitude < 1`
+- `0 <= root_flare_variation < 1`
 
 The generic default `root_flare_factor = 1.6` means **every** tree flares by
 default. `root_flare_factor = 1.0` reproduces the current cylinder-meets-fan
@@ -106,8 +108,11 @@ reports the same trunk base diameter as before.
 (threaded from `builder.py` via `cfg.seed`). It uses `rng` for:
 
 1. A buttress **phase** offset in `[0, 2π)` — rotates ridges per tree.
-2. A small **±8%** jitter on `root_flare_factor` — so even smooth-flared
-   species (`count == 0`) differ across a forest.
+2. A `±root_flare_variation` fractional jitter on `root_flare_factor` — so even
+   smooth-flared species (`count == 0`) differ across a forest. The applied
+   factor is `factor * (1 + rng.uniform(-v, v))` (clamped to `>= 1.0`), where
+   `v = root_flare_variation`. Setting `v = 0` makes every tree's flare
+   identical (useful for deterministic comparisons).
 
 `cfg.seed` is already per-tree in forests (`write_glb_forest` builds each tree
 with its own `per_tree_cfg`), so variation falls out naturally.
@@ -122,6 +127,9 @@ with its own `per_tree_cfg`), so variation falls out naturally.
 | fir     | 1.3    | 0.2    | linear     | 0              | —         |
 | birch   | 1.15   | 0.15   | linear     | 0              | —         |
 | default | 1.6    | 0.3    | linear     | 0              | 0.15      |
+
+All species inherit the default `root_flare_variation = 0.08`; no species YAML
+overrides it unless we find one that needs flatter or more varied flares.
 
 ## Tests
 
