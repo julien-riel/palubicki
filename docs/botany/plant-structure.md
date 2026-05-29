@@ -2,6 +2,11 @@
 
 *A science-based primer on plant morphology for engineers building 3D plant models. The goal is to give you a vocabulary and a mental model that maps cleanly onto data structures, so you can read botany papers and translate them into code.*
 
+> **Sources.** Ce primer est une vulgarisation. Les références primaires
+> (Palubicki 2009, ABOP, Borchert-Honda, Honda 1971, Runions, Měch) — avec
+> liens de téléchargement et correspondance vers le code — sont dans
+> [sources.md](./sources.md).
+
 ---
 
 ## 1. Why botany maps so well to data structures

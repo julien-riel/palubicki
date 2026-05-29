@@ -2,6 +2,8 @@
 
 *Companion to [plant-structure.md](./plant-structure.md). For each concept in sections 1–11 of the reference, this document reports: status in the current simulator, whether it should be modeled, the realism payoff, the performance cost, and a recommendation.*
 
+*Primary literature (download links + code mapping): [sources.md](./sources.md).*
+
 **Code root:** `src/palubicki/`. Species presets currently shipped: **oak**, **birch**, **pine**, **maple**.
 
 **Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)), and the **time / phenology foundation** ([#10](https://github.com/julien-riel/palubicki/issues/10)) all landed on `main`.
@@ -228,7 +230,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 |---|---|---|---|---|---|---|
 | Pipe model / da Vinci scaling | ✅ | = | `sim/radii.py` ~2.49 | — | — | — |
 | Trunk-diameter / height allometry (`H ∝ D^(2/3)`) | ❌ | = | — | L | L | **SKIP** as a constraint; consequence of mechanics. |
-| Strahler / Horton bifurcation ratios | ✅ | ⬆ Implemented | `sim/diagnostics.py::_strahler_metrics` ([issue #13](https://github.com/julien-riel/palubicki/issues/13)) — Horton bifurcation ratio, flagged against the literature range (3.0–5.0) | — | — | **DONE as diagnostic** |
+| Strahler / Horton bifurcation ratios | ✅ | ⬆ Implemented | `sim/diagnostics.py::_strahler_metrics` ([issue #13](https://github.com/julien-riel/palubicki/issues/13)) — Horton bifurcation ratio, flagged against the literature range (3.0–5.0, **hardcoded, uncited** → to be sourced per-species via [#32](https://github.com/julien-riel/palubicki/issues/32)) | — | — | **DONE as diagnostic** |
 | Fractal dimension of crown | ❌ | = | — | M | L–M | **LATER** |
 | Divergence angle | ✅ | = | `phyllotaxy.py` | — | — | — |
 | Insertion angle (base) | ✅ | = | `branch_angle_deg` + jitter | — | — | — |
@@ -236,8 +238,9 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Per-species pipe exponent | ✅ | = | configurable | — | — | — |
 | Sympodial fork rate | ✅ | 🆕 | `Node.sympodial_fork` (Phase 2A) lets you count promotions | — | — | Useful diagnostic seed. |
 | Validation / diagnostic harness | ✅ | ⬆ Implemented | `sim/diagnostics.py::compute_metrics` ([issue #13](https://github.com/julien-riel/palubicki/issues/13)) over one or many trees — Strahler/Horton ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count, height/crown radius, trunk base diameter, total leaf area; multi-seed aggregation; literature-range ✓/✗ flagging via `MetricRanges`/`format_report` | — | — | **DONE** — speeds up all preset tuning. |
+| Literature ranges sourced & per-species | 🟡 | 🆕 | `MetricRanges` bounds are **hardcoded global tuples**, uncited and species-blind (an oak's spiral divergence ≠ a maple's decussate ~90°) | — | — | **IMPROVE** ([#32](https://github.com/julien-riel/palubicki/issues/32)) — move the bounds to a cited `configs/literature.yaml` (per-species + global fallback), wire `MetricRanges.from_species`, add a fetch script for the source PDFs. Makes the ✓/✗ flag trustworthy and the per-species recalibration loop self-consistent. |
 
-**Verdict.** Both the generation axes and the diagnostic side are now covered: `sim/diagnostics.py` ([issue #13](https://github.com/julien-riel/palubicki/issues/13)) emits Strahler/Horton ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count and leaf-area density, with literature-range flagging. Nothing high-priority remains here; fractal dimension stays **LATER**.
+**Verdict.** Both the generation axes and the diagnostic side are now covered: `sim/diagnostics.py` ([issue #13](https://github.com/julien-riel/palubicki/issues/13)) emits Strahler/Horton ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count and leaf-area density, with literature-range flagging. The one open gap is **provenance of the reference bounds**: they are currently hardcoded, uncited, and global — [#32](https://github.com/julien-riel/palubicki/issues/32) moves them to a cited per-species manifest (`configs/literature.yaml`) with a fetch script for the source PDFs, so the flagging that drives the empirical recalibration loop rests on real, traceable values. Fractal dimension stays **LATER**.
 
 ---
 
