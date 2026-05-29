@@ -489,8 +489,6 @@ def test_elongation_defaults_disabled():
     cfg = ElongationConfig()
     assert cfg.enabled is False
     assert cfg.tau_years == 3.0
-    assert cfg.age_factor_min == 0.5
-    assert cfg.age_factor_decay == 0.5
 
 
 def test_sim_config_has_elongation_subdataclass():
@@ -671,3 +669,36 @@ def test_annual_growth_period_parsed_from_yaml(tmp_path):
     p.write_text("sim:\n  annual_growth_period: [0.25, 0.55]\n")
     cfg = load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
     assert cfg.sim.annual_growth_period == (0.25, 0.55)
+
+
+def test_simconfig_has_vigor_fields_with_defaults():
+    from palubicki.config import SimConfig
+    s = SimConfig()
+    assert s.shoot_extension_max > 0
+    assert s.vigor_ref > 0
+    assert s.vigor_dormancy >= 0
+    assert 0 < s.vigor_smoothing <= 1
+    assert s.vigor_diameter_gain >= 0
+
+
+def test_simconfig_dropped_obsolete_fields():
+    from palubicki.config import SimConfig
+    s = SimConfig()
+    assert not hasattr(s, "internode_length")
+    assert not hasattr(s, "n_substeps_max")
+    assert not hasattr(s, "re_perceive_per_substep")
+
+
+def test_simconfig_dropped_age_factor_fields():
+    from palubicki.config import ElongationConfig
+    e = ElongationConfig()
+    assert not hasattr(e, "age_factor_min")
+    assert not hasattr(e, "age_factor_decay")
+
+
+def test_invalid_vigor_ref_raises(tmp_path):
+    with pytest.raises(ConfigError, match="vigor_ref"):
+        _make_config(
+            sim=SimConfig(vigor_ref=0.0),
+            output=tmp_path / "out.glb",
+        )
