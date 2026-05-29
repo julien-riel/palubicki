@@ -60,7 +60,7 @@ def test_yaml_forest_with_species_per_seed_parses(tmp_path):
         "envelope:\n"
         "  marker_count: 500\n"
         "sim:\n"
-        "  max_iterations: 4\n"
+        "  max_simulation_years: 4\n"
         "forest:\n"
         "  seeds:\n"
         "    - position: [0.0, 0.0, 0.0]\n"

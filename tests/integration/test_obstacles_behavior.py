@@ -22,7 +22,7 @@ def test_obstacle_wall_deflects_crown(tmp_path):
     def _make_cfg(with_wall: bool):
         return Config(
             envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=4000),
-            sim=SimConfig(max_iterations=15),
+            sim=SimConfig(max_simulation_years=15.0),
             tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
             shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
             output=tmp_path / "x.glb", seed=42,

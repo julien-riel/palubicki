@@ -23,7 +23,7 @@ pytestmark = pytest.mark.slow
 def test_end_to_end_per_envelope(tmp_path, shape):
     cfg = Config(
         envelope=EnvelopeConfig(shape=shape, rx=0.5, ry=1.0, rz=0.5, marker_count=400),
-        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_iterations=8),
+        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_simulation_years=8.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -44,7 +44,7 @@ def test_end_to_end_per_envelope(tmp_path, shape):
 def test_end_to_end_per_envelope_light_enabled(tmp_path, shape):
     cfg = Config(
         envelope=EnvelopeConfig(shape=shape, rx=0.5, ry=1.0, rz=0.5, marker_count=400),
-        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_iterations=6),
+        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_simulation_years=6.0),
         tropism=TropismConfig(w_phototropism=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -82,7 +82,7 @@ def test_smoke_forest_two_trees_with_obstacle(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(marker_count=1000),
-        sim=SimConfig(max_iterations=5),
+        sim=SimConfig(max_simulation_years=5.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "smoke.glb", seed=42,

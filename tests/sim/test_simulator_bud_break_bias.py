@@ -17,7 +17,7 @@ def _minimal_config(tmp_path, bud_break_bias: BudBreakConfig) -> Config:
     return Config(
         envelope=EnvelopeConfig(rx=2.0, ry=4.0, rz=2.0, marker_count=2000),
         sim=SimConfig(
-            max_iterations=12,
+            max_simulation_years=12.0,
             internode_length=0.15,
             bud_break_bias=bud_break_bias,
         ),

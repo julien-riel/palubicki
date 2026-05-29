@@ -58,7 +58,7 @@ def _build_tiny_glb(tmp_path: Path) -> Path:
 
     cfg = Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.5, ry=1.0, rz=0.5, marker_count=200),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=4),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=4.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),

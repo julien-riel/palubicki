@@ -19,7 +19,7 @@ def _count_promotions(tree) -> int:
 def test_oak_produces_forks(tmp_path):
     cfg = load_config(
         yaml_path=None,
-        cli_overrides={"sim.max_iterations": 30, "envelope.marker_count": 8000},
+        cli_overrides={"sim.max_simulation_years": 30, "envelope.marker_count": 8000},
         output=tmp_path / "oak.glb",
         species="oak",
     )
@@ -32,7 +32,7 @@ def test_oak_produces_forks(tmp_path):
 def test_pine_produces_no_forks(tmp_path):
     cfg = load_config(
         yaml_path=None,
-        cli_overrides={"sim.max_iterations": 30, "envelope.marker_count": 8000},
+        cli_overrides={"sim.max_simulation_years": 30, "envelope.marker_count": 8000},
         output=tmp_path / "pine.glb",
         species="pine",
     )

@@ -5,7 +5,7 @@ envelope:
   rz: 1.5
   marker_count: 1000
 sim:
-  max_iterations: 4
+  max_simulation_years: 4
 seed: 42
 forest:
   seeds:
