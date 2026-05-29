@@ -42,7 +42,10 @@ def _hash_buffers(glb_path: Path) -> str:
     sha = hashlib.sha256()
     for prim in loaded.meshes[0].primitives:
         for acc_idx in (prim.attributes.POSITION, prim.attributes.NORMAL,
-                        prim.attributes.TEXCOORD_0, prim.indices):
+                        prim.attributes.TEXCOORD_0, prim.attributes.COLOR_0,
+                        prim.indices):
+            if acc_idx is None:
+                continue
             acc = loaded.accessors[acc_idx]
             bv = loaded.bufferViews[acc.bufferView]
             blob = loaded.binary_blob()[bv.byteOffset : bv.byteOffset + bv.byteLength]
