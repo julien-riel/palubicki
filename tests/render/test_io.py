@@ -110,3 +110,33 @@ def test_render_glb_produces_image(tmp_path):
     img = render_glb(glb, size=(200, 200))
     assert img.dtype == np.uint8
     assert img.shape[2] == 4
+
+
+# ---------- vertex color roundtrip ----------
+
+def _tinted_tri_mesh():
+    from palubicki.geom.mesh import Material, Mesh, Primitive
+    mat = Material(name="bark", base_color=(0.3, 0.2, 0.1, 1.0), metallic=0.0, roughness=1.0,
+                   base_color_texture_png=None, alpha_mode="OPAQUE", alpha_cutoff=0.5,
+                   double_sided=False)
+    prim = Primitive(
+        positions=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0]], np.float32),
+        normals=np.tile([0, 0, 1], (4, 1)).astype(np.float32),
+        uvs=np.zeros((4, 2), np.float32),
+        indices=np.array([0, 1, 2, 1, 3, 2], np.uint32),
+        material=mat,
+        colors=np.array([[0.8, 0.7, 0.6]] * 4, np.float32),
+    )
+    return Mesh(primitives=[prim])
+
+
+def test_glb_roundtrip_preserves_vertex_colors(tmp_path):
+    from palubicki.export.gltf import write_glb
+    from palubicki.render.io import _glb_to_mesh
+    out = tmp_path / "tinted.glb"
+    write_glb(_tinted_tri_mesh(), out, asset_meta={"seed": 1})
+    mesh = _glb_to_mesh(out)
+    cols = mesh.primitives[0].colors
+    assert cols is not None
+    # tint recovered (allow trimesh's 8-bit color quantization)
+    np.testing.assert_allclose(cols.mean(axis=0), [0.8, 0.7, 0.6], atol=0.02)

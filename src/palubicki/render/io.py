@@ -99,6 +99,25 @@ def _glb_to_mesh(path: Path, *, drop_leaves: bool = False) -> Mesh:
             elif bc.shape == (4,):
                 base_color = tuple(float(x) for x in bc)
 
+        # Per-vertex colors (glTF COLOR_0). When a material/texture visual is
+        # present, trimesh stores COLOR_0 in visual.vertex_attributes["color"]
+        # (float32 RGB or RGBA, already 0..1). When there is no material visual,
+        # trimesh passes them as vertex_colors (uint8 RGBA) directly.
+        vertex_colors = None
+        if visual is not None:
+            va = getattr(visual, "vertex_attributes", None)
+            vc = va.get("color") if (va is not None and hasattr(va, "get")) else None
+            if vc is None:
+                # Fallback: ColorVisuals path (no material)
+                vc = getattr(visual, "vertex_colors", None)
+            if vc is not None and len(vc) == verts.shape[0]:
+                vc_arr = np.asarray(vc, dtype=np.float32)
+                if vc_arr.ndim == 2 and vc_arr.shape[1] >= 3:
+                    rgb = vc_arr[:, :3]
+                    if rgb.max() > 1.5:   # uint8 0..255 -> 0..1
+                        rgb = rgb / 255.0
+                    vertex_colors = rgb.astype(np.float32)
+
         # Drop-leaves heuristic
         if drop_leaves:
             r, g, b, _ = base_color
@@ -121,6 +140,7 @@ def _glb_to_mesh(path: Path, *, drop_leaves: bool = False) -> Mesh:
             uvs=np.zeros((verts_w.shape[0], 2), dtype=np.float32),
             indices=faces,
             material=material,
+            colors=vertex_colors,
         ))
 
     if not primitives:
