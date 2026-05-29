@@ -270,6 +270,32 @@ def _divergence_angle_metrics(
     return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
 
 
+# ── Internode length by axis order ────────────────────────────────────────
+
+def _internode_length_metrics(
+    internodes: list[Internode],
+    axis_orders: dict[int, int],
+) -> dict:
+    """Internode length grouped by axis_order, plus proximal (lowest order)
+    vs distal (highest order) means. Verifies emergent tapering with no age
+    term (#20). Uses length_target (finalized length)."""
+    by_order: dict[int, list[float]] = defaultdict(list)
+    for L in internodes:
+        by_order[axis_orders[id(L)]].append(float(L.length_target))
+    out = {o: _stats(v) for o, v in by_order.items()}
+    if by_order:
+        lo = min(by_order); hi = max(by_order)
+        prox = float(np.mean(by_order[lo]))
+        dist = float(np.mean(by_order[hi]))
+    else:
+        prox = dist = float("nan")
+    return {
+        "internode_length_by_order": out,
+        "internode_length_proximal_mean": prox,
+        "internode_length_distal_mean": dist,
+    }
+
+
 # ── Counts ────────────────────────────────────────────────────────────────
 
 def _bud_state_histogram(nodes: list[Node]) -> dict[str, int]:
@@ -399,6 +425,7 @@ def compute_metrics(
     out.update(_strahler_metrics(tree.root))
     out.update(_insertion_angle_metrics(internodes, axis_orders))
     out.update(_divergence_angle_metrics(chains, axis_orders))
+    out.update(_internode_length_metrics(internodes, axis_orders))
     out["sympodial_fork_count"] = _sympodial_fork_count(nodes)
     out["bud_state_histogram"] = _bud_state_histogram(nodes)
     out["tree_height"] = height
@@ -421,6 +448,8 @@ _SCALAR_KEYS = (
     "trunk_base_diameter",
     "crown_radius",
     "total_leaf_area",
+    "internode_length_proximal_mean",
+    "internode_length_distal_mean",
 )
 
 _HISTOGRAM_KEYS = (
@@ -432,6 +461,7 @@ _ANGLE_KEYS = (
     "insertion_angle_deg_vs_parent",
     "insertion_angle_deg_vs_main_sibling",
     "divergence_angle_deg",
+    "internode_length_by_order",
 )
 
 
@@ -586,7 +616,8 @@ def format_report(
     lines.append("")
 
     lines.append("Architecture")
-    for k in ("tree_height", "trunk_base_diameter", "crown_radius", "total_leaf_area"):
+    for k in ("tree_height", "trunk_base_diameter", "crown_radius", "total_leaf_area",
+              "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))
         lines.append(f"  {k:24s} {_fmt_scalar(val):28s} {flag}".rstrip())
