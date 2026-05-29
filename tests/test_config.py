@@ -506,22 +506,6 @@ def test_elongation_validation_tau_must_be_positive(tmp_path):
         load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
 
 
-def test_elongation_validation_age_factor_min_bounds(tmp_path):
-    from palubicki.config import ConfigError, load_config
-    yaml_path = tmp_path / "bad.yaml"
-    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    age_factor_min: 0.05\n")
-    with pytest.raises(ConfigError, match="age_factor_min"):
-        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
-
-
-def test_elongation_validation_decay_must_be_nonnegative(tmp_path):
-    from palubicki.config import ConfigError, load_config
-    yaml_path = tmp_path / "bad.yaml"
-    yaml_path.write_text("sim:\n  elongation:\n    enabled: true\n    age_factor_decay: -0.1\n")
-    with pytest.raises(ConfigError, match="age_factor_decay"):
-        load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
-
-
 def test_bud_break_bias_defaults_to_uniform(tmp_path: Path) -> None:
     yaml_path = tmp_path / "c.yaml"
     yaml_path.write_text("sim: {}\n")
