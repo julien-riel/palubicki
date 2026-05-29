@@ -230,6 +230,7 @@ def test_flare_factor_one_is_identity():
     tree_a = _vertical_chain(n=4, length=0.2, r=0.05)
     tree_b = _vertical_chain(n=4, length=0.2, r=0.05)
     base = build_bark_primitive(tree_a, ring_sides=8, material=_mat())
+    # flare_variation defaults to 0.0, so jitter=0 and eff_factor stays exactly 1.0 -> byte-identical
     flared = build_bark_primitive(
         tree_b, ring_sides=8, material=_mat(),
         flare_height=0.5, flare_factor=1.0, flare_falloff="linear",

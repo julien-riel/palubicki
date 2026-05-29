@@ -168,11 +168,15 @@ def _flare_radius_field(
     angles: np.ndarray,           # (columns,)
     flare: _FlareSpec | None,
 ) -> np.ndarray:
-    """Effective per-vertex radius. ``(N, 1)`` (broadcasts over columns) when no
-    flare, ``(N, columns)`` when the trunk chain carries a ``_FlareSpec``.
+    """Effective per-vertex radius field.
 
-    Radial (axisymmetric) component only is added here; buttress is layered on in
-    a later task. Ground reference is the chain's own first node ``node_positions[0, 1]``.
+    Currently always returns ``(N, 1)`` (broadcasts over columns); the azimuthal
+    buttress term added in a later task will make the flared branch return
+    ``(N, columns)``.  The ``angles`` parameter is accepted now and reserved for
+    that buttress term.
+
+    Radial (axisymmetric) component only is added here. Ground reference is the
+    chain's own first node ``node_positions[0, 1]``.
     """
     if flare is None or flare.height <= 0.0:
         return radii_arr[:, None]
@@ -180,8 +184,8 @@ def _flare_radius_field(
     base_y = node_positions[0, 1]
     y = node_positions[:, 1] - base_y                         # (N,)
     t = np.clip((flare.height - y) / flare.height, 0.0, 1.0)  # 1 at base, 0 at top
-    f = _falloff(t, flare.falloff)                            # (N,)
-    radial = 1.0 + (flare.factor - 1.0) * f                   # (N,)
+    blend = _falloff(t, flare.falloff)                         # (N,)
+    radial = 1.0 + (flare.factor - 1.0) * blend               # (N,)
     return (radii_arr * radial)[:, None]                      # (N, 1)
 
 
