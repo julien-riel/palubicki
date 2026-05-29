@@ -36,7 +36,7 @@ def test_species_golden(tmp_path, update_goldens, species):
         "generate", "--species", species,
         "--seed", "42",
         "--marker-count", "1000",
-        "--iterations", "10",
+        "--years", "10",
         "-o", str(out),
     ])
     assert rc == 0

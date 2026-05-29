@@ -16,7 +16,6 @@ def _node_with_reserves(k: int) -> Node:
         )
         b.low_quality_steps = 7
         b.low_light_steps = 5
-        b.age = 12
         node.dormant_reserve_buds.append(b)
     return node
 
@@ -51,7 +50,6 @@ def test_activated_buds_have_counters_reset():
     b = out[0]
     assert b.low_quality_steps == 0
     assert b.low_light_steps == 0
-    assert b.age == 0
 
 
 def test_activate_caps_at_available_reserves():

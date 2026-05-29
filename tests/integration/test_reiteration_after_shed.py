@@ -26,7 +26,7 @@ def test_reiteration_produces_activations(tmp_path):
     with patch.object(shedding_mod, "activate_reserves_on_shed", side_effect=spy):
         cfg = load_config(
             yaml_path=None,
-            cli_overrides={"sim.max_iterations": 25, "envelope.marker_count": 3000},
+            cli_overrides={"sim.max_simulation_years": 25, "envelope.marker_count": 3000},
             output=tmp_path / "oak.glb", species="oak",
         )
         simulate(cfg)
@@ -40,7 +40,7 @@ def test_reiteration_produces_activations(tmp_path):
         cfg = load_config(
             yaml_path=None,
             cli_overrides={
-                "sim.max_iterations": 25,
+                "sim.max_simulation_years": 25,
                 "envelope.marker_count": 3000,
                 "phyllotaxy.dormant_reserve_count": 0,
             },

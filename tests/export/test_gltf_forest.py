@@ -21,7 +21,7 @@ from palubicki.sim.simulator import simulate_forest
 def test_write_glb_forest_has_one_node_per_tree(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, marker_count=1500),
-        sim=SimConfig(max_iterations=4),
+        sim=SimConfig(max_simulation_years=4.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "scene.glb", seed=42,
@@ -42,7 +42,7 @@ def test_write_glb_forest_has_one_node_per_tree(tmp_path):
 def test_write_glb_forest_includes_obstacles_node(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, marker_count=1500),
-        sim=SimConfig(max_iterations=4),
+        sim=SimConfig(max_simulation_years=4.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "scene.glb", seed=42,
@@ -63,7 +63,7 @@ def test_write_glb_forest_includes_obstacles_node(tmp_path):
 def test_write_glb_forest_embeds_config_in_asset_extras(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=2, ry=3, rz=2, marker_count=1500),
-        sim=SimConfig(max_iterations=4),
+        sim=SimConfig(max_simulation_years=4.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "scene.glb", seed=42,

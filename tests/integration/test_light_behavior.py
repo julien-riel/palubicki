@@ -8,7 +8,7 @@ activating V2 (BHls) light model produces expected biological outcomes:
 
 Parameters are tuned for reliable signal: large envelope (rx=2, ry=3, rz=2),
 high marker count (3000), strong absorption (k_absorption=1.0), large leaf area
-(leaf_area=0.2), and enough iterations (max_iterations=12) to accumulate effect.
+(leaf_area=0.2), and enough years (max_simulation_years=12) to accumulate effect.
 """
 from pathlib import Path
 
@@ -33,7 +33,7 @@ pytestmark = pytest.mark.slow
 def _base_cfg(**overrides) -> Config:
     base = {
         "envelope": EnvelopeConfig(shape="ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=3000),
-        "sim": SimConfig(max_iterations=12),
+        "sim": SimConfig(max_simulation_years=12.0),
         "tropism": TropismConfig(w_phototropism=0.3),
         "phyllotaxy": PhyllotaxyConfig(),
         "shedding": SheddingConfig(),
@@ -68,9 +68,9 @@ def test_light_enabled_raises_centroid():
     light gaps and lowers the centroid instead of raising it.
     Observed shift: 0.40 → 0.67 (delta ~+0.27).
     """
-    tree_off = simulate(_base_cfg(sim=SimConfig(max_iterations=30), light=LightConfig(enabled=False)))
+    tree_off = simulate(_base_cfg(sim=SimConfig(max_simulation_years=30.0), light=LightConfig(enabled=False)))
     tree_on = simulate(_base_cfg(
-        sim=SimConfig(max_iterations=30),
+        sim=SimConfig(max_simulation_years=30.0),
         light=LightConfig(enabled=True, k_absorption=2.5, leaf_area=0.2),
     ))
     centroid_y_off = np.mean([iod.child_node.position[1] for iod in tree_off.all_internodes])

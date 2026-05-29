@@ -71,7 +71,7 @@ def test_post_species_unknown_returns_400(client):
 def _tiny_config_dict():
     return {
         "envelope": {"shape": "ellipsoid", "rx": 1.0, "ry": 2.0, "rz": 1.0, "marker_count": 200},
-        "sim": {"max_iterations": 3},
+        "sim": {"max_simulation_years": 3},
         "seed": 1,
     }
 

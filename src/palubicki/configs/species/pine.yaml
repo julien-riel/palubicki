@@ -10,10 +10,10 @@ sim:
   internode_length_jitter: 0.10
   lambda_apical: 0.85
   alpha_basipetal: 2.5
-  max_iterations: 50
+  max_simulation_years: 50
   elongation:
     enabled: true
-    tau_iterations: 2.5
+    tau_years: 2.5
     age_factor_min: 0.4
     age_factor_decay: 0.7
   sympodial:

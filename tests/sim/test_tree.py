@@ -83,20 +83,20 @@ def test_node_sag_offset_defaults_to_zero_vector():
     assert n.sag_offset.dtype == np.float64
 
 
-def test_internode_has_birth_iteration_and_length_target_defaults():
+def test_internode_has_birth_time_and_length_target_defaults():
     a = Node(position=np.zeros(3))
     b = Node(position=np.array([0.0, 1.0, 0.0]))
     iod = Internode(parent_node=a, child_node=b, length=1.0, is_main_axis=True)
-    assert iod.birth_iteration == 0
+    assert iod.birth_time == 0.0
     assert iod.length_target == 0.0
 
 
-def test_internode_accepts_birth_iteration_and_length_target_kwargs():
+def test_internode_accepts_birth_time_and_length_target_kwargs():
     a = Node(position=np.zeros(3))
     b = Node(position=np.array([0.0, 1.0, 0.0]))
     iod = Internode(
         parent_node=a, child_node=b, length=0.0, is_main_axis=True,
-        birth_iteration=7, length_target=0.42,
+        birth_time=7.0, length_target=0.42,
     )
-    assert iod.birth_iteration == 7
+    assert iod.birth_time == 7.0
     assert iod.length_target == 0.42

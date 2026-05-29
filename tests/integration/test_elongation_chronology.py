@@ -13,15 +13,15 @@ def test_oak_late_internodes_shorter_than_early(tmp_path):
         yaml_path=None,
         cli_overrides={
             "envelope.marker_count": 2000,
-            "sim.max_iterations": 30,
+            "sim.max_simulation_years": 30,
         },
         output=tmp_path / "oak.glb",
         species="oak",
     )
     tree = simulate(cfg)
 
-    early = [iod.length_target for iod in tree.all_internodes if iod.birth_iteration < 10]
-    late = [iod.length_target for iod in tree.all_internodes if iod.birth_iteration >= 20]
+    early = [iod.length_target for iod in tree.all_internodes if iod.birth_time < 10]
+    late = [iod.length_target for iod in tree.all_internodes if iod.birth_time >= 20]
     assert len(early) > 5 and len(late) > 5, (
         f"insufficient samples: early={len(early)} late={len(late)}"
     )

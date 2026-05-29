@@ -17,7 +17,7 @@ def _base_cfg(tmp_path, *, light_enabled: bool) -> Config:
     return Config(
         envelope=EnvelopeConfig(rx=1.0, ry=2.0, rz=1.0, marker_count=400),
         sim=SimConfig(
-            internode_length=0.15, max_iterations=4,
+            internode_length=0.15, max_simulation_years=4.0,
             r_perception=0.6, r_kill=0.1,
         ),
         tropism=TropismConfig(w_orthotropy_main=0.3),

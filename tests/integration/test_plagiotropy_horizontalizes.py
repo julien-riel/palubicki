@@ -40,7 +40,7 @@ def _structural_depth(tree) -> dict:
 def test_oak_laterals_tilt_toward_horizontal(tmp_path):
     cfg = load_config(
         yaml_path=None,
-        cli_overrides={"sim.max_iterations": 30, "envelope.marker_count": 8000},
+        cli_overrides={"sim.max_simulation_years": 30, "envelope.marker_count": 8000},
         output=tmp_path / "oak.glb",
         species="oak",
     )

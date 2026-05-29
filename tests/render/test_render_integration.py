@@ -34,7 +34,7 @@ def _nonbg_ratio(img: np.ndarray, bg_rgb=(255, 255, 255), tol=8) -> float:
 def _v1_cfg(out: Path) -> Config:
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=10),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=10.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -67,7 +67,7 @@ def test_render_v1_ellipsoid_glb_roundtrip(tmp_path):
 def test_render_forest_glb(tmp_path):
     cfg = Config(
         envelope=EnvelopeConfig(rx=1.5, ry=2.5, rz=1.5, shape="ellipsoid", marker_count=1500),
-        sim=SimConfig(max_iterations=6),
+        sim=SimConfig(max_simulation_years=6.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(),

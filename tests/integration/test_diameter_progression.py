@@ -21,8 +21,8 @@ def test_diameter_progression_final_matches_post_sim_compute_radii(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=3.0, ry=4.0, rz=3.0, marker_count=2000),
-        sim=SimConfig(max_iterations=15,
-                      elongation=ElongationConfig(enabled=True, tau_iterations=2.0)),
+        sim=SimConfig(max_simulation_years=15.0,
+                      elongation=ElongationConfig(enabled=True, tau_years=2.0)),
         tropism=TropismConfig(w_orthotropy_main=0.3, w_phototropism=0.2),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),

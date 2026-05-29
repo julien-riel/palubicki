@@ -27,7 +27,7 @@ pytestmark = pytest.mark.slow
 def _cfg_ellipsoid(out: Path) -> Config:
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=10),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=10.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -56,7 +56,7 @@ def _hash_buffers(glb_path: Path) -> str:
 def _cfg_ellipsoid_light(out: Path) -> Config:
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_iterations=8),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=8.0),
         tropism=TropismConfig(w_phototropism=0.3),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -143,7 +143,7 @@ def test_golden_forest_v3(tmp_path):
 
     cfg = Config(
         envelope=EnvelopeConfig(rx=1.5, ry=2.5, rz=1.5, shape="ellipsoid", marker_count=2000),
-        sim=SimConfig(max_iterations=10),
+        sim=SimConfig(max_simulation_years=10.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(),
         light=LightConfig(enabled=True),

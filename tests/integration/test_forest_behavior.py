@@ -24,12 +24,12 @@ def test_two_trees_compete_for_space(tmp_path):
     accumulates more internodes. With Phase 1 defaults (lateral orthotropy/gravi
     weights from TropismConfig), the asymmetry needs enough iterations and tight
     enough spacing to be discriminating: spacing=1.2 (inner gap=2.4, env_rx=1.5
-    → envelopes overlap) and max_iterations=18 surface a clear outer-favored
+    → envelopes overlap) and max_simulation_years=18 surface a clear outer-favored
     margin without being overly slow.
     """
     cfg = Config(
         envelope=EnvelopeConfig(rx=1.5, ry=3.0, rz=1.5, marker_count=3000),
-        sim=SimConfig(max_iterations=18),
+        sim=SimConfig(max_simulation_years=18.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "x.glb", seed=42,
@@ -56,7 +56,7 @@ def test_simulate_vs_simulate_forest_single_tree_match(tmp_path):
     """simulate(cfg) and simulate_forest(cfg) on cfg with no forest.seeds must produce the same tree."""
     cfg = Config(
         envelope=EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
-        sim=SimConfig(max_iterations=8),
+        sim=SimConfig(max_simulation_years=8.0),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "x.glb", seed=42,

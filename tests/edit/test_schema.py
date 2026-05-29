@@ -84,7 +84,7 @@ def test_sim_section_exposes_expected_fields():
     s = build_schema()
     sim = next(sec for sec in s["sections"] if sec["name"] == "sim")
     names = [f["name"] for f in sim["fields"]]
-    assert "max_iterations" in names
+    assert "max_simulation_years" in names
     assert "lambda_apical" in names
     assert "r_perception" in names
     assert "r_kill" in names
