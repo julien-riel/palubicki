@@ -4,12 +4,13 @@
 
 **Code root:** `src/palubicki/`. Species presets currently shipped: **oak**, **birch**, **pine**, **maple**.
 
-**Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), and bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)) all landed on `main`.
+**Last reviewed:** 2026-05-29, after root flare ([issue #8](https://github.com/julien-riel/palubicki/issues/8)), true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), the diagnostic harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)), and the **time / phenology foundation** ([#10](https://github.com/julien-riel/palubicki/issues/10)) all landed on `main`.
 
 ## What changed since the 2026-05-28 review
 
 All merged to `main` via the issue tracker:
 
+- **Time / phenology axis — Phase 1 foundation** (`sim/clock.py` + `config.py` + `sim/simulator.py` + `sim/elongation.py` + `sim/tree.py`, [issue #10](https://github.com/julien-riel/palubicki/issues/10) / [PR #23](https://github.com/julien-riel/palubicki/pull/23)) — the simulator now advances in fractional years instead of bare iterations. A `Clock` (`dt_years`, `t`) threads through the forest loop; `sim.max_iterations` is replaced by `dt_years` + `max_simulation_years` (with a derived `num_iterations`); `Internode.birth_iteration` → `birth_time` (years) and `ElongationConfig.tau_iterations` → `tau_years`; the vestigial `Bud.age` was removed. A per-species `sim.annual_growth_period = [lo, hi)` (year fractions) gates growth to a window — outside it the tree only ages (elongation/diameters/sag), emits nothing, and does not trip the saturation early-stop. The `iteration`-vs-`t` split keeps integer `iteration` for RNG seeding/identity and float `t` for biological time, so at `dt_years=1.0` trees are bit-identical (all goldens, incl. the pinned bit-exact RNG test, unchanged). **This is the foundation the deciduousness / leaf-age / epinasty / flowering work was waiting on.**
 - **Bark variation by `Internode.diameter`** (`geom/bark_blend.py` + `config.py` + `export/gltf.py`, [issue #9](https://github.com/julien-riel/palubicki/issues/9) / [PR #22](https://github.com/julien-riel/palubicki/pull/22)) — three-way bark tint (young → mature → senescent) carried as a per-vertex `COLOR_0` blend over the single bark texture, driven solely by `Internode.diameter`: pale smooth bark on thin twigs, dark fissured bark on thick limbs. Stops calibrated to the sim's actual internode-diameter scale (~1.5–8.6 cm). Presence-gated (off ⇒ byte-identical output); on by default for all five species, with mature tint = each species' prior `bark_color`.
 - **Diagnostic / validation harness** (`sim/diagnostics.py`, [issue #13](https://github.com/julien-riel/palubicki/issues/13)) — `compute_metrics` over one or many trees: Strahler/Horton bifurcation ratios, per-order divergence & insertion angles, bud-state histogram, sympodial fork count, height/crown radius, trunk base diameter, total leaf area. Multi-seed aggregation plus literature-range ✓/✗ flagging via `MetricRanges`/`format_report`. This was the highest-priority remaining item in §11.
 - **True distichous phyllotaxis** (`sim/phyllotaxy.py` mode `"distichous"`, [issue #15](https://github.com/julien-riel/palubicki/issues/15)) — single bud per node, 180° alternation between successive nodes. The `distichous_on_plagiotropic` flag auto-switches plagiotropic (order > 0) axes to distichous, so conifer side-sprays form a flat 2-ranked plane — the exact fix §5/§10 flagged.
@@ -29,7 +30,7 @@ Phases 2A–2D were merged. Concretely, the following moved from ❌/🟡 to ✅
 - **Decussate phyllotaxy** (`sim/phyllotaxy.py` mode `"decussate"` with π/2 alternation between successive pairs).
 - **Sun/shade leaf morphology** (`geom.leaf_sun_shade_k` + `Internode.light_factor`).
 - **Time-stepped trunk thickening** (`sim/radii.py::update_diameters_incremental`, called per iteration, idempotent).
-- **Progressive internode elongation** (`sim/elongation.py` — sigmoid ramp per internode based on `birth_iteration` and `length_target`).
+- **Progressive internode elongation** (`sim/elongation.py` — sigmoid ramp per internode based on `birth_time` and `length_target`; `birth_iteration` was renamed to `birth_time` in years by Phase 1 [#10](https://github.com/julien-riel/palubicki/issues/10)).
 - **Idempotent sag** (`sim/sag.py` writing `Node.sag_offset`).
 - **Bud lifecycle**: `BudState.RESERVE`, `Bud.low_quality_steps`, `Bud.low_light_steps`, shade mortality (`sim/shade_mortality.py`), reiteration from reserves (`sim/reiteration.py`).
 - **Maple** species preset (decussate + sympodial + reiteration + plagiotropism + sun/shade leaves).
@@ -72,8 +73,8 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
-| Phytomer = node + internode + leaf(s) + bud(s) as one logical unit | 🟡 | = | `sim/tree.py`: `Node`, `Internode`, `Bud` separate; leaves still synthesized at render time in `geom/leaves.py` | M | L | **IMPROVE** ([#14](https://github.com/julien-riel/palubicki/issues/14), [#10](https://github.com/julien-riel/palubicki/issues/10)) — leaves are still not first-class node attributes. Largest single architectural gap; blocks deciduousness, per-leaf age, and seasonal rendering. Tackle with Phase 1 (seasonal/phenology) — see end of doc. |
-| Internode with length + radius | ✅ | 🆕 strengthened | `Internode.length`, `Internode.diameter`; also now `light_factor`, `birth_iteration`, `length_target` (Phase 2D) | — | — | — |
+| Phytomer = node + internode + leaf(s) + bud(s) as one logical unit | 🟡 | = | `sim/tree.py`: `Node`, `Internode`, `Bud` separate; leaves still synthesized at render time in `geom/leaves.py` | M | L | **IMPROVE** ([#14](https://github.com/julien-riel/palubicki/issues/14)) — leaves are still not first-class node attributes. Largest single architectural gap; blocks deciduousness, per-leaf age, and seasonal rendering. Phase 1 (time/phenology, [#10](https://github.com/julien-riel/palubicki/issues/10)) **landed**, so `LeafState` can now be designed on a real calendar (`leaf_age` in years) the first time — see end of doc. |
+| Internode with length + radius | ✅ | 🆕 strengthened | `Internode.length`, `Internode.diameter`; also now `light_factor`, `birth_time` (years, Phase 1 [#10](https://github.com/julien-riel/palubicki/issues/10)), `length_target` (Phase 2D) | — | — | — |
 | Axillary buds in axils | ✅ | ⬆ strengthened | `Node.lateral_buds`; states now `ACTIVE`, `DORMANT`, `DEAD`, `RESERVE` (Phase 2B); also `Bud.low_quality_steps`, `low_light_steps` | — | — | — |
 | Terminal/apical bud | ✅ | = | `Node.terminal_bud` | — | — | — |
 | Dormant reserve buds (preformed) | ✅ | 🆕 | `Node.dormant_reserve_buds: List[Bud]` (Phase 2B) — separate from active laterals, activated by `reiteration.py` | M | L | — |
@@ -88,7 +89,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
-| Apical meristem | ✅ | = | terminal bud + `simulator.py:62–71` loop | — | — | — |
+| Apical meristem | ✅ | = | terminal bud + the `Clock`-driven `simulate_forest` loop (`simulator.py`, `range(cfg.sim.num_iterations)`) | — | — | — |
 | Axillary meristems | ✅ | ⬆ strengthened | richer state machine (Phase 2B) — ACTIVE / DORMANT / DEAD / RESERVE | — | — | — |
 | Bud break / release rule | 🟡 | ⬆ strengthened | Activation still implicit through BH allocation, but the lifecycle on the other end is now explicit: `shade_mortality.kill_shaded_buds` (Phase 2B) and `reiteration.activate_reserves_on_shed` (Phase 2B) close the loop on dormancy/death. | M | L | **IMPROVE** — the "missing piece" is now upstream: still no explicit bud-break probability for *initial* activation. Acceptable for now; revisit only if shrub presets need fine control. |
 | Reiteration (replacing shed branches from reserves) | ✅ | ⬆ Implemented | `sim/reiteration.py`; activated by `shedding.reactivation_count` | M | L | **DONE** — this also partially substitutes for one role of determinate growth (it lets trees recover from canopy damage). |
@@ -112,11 +113,11 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Basitony (base-favoring) | ✅ | ⬆ Implemented | Same `bud_break_bias` axis, `mode="basitonic"`. Linearly boosts base-side lateral quality. Mesotonic mode (midpoint peak) also available. | — | — | **DONE** — gates shrub presets; lilac / dogwood / blueberry can land as a follow-up species PR. |
 | Orthotropy | ✅ | = | `sim/tropisms.py` `w_orthotropy_main/_lateral` with `axis_decay^order` | — | — | — |
 | Plagiotropy (horizontal lateral axis) | ✅ | ⬆ Promoted | `sim/tropisms.py:44–67` `w_plagiotropism_main/_lateral` (Phase 2A) — projects current direction onto XY plane, blends, safely skipped near-vertical | — | — | **DONE** — true plagiotropic horizontal sprays now possible (key for maple-like crowns, fir-like flat tiers). |
-| Plagiotropy via epinasty (time-dependent bend) | ❌ | = | Current plagiotropism is per-step blend, not "starts vertical then bends down over years" | M | L | **ADD** ([#10](https://github.com/julien-riel/palubicki/issues/10)) with Phase 1 (seasonal/time axis) — needs a meaningful concept of branch age. |
+| Plagiotropy via epinasty (time-dependent bend) | ❌ | ⬆ unblocked | Current plagiotropism is per-step blend, not "starts vertical then bends down over years" | M | L | **ADD** — the Phase 1 time axis ([#10](https://github.com/julien-riel/palubicki/issues/10)) landed, so branch age in years (`t - birth_time`) is now available; epinasty can be built on it. Feature itself still to do. |
 | Per-order branching angles | ✅ | ⬆ Promoted | `phyllotaxy.branch_angle_by_order` (Phase 2A) — list indexed by axis order (oak: 60°, 40°, 30°, 25°) | — | — | **DONE** |
 | Hallé–Oldeman model selection | ❌ | = | — | L (labels) / H (constraints) | L | **SKIP labels** — current parameter dimensions (mono/sympodial × ortho/plagio × per-order angles) already cover most of what Hallé–Oldeman describes. |
 
-**Verdict.** This section is now the **strongest area of the simulator**. The four landed Phase-2A items (sympodial, plagiotropism, per-order angles, explicit `bud_break_bias`) collectively change what species can be modeled. Only remaining work here: epinasty (couple with seasonal cycles).
+**Verdict.** This section is now the **strongest area of the simulator**. The four landed Phase-2A items (sympodial, plagiotropism, per-order angles, explicit `bud_break_bias`) collectively change what species can be modeled. Only remaining work here: epinasty — and the Phase 1 time axis ([#10](https://github.com/julien-riel/palubicki/issues/10)) it depended on is now in place, so it is ready to build.
 
 ---
 
@@ -144,14 +145,14 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 | Simple vs compound leaf (pinnate / palmate / bipinnate) | ❌ | = | All leaves are simple | H (ash, walnut, rose, sumac, mimosa, locust) | L | **ADD** ([#6](https://github.com/julien-riel/palubicki/issues/6)) — a compound leaf is a small phytomer chain; reuse the same walker on a leaf-scale subgrammar. Unlocks many broadleaf species. |
 | Venation (parallel / pinnate / palmate) | 🟡 | = | Texture-driven | M | L | **IMPROVE** — bake into blade shape parameters; don't model veins as geometry. |
 | Margins (serrate, dentate, lobed, entire) | ✅ | ⬆ Implemented | `geom/leaf_blade.py` — 4 margin functions (entire / serrate / dentate / lobed) on the blade outline ([issue #4](https://github.com/julien-riel/palubicki/issues/4)) | — | — | **DONE** — delivered with the parametric blade. |
-| Leaf orientation (per-leaf insertion + petiole twist) | 🟡 | = | `leaf_splay_deg` cluster-fan, not per-leaf | M | L | **IMPROVE** ([#14](https://github.com/julien-riel/palubicki/issues/14), [#10](https://github.com/julien-riel/palubicki/issues/10)) with leaves-on-nodes (couples with Phase 1). |
+| Leaf orientation (per-leaf insertion + petiole twist) | 🟡 | = | `leaf_splay_deg` cluster-fan, not per-leaf | M | L | **IMPROVE** ([#14](https://github.com/julien-riel/palubicki/issues/14)) with leaves-on-nodes (Phase 1 time foundation [#10](https://github.com/julien-riel/palubicki/issues/10) already landed). |
 | Leaf clusters at growing tips | ✅ | = | `leaf_cluster_count`, `foliage_depth` | — | — | — |
 | Needles / scales / fascicles | 🟡 | = | Pine uses tiny aspect-ratio leaves; no real fascicles (clusters of 2–5 needles from a short shoot) | M (close-up); L (distant) | L | **ADD** ([#7](https://github.com/julien-riel/palubicki/issues/7)) — `fascicle: int` parameter on the leaf primitive. Skip if all renders are tree-scale. |
 | Sun-leaf vs shade-leaf morphology | ✅ | ⬆ Implemented | `geom.leaf_sun_shade_k` (Phase 2C) — `leaf_size *= 1 + k*(1 - light_factor)`, clamped [0.5×, 2×]. Per-internode `light_factor` captured during sim. | — | — | **DONE** — shade leaves now grow larger, as in real broadleaf trees. |
-| Leaf life span | ❌ | = | All leaves permanent | M | L | **ADD with Phase 1 (seasonal cycles)** ([#10](https://github.com/julien-riel/palubicki/issues/10), [#14](https://github.com/julien-riel/palubicki/issues/14)) — `leaf_age` field once leaves move onto nodes. Prerequisite for deciduousness. |
-| Deciduous / evergreen / marcescent | ❌ | = | — | H (seasonal scenes) | L | **ADD with Phase 1** ([#10](https://github.com/julien-riel/palubicki/issues/10)) — payoff is enormous if seasonal renders matter. |
+| Leaf life span | ❌ | ⬆ unblocked | All leaves permanent | M | L | **ADD** ([#14](https://github.com/julien-riel/palubicki/issues/14)) — Phase 1 ([#10](https://github.com/julien-riel/palubicki/issues/10)) landed, so `leaf_age` in years is now expressible once leaves move onto nodes. Prerequisite for deciduousness. |
+| Deciduous / evergreen / marcescent | ❌ | ⬆ unblocked | — | H (seasonal scenes) | L | **ADD** — Phase 1 foundation ([#10](https://github.com/julien-riel/palubicki/issues/10)) landed (`birth_time` + `annual_growth_period`); build on leaves-on-nodes ([#14](https://github.com/julien-riel/palubicki/issues/14)). Payoff is enormous if seasonal renders matter. |
 
-**Verdict.** Parametric blade + margins ([issue #4](https://github.com/julien-riel/palubicki/issues/4)) and sun/shade morphology (Phase 2C) are in; leaves still aren't first-class node attributes. **In priority order: compound leaves → petiole geometry → (Phase 1: leaves-on-nodes + deciduousness).** The first two don't require seasonal infrastructure.
+**Verdict.** Parametric blade + margins ([issue #4](https://github.com/julien-riel/palubicki/issues/4)) and sun/shade morphology (Phase 2C) are in; leaves still aren't first-class node attributes. The Phase 1 time foundation ([#10](https://github.com/julien-riel/palubicki/issues/10)) has now landed, so leaves-on-nodes + deciduousness can be designed against a real calendar. **In priority order: compound leaves → petiole geometry → leaves-on-nodes ([#14](https://github.com/julien-riel/palubicki/issues/14)) + deciduousness.** The first two don't require the seasonal infrastructure.
 
 ---
 
@@ -171,7 +172,7 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 | Topic | Status | Δ | Where | Realism | Perf | Recommendation |
 |---|---|---|---|---|---|---|
-| Primary growth (tip elongation) | ✅ | ⬆ Strengthened | `sim/elongation.py` (Phase 2D): each internode has `birth_iteration` and `length_target`; effective length follows a sigmoid ramp `length_target * sigmoid((iter - birth)/τ)`. Earlier-born internodes also have a larger `length_target` via `compute_target_with_age`. | — | — | **DONE** — primary growth is now genuinely temporal: a 5-year-old internode is still elongating until it reaches its target. Big realism win for young trees. |
+| Primary growth (tip elongation) | ✅ | ⬆ Strengthened | `sim/elongation.py` (Phase 2D, time-based since Phase 1 [#10](https://github.com/julien-riel/palubicki/issues/10)): each internode has `birth_time` (years) and `length_target`; effective length follows a sigmoid ramp `length_target * sigmoid((t - birth_time)/τ)` with `τ = tau_years`. Earlier-born internodes also have a larger `length_target` via `compute_target_with_age(birth_time, total_years)`. | — | — | **DONE** — primary growth is now genuinely temporal: a 5-year-old internode is still elongating until it reaches its target. Big realism win for young trees. |
 | Secondary growth (radial thickening over time) | ✅ | ⬆ Promoted | `radii.update_diameters_incremental` (Phase 2D) — recomputed each iteration, idempotent | — | — | **DONE** — trunk thickens visibly as the tree grows; sag responds correctly mid-growth. |
 | Pipe model / da Vinci's rule | ✅ | = | `radii.py:6–14` exponent ~2.49 | — | — | — |
 | Trunk taper | ✅ | = | from pipe model | — | — | — |
@@ -237,31 +238,37 @@ Still nothing to do — the simulator follows all three principles. **Reinforced
 
 ## Top remaining recommendations (ranked by realism-per-effort)
 
-These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D and the 2026-05-29 work (root flare [#8](https://github.com/julien-riel/palubicki/issues/8), distichous [#15](https://github.com/julien-riel/palubicki/issues/15), diagnostic harness [#13](https://github.com/julien-riel/palubicki/issues/13), bark variation [#9](https://github.com/julien-riel/palubicki/issues/9)) already delivered.
+These are the items where the realism payoff is high and the implementation cost is low — the kind of changes worth doing first, **excluding** what Phases 2A–2D and the 2026-05-29 work (root flare [#8](https://github.com/julien-riel/palubicki/issues/8), distichous [#15](https://github.com/julien-riel/palubicki/issues/15), diagnostic harness [#13](https://github.com/julien-riel/palubicki/issues/13), bark variation [#9](https://github.com/julien-riel/palubicki/issues/9), time/phenology foundation [#10](https://github.com/julien-riel/palubicki/issues/10)) already delivered.
 
 1. **Compound leaves** (§6, [#6](https://github.com/julien-riel/palubicki/issues/6)) — a small phytomer chain at leaf scale. Big species unlock (ash, walnut, rose, sumac, locust…). No dependency.
 2. **Shrub species presets** (§10) — now that `bud_break_bias` is in, lilac / dogwood / blueberry YAMLs are mostly parameter-tuning work. Visible payoff for a small PR.
 3. **Petiole geometry** (§6, [#5](https://github.com/julien-riel/palubicki/issues/5)) — short stalk between bud site and leaf blade. Cheap, removes the "leaves stuck to twig" look.
 4. **Fascicles of needles** (§6, [#7](https://github.com/julien-riel/palubicki/issues/7)) — `fascicle: int` on the leaf primitive. Worth it only for close-up conifer renders.
 
-*Landed since the previous review and removed from this list:* true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), root flare at trunk base ([#8](https://github.com/julien-riel/palubicki/issues/8)), diagnostic/validation harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)).
+*Landed since the previous review and removed from this list:* true distichous phyllotaxis ([#15](https://github.com/julien-riel/palubicki/issues/15)), root flare at trunk base ([#8](https://github.com/julien-riel/palubicki/issues/8)), diagnostic/validation harness ([#13](https://github.com/julien-riel/palubicki/issues/13)), bark variation by `Internode.diameter` ([#9](https://github.com/julien-riel/palubicki/issues/9)), time/phenology foundation ([#10](https://github.com/julien-riel/palubicki/issues/10)).
 
-## Phase 1 — Foundation: time / phenology axis ([#10](https://github.com/julien-riel/palubicki/issues/10)) *(at the right moment)*
+## Phase 1 — Foundation: time / phenology axis ([#10](https://github.com/julien-riel/palubicki/issues/10)) — ✅ LANDED
 
-The right moment to do this is **before** adding any of these features, which all need a real concept of time:
+**Status: done** ([PR #23](https://github.com/julien-riel/palubicki/pull/23)). The simulator now advances in fractional years rather than bare iterations:
+
+- `sim/clock.py` — a `Clock(dt, t)` with `tick()` / `year()` / `year_fraction()` / `in_window(lo, hi)`, threaded through the forest loop.
+- `sim.max_iterations` → `dt_years` + `max_simulation_years`, with a derived `num_iterations` property (`round(max_simulation_years / dt_years)`).
+- `Internode.birth_iteration` → `birth_time` (years); `ElongationConfig.tau_iterations` → `tau_years`; elongation reads time deltas (`t - birth_time`, `birth_time / total_years`).
+- `sim.annual_growth_period = [lo, hi)` (year fractions) gates growth to a seasonal window — outside it the tree only ages (elongation/diameters/sag) and emits nothing, without tripping the no-growth early-stop.
+- Vestigial `Bud.age` removed. The integer `iteration` is retained only for RNG seeding / `node_index` / logging; biological time flows through float `t`, so at `dt_years=1.0` trees are bit-identical (all goldens, incl. the pinned bit-exact RNG test, unchanged).
+
+This was deliberately done **before** leaves-on-nodes so `LeafState` is designed against a real calendar exactly once. The features it now unblocks:
 
 - Leaves as first-class node attributes with `leaf_age` (§2, §6 — [#14](https://github.com/julien-riel/palubicki/issues/14))
 - Deciduousness, evergreen, marcescence (§6)
 - Plagiotropy by epinasty / time-dependent branch reorientation (§4)
-- Seasonal bud dormancy windows (proper "release from dormancy" rather than continuous activation)
+- Seasonal bud dormancy windows (proper "release from dormancy" — the `annual_growth_period` gate is the first step; per-bud release probability is the next)
 
-Today, an iteration is "+1 internode of growth at each active bud" with no temporal unit. Once a step represents a calendar duration (a fraction of a year, or a day), the existing `birth_iteration` and the new `low_quality_steps` / `low_light_steps` counters can be reinterpreted in calendar terms without changing their semantics. **Design pre-work**: pick a clock model (continuous fractional year vs. discrete seasons) and decide whether all species share the same clock or each preset declares its own annual rhythm.
-
-Doing Phase 1 *before* leaves-on-nodes avoids designing `LeafState` twice.
+The existing `low_quality_steps` / `low_light_steps` counters were correctly **kept** as step-counts (they count iterations, not time); only the values that represent time switched to years.
 
 ## Larger projects worth planning, not yet building
 
-- **Determinate growth + flowers + inflorescences** (§3, §9 — [#11](https://github.com/julien-riel/palubicki/issues/11)) — a coherent block. Gates herbaceous forbs, fruiting trees, and a second sympodial trigger ("apex differentiated to flower → terminate," distinct from today's "apex failed quality threshold"). Best done *after* Phase 1, since flowering is itself a seasonal event.
+- **Determinate growth + flowers + inflorescences** (§3, §9 — [#11](https://github.com/julien-riel/palubicki/issues/11)) — a coherent block. Gates herbaceous forbs, fruiting trees, and a second sympodial trigger ("apex differentiated to flower → terminate," distinct from today's "apex failed quality threshold"). Phase 1 ([#10](https://github.com/julien-riel/palubicki/issues/10)) has now landed, so the temporal prerequisite is satisfied (flowering is itself a seasonal event) — this is the next of the larger projects to schedule.
 - **Tillering + intercalary meristems** (§3, §10 — [#12](https://github.com/julien-riel/palubicki/issues/12)) — required for any grass. Architecturally orthogonal — a new growth mode, independent of everything above. Add when grasses become a goal.
 - **Vines / climbers** (§10) — needs an external "support geometry" the vine reacts to. Substantial new system; only worth it if landscape scenes with structures are in scope.
 
