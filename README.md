@@ -195,15 +195,15 @@ Species defaults:
 
 ### Phase 2D — temporal dynamics (progressive elongation + dynamic diameter/sag)
 
-Every internode now tracks its birth iteration and a target length. The
-effective `length` ramps via a sigmoid each iteration; pipe-model diameters
+Every internode now tracks its birth time (in years) and a target length. The
+effective `length` ramps via a sigmoid as the tree ages; pipe-model diameters
 and cantilever-bend sag are recomputed live on the growing tree. A
 finalization snap at the end of `simulate()` sets every length to its target
 and reruns diameters + sag once more, so the exported geometry is always
 fully grown — regardless of when an internode was born.
 
-- **`sim.elongation`** (per-preset): `enabled`, `tau_iterations` (sigmoid
-  width), `age_factor_min` (final scale), `age_factor_decay` (curvature).
+- **`sim.elongation`** (per-preset): `enabled`, `tau_years` (sigmoid
+  width, in years), `age_factor_min` (final scale), `age_factor_decay` (curvature).
   Late-born internodes have shorter targets, capturing the
   early-vigorous-vs-late-conservative chronology of real shoots.
 - **`Node.sag_offset`** separates the visual sag from topological position.
@@ -211,6 +211,22 @@ fully grown — regardless of when an internode was born.
   to run per-iteration.
 - **`update_diameters_incremental`** in `sim/radii.py` exposes pipe-model
   recomputation as a public callable.
+
+### Time model
+
+The simulator advances in fractional years rather than bare iterations.
+`sim.dt_years` is how much time one iteration represents (default `1.0` — one
+iteration ≈ one growing year); `sim.max_simulation_years` is the total
+simulated span (default `30.0`), so the iteration count is
+`round(max_simulation_years / dt_years)` (exposed as `SimConfig.num_iterations`,
+and overridable on the CLI via `--years` / `--dt-years`). Each internode records
+its `birth_time` in years, and elongation ramps over `tau_years`.
+`sim.annual_growth_period = [lo, hi]` (year fractions in `[0, 1)`) gates growth
+to a window: with `dt_years < 1.0`, new internodes are only emitted when the
+current year-fraction falls in `[lo, hi)`; outside it the tree only ages
+(elongation, diameters, sag) and emits nothing. At the default `dt_years = 1.0`
+and `[0.0, 1.0]` window every iteration grows, identical to the prior
+iteration-count behavior.
 
 ## Architecture
 
