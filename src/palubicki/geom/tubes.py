@@ -16,6 +16,16 @@ class _ChainBuild:
     radii: list[float]
 
 
+def _falloff(t: np.ndarray, mode: str) -> np.ndarray:
+    """Flare blend weight on ``t`` in [0, 1] (1 at base, 0 at top of flare zone).
+
+    ``linear`` is identity; ``smoothstep`` is the classic ``3t^2 - 2t^3``.
+    """
+    if mode == "smoothstep":
+        return t * t * (3.0 - 2.0 * t)
+    return t
+
+
 def build_bark_primitive(tree: Tree, *, ring_sides: int, material: Material) -> Primitive:
     chains = _collect_chains(tree)
 

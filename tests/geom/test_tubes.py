@@ -205,3 +205,17 @@ def test_build_bark_primitive_reads_sag_offset():
 
     # The tube tip should have moved downward.
     assert bent_max_y < baseline_max_y - 0.3
+
+
+def test_falloff_linear_identity():
+    from palubicki.geom.tubes import _falloff
+    t = np.array([0.0, 0.25, 0.5, 0.75, 1.0])
+    np.testing.assert_allclose(_falloff(t, "linear"), t)
+
+
+def test_falloff_smoothstep_known_values():
+    from palubicki.geom.tubes import _falloff
+    t = np.array([0.0, 0.25, 0.5, 1.0])
+    # 3t^2 - 2t^3
+    expected = np.array([0.0, 0.15625, 0.5, 1.0])
+    np.testing.assert_allclose(_falloff(t, "smoothstep"), expected)
