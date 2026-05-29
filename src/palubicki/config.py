@@ -244,6 +244,24 @@ class GeomConfig:
         default=0.0,
         metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}},
     )
+    root_flare_height: float = field(
+        default=0.3, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}}
+    )
+    root_flare_factor: float = field(
+        default=1.6, metadata={"ui": {"min": 1.0, "max": 3.0, "step": 0.05}}
+    )
+    root_flare_falloff: Literal["linear", "smoothstep"] = field(
+        default="linear", metadata={"ui": {"label": "Root flare falloff"}}
+    )
+    root_buttress_count: int = field(
+        default=0, metadata={"ui": {"min": 0, "max": 8, "step": 1}}
+    )
+    root_buttress_amplitude: float = field(
+        default=0.15, metadata={"ui": {"min": 0.0, "max": 0.9, "step": 0.05}}
+    )
+    root_flare_variation: float = field(
+        default=0.08, metadata={"ui": {"min": 0.0, "max": 0.9, "step": 0.01}}
+    )
 
 
 @dataclass(frozen=True)
@@ -464,6 +482,33 @@ class Config:
         if g.leaf_margin_count < 0:
             raise ConfigError(
                 f"geom.leaf_margin_count must be >= 0, got {g.leaf_margin_count}"
+            )
+        if g.root_flare_factor < 1.0:
+            raise ConfigError(
+                f"geom.root_flare_factor must be >= 1.0, got {g.root_flare_factor}"
+            )
+        if g.root_flare_height < 0.0:
+            raise ConfigError(
+                f"geom.root_flare_height must be >= 0, got {g.root_flare_height}"
+            )
+        if g.root_flare_falloff not in ("linear", "smoothstep"):
+            raise ConfigError(
+                f"geom.root_flare_falloff must be 'linear'|'smoothstep', "
+                f"got {g.root_flare_falloff!r}"
+            )
+        if g.root_buttress_count < 0:
+            raise ConfigError(
+                f"geom.root_buttress_count must be >= 0, got {g.root_buttress_count}"
+            )
+        if not (0.0 <= g.root_buttress_amplitude < 1.0):
+            raise ConfigError(
+                f"geom.root_buttress_amplitude must be in [0, 1), "
+                f"got {g.root_buttress_amplitude}"
+            )
+        if not (0.0 <= g.root_flare_variation < 1.0):
+            raise ConfigError(
+                f"geom.root_flare_variation must be in [0, 1), "
+                f"got {g.root_flare_variation}"
             )
 
         light = self.light
