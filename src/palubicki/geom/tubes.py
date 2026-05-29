@@ -111,7 +111,7 @@ def build_bark_primitive(
     idx_arr = (np.concatenate(idx_parts, axis=0).astype(np.uint32, copy=False)
                if idx_parts else np.zeros((0,), dtype=np.uint32))
     col_arr = (np.concatenate(col_parts, axis=0).astype(np.float32, copy=False)
-               if (stops is not None and col_parts) else None)
+               if col_parts else None)
 
     return Primitive(positions=pos_arr, normals=nor_arr, uvs=uv_arr, indices=idx_arr,
                      material=material, colors=col_arr)

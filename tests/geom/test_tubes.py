@@ -1,6 +1,7 @@
 # tests/geom/test_tubes.py
 import numpy as np
 
+from palubicki.geom.bark_blend import BarkBlendStops
 from palubicki.geom.mesh import Material
 from palubicki.geom.tubes import build_bark_primitive
 from palubicki.sim.tree import Internode, Node, Tree
@@ -328,9 +329,6 @@ def test_variation_zero_means_identical_flares():
     rad1 = _seeded_base_radius(seed=99, variation=0.0)
     # no buttress, no jitter => base radius identical regardless of seed
     np.testing.assert_allclose(rad0, rad1, atol=1e-12)
-
-
-from palubicki.geom.bark_blend import BarkBlendStops
 
 
 def _stops():
