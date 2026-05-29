@@ -261,3 +261,41 @@ def test_flare_builds_finite_positions():
         flare_height=0.5, flare_factor=2.0,
     )
     assert np.isfinite(flared.positions).all()
+
+
+def test_buttress_modulates_base_ring():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5, flare_falloff="linear",
+        buttress_count=4, buttress_amplitude=0.3, flare_variation=0.0, seed=0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]
+    # ridges => base ring radii are NOT all equal
+    assert base_ring.std() > 1e-3
+
+
+def test_buttress_seam_welded():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5,
+        buttress_count=5, buttress_amplitude=0.3, flare_variation=0.0, seed=0,
+    )
+    # column 0 and the duplicated seam column (index ring_sides=8) must coincide in 3D
+    np.testing.assert_allclose(prim.positions[0], prim.positions[8], atol=1e-12)
+
+
+def test_buttress_count_zero_is_axisymmetric():
+    tree = _vertical_chain(n=4, length=0.2, r=0.05)
+    prim = build_bark_primitive(
+        tree, ring_sides=8, material=_mat(),
+        flare_height=0.5, flare_factor=1.5,
+        buttress_count=0, buttress_amplitude=0.3, flare_variation=0.0,
+    )
+    columns = 8 + 1
+    rad = _radial_dist(prim, 8)
+    base_ring = rad[0:columns]
+    np.testing.assert_allclose(base_ring, base_ring[0], atol=1e-9)  # all equal

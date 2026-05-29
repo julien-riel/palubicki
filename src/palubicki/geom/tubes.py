@@ -170,13 +170,14 @@ def _flare_radius_field(
 ) -> np.ndarray:
     """Effective per-vertex radius field.
 
-    Currently always returns ``(N, 1)`` (broadcasts over columns); the azimuthal
-    buttress term added in a later task will make the flared branch return
-    ``(N, columns)``.  The ``angles`` parameter is accepted now and reserved for
-    that buttress term.
+    Returns ``(N, 1)`` when there is no buttress (or no flare) so it broadcasts
+    over columns; returns ``(N, columns)`` when azimuthal buttress ridges are
+    active.  Ground reference is the chain's own first node
+    ``node_positions[0, 1]``.
 
-    Radial (axisymmetric) component only is added here. Ground reference is the
-    chain's own first node ``node_positions[0, 1]``.
+    The ``angles`` array uses ``k % ring_sides`` upstream so
+    ``angles[ring_sides] == angles[0]``; the duplicated seam column therefore
+    receives the same buttress modulation as column 0, keeping the seam welded.
     """
     if flare is None or flare.height <= 0.0:
         return radii_arr[:, None]
@@ -186,7 +187,17 @@ def _flare_radius_field(
     t = np.clip((flare.height - y) / flare.height, 0.0, 1.0)  # 1 at base, 0 at top
     blend = _falloff(t, flare.falloff)                         # (N,)
     radial = 1.0 + (flare.factor - 1.0) * blend               # (N,)
-    return (radii_arr * radial)[:, None]                      # (N, 1)
+
+    if flare.buttress_count <= 0 or flare.buttress_amplitude <= 0.0:
+        return (radii_arr * radial)[:, None]                   # (N, 1)
+
+    # Azimuthal ridges, fading with the same falloff so they live only in the collar.
+    # ``angles`` uses ``k % ring_sides`` upstream, so angles[ring_sides] == angles[0]
+    # and the duplicated seam vertex therefore stays welded.
+    butt = 1.0 + flare.buttress_amplitude * blend[:, None] * np.cos(
+        flare.buttress_count * angles[None, :] + flare.buttress_phase
+    )                                                          # (N, columns)
+    return radii_arr[:, None] * radial[:, None] * butt         # (N, columns)
 
 
 def _emit_chain_tube(
