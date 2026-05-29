@@ -45,6 +45,7 @@ packages = ["src/palubicki"]
 testpaths = ["tests"]
 markers = [
     "slow: integration and golden tests (deselect with -m 'not slow')",
+    "pinned: bit-exact hash pins (textures, sim digests) valid only on the reference numpy/Pillow build; deselect across environments with -m 'not pinned'",
 ]
 addopts = "-ra"
 

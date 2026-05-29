@@ -96,6 +96,7 @@ _TEXTURE_FIRST64_SHA256 = {
 }
 
 
+@pytest.mark.pinned
 @pytest.mark.parametrize("name", sorted(_PROC_TEXTURES.keys()))
 def test_texture_pinned_hash(name):
     """SHA-256 of the first 64 bytes of each generator's 64-px PNG is pinned.

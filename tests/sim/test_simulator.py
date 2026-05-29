@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from palubicki.config import (
     Config,
@@ -281,6 +282,7 @@ def test_simulator_light_reproducible():
     assert pos_hash(t1) == pos_hash(t2)
 
 
+@pytest.mark.pinned
 def test_simulate_v2_bit_exact_after_refactor(tmp_path):
     """After refactor: simulate(cfg) with empty forest must produce the same Tree as
     a hash-pinned baseline. The baseline is recomputed once and saved in the test."""
