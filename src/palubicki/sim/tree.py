@@ -23,6 +23,14 @@ class Bud:
     state: BudState = BudState.ACTIVE
     low_quality_steps: int = 0
     low_light_steps: int = 0
+    # Phyllotactic ordinal along THIS bud's own anatomical axis: 0 for a bud that
+    # starts an axis (the root, or a lateral beginning a new branch axis),
+    # incrementing by 1 for each node the axis adds. Drives the divergence azimuth
+    # in phyllotaxy.lateral_bud_directions. Unlike the global _SimState.node_index
+    # — which the step-major substep loop interleaves across chains, so it does NOT
+    # advance by a constant step along any single axis — this counter is per-axis,
+    # giving correct spiral/decussate/distichous divergence on the real tree (#24).
+    axis_node_ordinal: int = 0
 
 
 @dataclass(eq=False)

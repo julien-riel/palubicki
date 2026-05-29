@@ -167,10 +167,10 @@ def test_golden_forest_v3(tmp_path):
             for iod in node.children_internodes:
                 stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True, default=list).encode()).hexdigest()
-    # Re-pinned after Phase 1 realism foundations: main/lateral tropism split,
-    # phyllotaxy jitter (divergence + branch_angle), internode_length jitter,
-    # and rewritten oak/pine/birch presets.
-    EXPECTED = "fe1720d2ecbc19e163b376cfafd0b7fa5debaba89530ff657b1fd68bd2464505"
+    # Re-pinned for #24: phyllotaxy divergence now advances per-axis
+    # (Bud.axis_node_ordinal) instead of the global, interleaved node_index, so
+    # lateral bud directions — and thus the whole forest geometry — change.
+    EXPECTED = "deaef41f96739f039175f4add9ea97f6aede3e6e58f2bc6a2bea6fee675fa471"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")

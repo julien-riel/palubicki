@@ -55,6 +55,10 @@ def promote_lateral_if_failing(
         node.lateral_buds.remove(best)
         node.terminal_bud = best
         best.axis_order = bud.axis_order
+        # The promoted lateral now continues the parent axis, so it inherits that
+        # axis's phyllotactic ordinal (#24) — keeping divergence continuous across
+        # the sympodial fork instead of restarting from the lateral's 0.
+        best.axis_node_ordinal = bud.axis_node_ordinal
 
         bud.state = BudState.DEAD
         node.sympodial_fork = True

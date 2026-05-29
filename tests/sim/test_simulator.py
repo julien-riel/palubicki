@@ -322,11 +322,10 @@ def test_simulate_v2_bit_exact_after_refactor(tmp_path):
             stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True).encode()).hexdigest()
     # This hash is pinned to detect unintended drift during refactors.
-    # Re-pinned after Phase 1 realism foundations: TropismConfig main/lateral
-    # split, phyllotaxy jitter fields (default 0), internode_length_jitter
-    # field (default 0). Default cfg values are unchanged behavior-wise except
-    # tropism orthotropy now applies main weight to trunk only.
-    EXPECTED = "1ecf0e4dcf64e31d29248650e2541f5091c243211a0df6f6ab7319f070812f78"
+    # Re-pinned for #24: phyllotaxy divergence now advances per-axis
+    # (Bud.axis_node_ordinal) instead of the global, interleaved node_index, so
+    # lateral bud directions — and thus the whole tree geometry — change.
+    EXPECTED = "a064818f4a62fb917aadef73ec423efc09672fb23a3551fd0c5ded0cef707b17"
     assert EXPECTED is None or digest == EXPECTED, f"V2 bit-exact broken: {digest}"
     # Side-effect: print so we can copy the value if needed
     print(f"V2 hash: {digest}")
