@@ -1,6 +1,7 @@
 # tests/geom/test_tubes.py
 import numpy as np
 
+from palubicki.geom.bark_blend import BarkBlendStops
 from palubicki.geom.mesh import Material
 from palubicki.geom.tubes import build_bark_primitive
 from palubicki.sim.tree import Internode, Node, Tree
@@ -328,3 +329,38 @@ def test_variation_zero_means_identical_flares():
     rad1 = _seeded_base_radius(seed=99, variation=0.0)
     # no buttress, no jitter => base radius identical regardless of seed
     np.testing.assert_allclose(rad0, rad1, atol=1e-12)
+
+
+def _stops():
+    return BarkBlendStops(
+        d_young=0.02, d_mature=0.10, d_senescent=0.30,
+        c_young=(0.9, 0.9, 0.9),       # near-white young
+        c_mature=(0.5, 0.4, 0.3),
+        c_senescent=(0.1, 0.1, 0.1),   # near-black senescent
+    )
+
+
+def test_no_colors_without_stops():
+    tree = _vertical_chain(n=4)
+    prim = build_bark_primitive(tree, ring_sides=8, material=_mat())
+    assert prim.colors is None
+
+
+def test_colors_present_with_stops():
+    tree = _vertical_chain(n=4, r=0.05)  # diameter 0.10 == d_mature
+    prim = build_bark_primitive(tree, ring_sides=8, material=_mat(), stops=_stops())
+    assert prim.colors is not None
+    assert prim.colors.shape == (prim.positions.shape[0], 3)
+    assert prim.colors.dtype == np.float32
+    assert np.isfinite(prim.colors).all()
+
+
+def test_thin_ring_is_young_thick_ring_is_senescent():
+    # Two separate trees: thin (twig) vs thick (trunk base).
+    thin = _vertical_chain(n=3, r=0.005)   # diameter 0.01 < d_young -> young
+    thick = _vertical_chain(n=3, r=0.20)   # diameter 0.40 > d_senescent -> senescent
+    c_thin = build_bark_primitive(thin, ring_sides=8, material=_mat(), stops=_stops()).colors
+    c_thick = build_bark_primitive(thick, ring_sides=8, material=_mat(), stops=_stops()).colors
+    # young is brighter than senescent on every channel
+    assert c_thin.mean() > 0.8
+    assert c_thick.mean() < 0.2

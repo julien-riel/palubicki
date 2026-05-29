@@ -53,15 +53,21 @@ def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
                                 _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
         uv_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.uvs, _COMPONENT_FLOAT,
                                _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+
+        col_acc = None
+        if prim.colors is not None and prim.colors.shape[0] == prim.positions.shape[0]:
+            col_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.colors,
+                                    _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
         idx_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.indices, _COMPONENT_UINT,
                                 _TYPE_SCALAR, _TARGET_ELEMENT_ARRAY, with_minmax=False)
 
         mat_idx = _add_material(prim.material, buffer_data, buffer_views, materials,
-                                textures, images, samplers)
+                                textures, images, samplers,
+                                neutralize_base_color=col_acc is not None)
 
         gltf_primitives.append(pygltflib.Primitive(
             attributes=pygltflib.Attributes(
-                POSITION=pos_acc, NORMAL=nor_acc, TEXCOORD_0=uv_acc,
+                POSITION=pos_acc, NORMAL=nor_acc, TEXCOORD_0=uv_acc, COLOR_0=col_acc,
             ),
             indices=idx_acc,
             material=mat_idx,
@@ -130,9 +136,12 @@ def _add_material(
     textures: list,
     images: list,
     samplers: list,
+    *,
+    neutralize_base_color: bool = False,
 ) -> int:
+    base_color = (1.0, 1.0, 1.0, 1.0) if neutralize_base_color else list(mat.base_color)
     pbr = pygltflib.PbrMetallicRoughness(
-        baseColorFactor=list(mat.base_color),
+        baseColorFactor=list(base_color),
         metallicFactor=mat.metallic,
         roughnessFactor=mat.roughness,
     )
@@ -213,12 +222,18 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
                                     _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
             uv_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.uvs,
                                    _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+            col_acc = None
+            if prim.colors is not None and prim.colors.shape[0] == prim.positions.shape[0]:
+                col_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.colors,
+                                        _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
             idx_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.indices,
                                     _COMPONENT_UINT, _TYPE_SCALAR, _TARGET_ELEMENT_ARRAY, with_minmax=False)
             mat_idx = _add_material(prim.material, buffer_data, buffer_views,
-                                    materials, textures, images, samplers)
+                                    materials, textures, images, samplers,
+                                    neutralize_base_color=col_acc is not None)
             gltf_prims.append(pygltflib.Primitive(
-                attributes=pygltflib.Attributes(POSITION=pos_acc, NORMAL=nor_acc, TEXCOORD_0=uv_acc),
+                attributes=pygltflib.Attributes(POSITION=pos_acc, NORMAL=nor_acc,
+                                                TEXCOORD_0=uv_acc, COLOR_0=col_acc),
                 indices=idx_acc,
                 material=mat_idx,
             ))

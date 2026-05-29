@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from palubicki.geom.bark_blend import BarkBlendStops, bark_tint
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.tree import Node, Tree
 
@@ -50,6 +51,7 @@ def build_bark_primitive(
     buttress_amplitude: float = 0.0,
     flare_variation: float = 0.0,
     seed: int = 0,
+    stops: BarkBlendStops | None = None,
 ) -> Primitive:
     chains = _collect_chains(tree)
 
@@ -72,27 +74,32 @@ def build_bark_primitive(
     pos_parts: list[np.ndarray] = []
     nor_parts: list[np.ndarray] = []
     uv_parts: list[np.ndarray] = []
+    col_parts: list[np.ndarray] = []
     idx_parts: list[np.ndarray] = []
     vertex_offset = 0
 
     for i, chain in enumerate(chains):
         chain_flare = flare if i == 0 else None  # trunk chain only
-        p, n, u, idx = _emit_chain_tube(chain, ring_sides, vertex_offset, chain_flare)
+        p, n, u, c, idx = _emit_chain_tube(chain, ring_sides, vertex_offset, chain_flare, stops)
         if p.shape[0]:
             pos_parts.append(p)
             nor_parts.append(n)
             uv_parts.append(u)
             idx_parts.append(idx)
+            if c is not None:
+                col_parts.append(c)
             vertex_offset += p.shape[0]
 
     # Cap root: only the main trunk's first ring
     if chains:
-        p, n, u, idx = _emit_root_cap(chains[0], ring_sides, vertex_offset)
+        p, n, u, c, idx = _emit_root_cap(chains[0], ring_sides, vertex_offset, stops)
         if p.shape[0]:
             pos_parts.append(p)
             nor_parts.append(n)
             uv_parts.append(u)
             idx_parts.append(idx)
+            if c is not None:
+                col_parts.append(c)
             vertex_offset += p.shape[0]
 
     pos_arr = (np.concatenate(pos_parts, axis=0).astype(np.float32, copy=False)
@@ -103,8 +110,11 @@ def build_bark_primitive(
               if uv_parts else np.zeros((0, 2), dtype=np.float32))
     idx_arr = (np.concatenate(idx_parts, axis=0).astype(np.uint32, copy=False)
                if idx_parts else np.zeros((0,), dtype=np.uint32))
+    col_arr = (np.concatenate(col_parts, axis=0).astype(np.float32, copy=False)
+               if col_parts else None)
 
-    return Primitive(positions=pos_arr, normals=nor_arr, uvs=uv_arr, indices=idx_arr, material=material)
+    return Primitive(positions=pos_arr, normals=nor_arr, uvs=uv_arr, indices=idx_arr,
+                     material=material, colors=col_arr)
 
 
 def _collect_chains(tree: Tree) -> list[_ChainBuild]:
@@ -205,8 +215,9 @@ def _emit_chain_tube(
     ring_sides: int,
     vertex_offset: int,
     flare: _FlareSpec | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Emit a tube along ``chain``. Returns ``(positions, normals, uvs, indices)``.
+    stops: BarkBlendStops | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
+    """Emit a tube along ``chain``. Returns ``(positions, normals, uvs, colors, indices)``.
 
     Vectorised column expansion: parallel-transport frame is propagated node-by-node
     (inherently sequential), then the per-node ring of ``columns = ring_sides + 1``
@@ -222,6 +233,7 @@ def _emit_chain_tube(
             np.zeros((0, 3), dtype=np.float64),
             np.zeros((0, 3), dtype=np.float64),
             np.zeros((0, 2), dtype=np.float32),
+            None,
             np.zeros((0,), dtype=np.int64),
         )
 
@@ -286,14 +298,23 @@ def _emit_chain_tube(
     d = ring0 + k_arr[None, :] + 1
     indices = np.stack([a, b, c, a, c, d], axis=-1).reshape(-1).astype(np.int64)
 
-    return positions_flat, normals_flat, uvs_flat, indices
+    colors_flat = None
+    if stops is not None:
+        # Per-node diameter = 2 * radius; broadcast each node's tint across the ring.
+        diameters = 2.0 * radii_arr                                  # (N,)
+        node_rgb = bark_tint(diameters, stops)                       # (N, 3) float32
+        colors = np.broadcast_to(node_rgb[:, None, :], (n_nodes, columns, 3))
+        colors_flat = colors.reshape(n_nodes * columns, 3).astype(np.float32, copy=True)
+
+    return positions_flat, normals_flat, uvs_flat, colors_flat, indices
 
 
 def _emit_root_cap(
     chain: _ChainBuild,
     ring_sides: int,
     vertex_offset: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    stops: BarkBlendStops | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray | None, np.ndarray]:
     """Bottom-of-trunk fan: one center vertex + ``ring_sides`` triangles.
 
     Triangles assume the trunk's first ring is at global indices [0..columns-1] —
@@ -307,8 +328,13 @@ def _emit_root_cap(
     normals = np.array([[0.0, -1.0, 0.0]], dtype=np.float64)          # (1, 3)
     uvs = np.array([[0.5, 0.5]], dtype=np.float32)                    # (1, 2)
 
+    cap_color = None
+    if stops is not None:
+        base_diameter = 2.0 * chain.radii[0]
+        cap_color = bark_tint(np.array([base_diameter]), stops).astype(np.float32)  # (1, 3)
+
     if len(chain.nodes) < 2:
-        return positions, normals, uvs, np.zeros((0,), dtype=np.int64)
+        return positions, normals, uvs, cap_color, np.zeros((0,), dtype=np.int64)
 
     ring0_start = 0
     center_index = vertex_offset
@@ -317,7 +343,7 @@ def _emit_root_cap(
     b = ring0_start + k_arr + 1
     centers = np.full_like(a, center_index)
     indices = np.stack([centers, b, a], axis=-1).reshape(-1).astype(np.int64)
-    return positions, normals, uvs, indices
+    return positions, normals, uvs, cap_color, indices
 
 
 def _compute_tangents(positions: np.ndarray) -> np.ndarray:

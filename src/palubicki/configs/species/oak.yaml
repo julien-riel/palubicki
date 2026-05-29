@@ -77,3 +77,9 @@ geom:
   root_flare_falloff: smoothstep
   root_buttress_count: 5
   root_buttress_amplitude: 0.15
+  bark_tint_young: [0.46, 0.40, 0.32]
+  bark_tint_mature: [0.32, 0.22, 0.14]
+  bark_tint_senescent: [0.22, 0.20, 0.16]
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07

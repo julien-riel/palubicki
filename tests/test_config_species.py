@@ -109,3 +109,17 @@ def test_deep_merge_preserves_sibling_sections(tmp_path):
     assert cfg.phyllotaxy.mode == "whorled"
     assert cfg.geom.leaf_cluster_count == 5
     assert cfg.tropism.w_orthotropy_main == pytest.approx(0.3)
+
+
+from palubicki.geom.builder import _bark_blend_stops
+
+
+@pytest.mark.parametrize("species", ["oak", "pine", "birch", "maple", "fir"])
+def test_species_enables_bark_blend(species, tmp_path):
+    cfg = load_config(yaml_path=None, cli_overrides={},
+                      output=tmp_path / "x.glb", species=species)
+    stops = _bark_blend_stops(cfg.geom)
+    assert stops is not None, f"{species} should enable bark blend"
+    assert stops.d_young <= stops.d_mature <= stops.d_senescent
+    # mature tint must equal the species bark_color (mid-trunk look preserved)
+    assert tuple(stops.c_mature) == tuple(cfg.geom.bark_color)
