@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from palubicki.config import Config, ConfigError
+from palubicki.config import Config, ConfigError, GeomConfig
 from palubicki.geom._textures import _PROC_TEXTURES, default_leaf_png
 from palubicki.geom.bark_blend import BarkBlendStops
 from palubicki.geom.leaves import build_leaves_primitive
@@ -72,7 +72,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     return Mesh(primitives=primitives)
 
 
-def _bark_blend_stops(geom) -> BarkBlendStops | None:
+def _bark_blend_stops(geom: GeomConfig) -> BarkBlendStops | None:
     """Assemble blend stops from GeomConfig; None when blend is disabled.
 
     Gated on bark_tint_young. Mature falls back to bark_color; senescent falls
