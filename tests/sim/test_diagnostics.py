@@ -359,6 +359,7 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     Hash captured pre-refactor; assertion fails if the refactor drifted.
     """
     from pathlib import Path
+
     from palubicki.config import load_config
     from palubicki.geom.leaves import build_leaves_primitive
     from palubicki.geom.mesh import Material
@@ -409,6 +410,7 @@ def test_leaf_area_matches_geom_helper():
     helper's formula, not a self-check.
     """
     from pathlib import Path
+
     from palubicki.config import load_config
     from palubicki.geom.leaves import build_leaves_primitive
     from palubicki.geom.mesh import Material
@@ -568,6 +570,7 @@ def test_diagnostics_doesnt_mutate_tree():
     """compute_metrics must be read-only — snapshot tree invariants and
     verify they're unchanged after the call."""
     from pathlib import Path
+
     from palubicki.config import load_config
     from palubicki.sim.simulator import simulate
 
@@ -606,6 +609,7 @@ def test_bifurcation_ratio_in_sane_range_per_species(species):
     before relaxing the bound — likely a real Strahler bug or a real
     botanical signal."""
     from pathlib import Path
+
     from palubicki.config import load_config
     from palubicki.sim.simulator import simulate
 

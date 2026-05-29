@@ -179,6 +179,7 @@ def test_build_bark_primitive_reads_sag_offset():
     """When a node has a non-zero sag_offset, the tube vertices should reflect
     the bent position (position + sag_offset), not the raw topological position."""
     import numpy as np
+
     from palubicki.geom.mesh import Material
     from palubicki.geom.tubes import build_bark_primitive
     from palubicki.sim.tree import Internode, Node, Tree

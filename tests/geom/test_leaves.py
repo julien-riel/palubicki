@@ -159,9 +159,10 @@ def test_leaves_follow_sag_offset_at_apex():
     """When the apex node has a downward sag_offset, leaves should be emitted
     at the bent position, not the raw position."""
     import numpy as np
+
     from palubicki.geom.leaves import build_leaves_primitive
     from palubicki.geom.mesh import Material
-    from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+    from palubicki.sim.tree import Bud, Internode, Node, Tree
 
     root = Node(position=np.zeros(3))
     tip = Node(position=np.array([0.0, 1.0, 0.0]))

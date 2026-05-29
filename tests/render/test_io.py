@@ -44,8 +44,13 @@ def test_save_png_rejects_wrong_shape(tmp_path):
 def _build_tiny_glb(tmp_path: Path) -> Path:
     """Produce a real .glb from palubicki's builder, for roundtrip testing."""
     from palubicki.config import (
-        Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-        SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        GeomConfig,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.export.gltf import write_glb
     from palubicki.geom.builder import build_mesh

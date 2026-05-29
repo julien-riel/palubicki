@@ -1,8 +1,14 @@
 import pytest
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    ConfigError,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 
 

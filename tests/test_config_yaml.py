@@ -1,9 +1,8 @@
 # tests/test_config_yaml.py
-from pathlib import Path
 
 import pytest
 
-from palubicki.config import Config, ConfigError, load_config
+from palubicki.config import ConfigError, load_config
 
 
 def test_load_full_yaml(tmp_path):
@@ -55,7 +54,7 @@ def test_unknown_yaml_key_rejected(tmp_path):
 
 
 def test_load_config_with_obstacles(tmp_path):
-    from palubicki.config import load_config, ObstacleAABB, ObstacleSphere, ObstacleMesh
+    from palubicki.config import ObstacleAABB, ObstacleSphere, load_config
     yaml_path = tmp_path / "scene.yaml"
     yaml_path.write_text("""
 forest:
@@ -77,7 +76,7 @@ forest:
 
 
 def test_load_config_with_forest_seeds(tmp_path):
-    from palubicki.config import load_config, ForestSeed
+    from palubicki.config import load_config
     yaml_path = tmp_path / "scene.yaml"
     yaml_path.write_text("""
 forest:
@@ -99,8 +98,9 @@ forest:
 
 
 def test_load_config_unknown_obstacle_kind_raises(tmp_path):
-    from palubicki.config import load_config, ConfigError
     import pytest
+
+    from palubicki.config import ConfigError, load_config
     yaml_path = tmp_path / "scene.yaml"
     yaml_path.write_text("""
 forest:

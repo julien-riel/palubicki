@@ -1,4 +1,3 @@
-from palubicki.config import Config
 from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_for_ui
 
 
@@ -27,8 +26,9 @@ def test_flatten_skips_none_values():
 
 
 def test_config_to_dict_for_ui_is_loadable_back():
-    from palubicki.config import load_config
     from pathlib import Path
+
+    from palubicki.config import load_config
 
     cfg = load_config(yaml_path=None, cli_overrides={}, output=Path("tree.glb"))
     d = config_to_dict_for_ui(cfg)

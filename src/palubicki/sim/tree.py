@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Optional
 
 import numpy as np
 
@@ -20,7 +19,7 @@ class Bud:
     position: np.ndarray
     direction: np.ndarray
     axis_order: int
-    parent_node: "Node"
+    parent_node: Node
     age: int = 0
     state: BudState = BudState.ACTIVE
     low_quality_steps: int = 0
@@ -30,9 +29,9 @@ class Bud:
 @dataclass(eq=False)
 class Node:
     position: np.ndarray
-    parent_internode: Optional["Internode"] = None
-    children_internodes: list["Internode"] = field(default_factory=list)
-    terminal_bud: Optional[Bud] = None
+    parent_internode: Internode | None = None
+    children_internodes: list[Internode] = field(default_factory=list)
+    terminal_bud: Bud | None = None
     lateral_buds: list[Bud] = field(default_factory=list)
     dormant_reserve_buds: list[Bud] = field(default_factory=list)
     # Set to True by sym.promote_lateral_if_failing when a lateral bud is

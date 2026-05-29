@@ -29,7 +29,8 @@ def _fork():
     root.children_internodes.append(iod_main)
     mid.parent_internode = iod_main
     mid.children_internodes.extend([iod_a, iod_b])
-    tip_a.parent_internode = iod_a; tip_b.parent_internode = iod_b
+    tip_a.parent_internode = iod_a
+    tip_b.parent_internode = iod_b
     return Tree(root=root, all_internodes=[iod_main, iod_a, iod_b]), iod_main, iod_a, iod_b
 
 

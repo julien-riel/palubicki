@@ -57,7 +57,7 @@ class LightGrid:
     lai: np.ndarray               # (nx, ny, nz) float32
 
     @classmethod
-    def from_config(cls, light_cfg: LightConfig, env_cfg: EnvelopeConfig) -> "LightGrid":
+    def from_config(cls, light_cfg: LightConfig, env_cfg: EnvelopeConfig) -> LightGrid:
         if light_cfg.grid_origin is None or light_cfg.grid_size is None:
             origin, size = _autofit_bounds(env_cfg)
         else:

@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from palubicki.config import Config
 from palubicki.cli import _config_to_dict
+from palubicki.config import Config
 
 
 def config_to_dict_for_ui(cfg: Config) -> dict:

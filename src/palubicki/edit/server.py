@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from palubicki.config import Config, ConfigError, _load_packaged_species, load_config
+from palubicki.config import Config, ConfigError, load_config
 from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_for_ui
 from palubicki.edit.schema import build_schema
 from palubicki.export.gltf import ExportError, write_glb_to_bytes

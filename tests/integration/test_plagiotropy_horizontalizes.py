@@ -1,12 +1,10 @@
 import math
-from collections import deque
 
 import numpy as np
 import pytest
 
 from palubicki.config import load_config
 from palubicki.sim.simulator import simulate_forest
-
 
 pytestmark = pytest.mark.slow
 

@@ -1,11 +1,17 @@
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestSeed, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestSeed,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.forest import per_tree_config
 
@@ -93,7 +99,7 @@ def test_forest_light_bounds_with_obstacle_extends_aabb():
     np.testing.assert_allclose(origin, expected_origin)
 
 
-from palubicki.sim.forest import Forest, build_forest, all_active_buds
+from palubicki.sim.forest import Forest, all_active_buds, build_forest
 
 
 def test_build_forest_single_tree_default():

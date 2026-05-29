@@ -5,12 +5,14 @@ from PIL import Image
 
 from palubicki.geom._textures import (
     _PROC_TEXTURES,
-    birch_bark_png, birch_leaf_png,
+    birch_bark_png,
+    birch_leaf_png,
     default_leaf_png,
-    oak_bark_png, oak_leaf_png,
-    pine_bark_png, pine_needle_png,
+    oak_bark_png,
+    oak_leaf_png,
+    pine_bark_png,
+    pine_needle_png,
 )
-
 
 BARK_GENS = [oak_bark_png, pine_bark_png, birch_bark_png]
 LEAF_GENS = [oak_leaf_png, pine_needle_png, birch_leaf_png]
@@ -73,7 +75,8 @@ def test_texture_cross_process_stable(name):
 def test_print_current_texture_hashes(capsys):
     """Helper to extract the pin values after a deliberate algorithm change.
     Skipped unless PRINT_TEXTURE_HASHES=1 is set in the env."""
-    import hashlib, os
+    import hashlib
+    import os
     if os.environ.get("PRINT_TEXTURE_HASHES") != "1":
         pytest.skip("set PRINT_TEXTURE_HASHES=1 to print")
     for name in sorted(_PROC_TEXTURES):

@@ -3,8 +3,14 @@ compute_radii on the final tree (pipe model is len-independent)."""
 import pytest
 
 from palubicki.config import (
-    Config, ElongationConfig, EnvelopeConfig, GeomConfig, LightConfig,
-    PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    ElongationConfig,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.simulator import simulate_forest
 
@@ -33,5 +39,5 @@ def test_diameter_progression_final_matches_post_sim_compute_radii(tmp_path):
     fresh_diam = [iod.diameter for iod in tree.all_internodes]
 
     assert len(sim_diam) == len(fresh_diam) and len(sim_diam) > 0
-    for s, f in zip(sim_diam, fresh_diam):
+    for s, f in zip(sim_diam, fresh_diam, strict=True):
         assert abs(s - f) < 1e-9

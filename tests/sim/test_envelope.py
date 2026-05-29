@@ -55,7 +55,10 @@ def test_deterministic_with_same_seed():
 def test_unknown_shape_raises():
     cfg = EnvelopeConfig.__new__(EnvelopeConfig)
     object.__setattr__(cfg, "shape", "torus")
-    object.__setattr__(cfg, "rx", 1.0); object.__setattr__(cfg, "ry", 1.0); object.__setattr__(cfg, "rz", 1.0)
-    object.__setattr__(cfg, "center", (0.0, 0.0, 0.0)); object.__setattr__(cfg, "marker_count", 100)
+    object.__setattr__(cfg, "rx", 1.0)
+    object.__setattr__(cfg, "ry", 1.0)
+    object.__setattr__(cfg, "rz", 1.0)
+    object.__setattr__(cfg, "center", (0.0, 0.0, 0.0))
+    object.__setattr__(cfg, "marker_count", 100)
     with pytest.raises(ValueError, match="torus"):
         sample_markers(cfg, np.random.default_rng(0))

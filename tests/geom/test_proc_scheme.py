@@ -3,10 +3,16 @@ from pathlib import Path
 import pytest
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, GeomConfig,
-    PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    ConfigError,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
-from palubicki.geom.builder import build_mesh, _resolve_texture
+from palubicki.geom.builder import _resolve_texture, build_mesh
 from palubicki.sim.simulator import simulate
 
 

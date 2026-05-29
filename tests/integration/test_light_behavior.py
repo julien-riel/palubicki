@@ -16,26 +16,31 @@ import numpy as np
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.simulator import simulate
-
 
 pytestmark = pytest.mark.slow
 
 
 def _base_cfg(**overrides) -> Config:
-    base = dict(
-        envelope=EnvelopeConfig(shape="ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=3000),
-        sim=SimConfig(max_iterations=12),
-        tropism=TropismConfig(w_phototropism=0.3),
-        phyllotaxy=PhyllotaxyConfig(),
-        shedding=SheddingConfig(),
-        geom=GeomConfig(),
-        seed=42,
-        output=Path("/tmp/x.glb"),
-    )
+    base = {
+        "envelope": EnvelopeConfig(shape="ellipsoid", rx=2.0, ry=3.0, rz=2.0, marker_count=3000),
+        "sim": SimConfig(max_iterations=12),
+        "tropism": TropismConfig(w_phototropism=0.3),
+        "phyllotaxy": PhyllotaxyConfig(),
+        "shedding": SheddingConfig(),
+        "geom": GeomConfig(),
+        "seed": 42,
+        "output": Path("/tmp/x.glb"),
+    }
     base.update(overrides)
     return Config(**base)
 

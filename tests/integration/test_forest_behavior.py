@@ -2,8 +2,16 @@ import numpy as np
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-    PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestConfig,
+    ForestSeed,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.simulator import simulate, simulate_forest
 
@@ -32,7 +40,7 @@ def test_two_trees_compete_for_space(tmp_path):
     )
     forest = simulate_forest(cfg)
 
-    tree_left, tree_right = forest.trees[0], forest.trees[1]
+    tree_left = forest.trees[0]
     # tree_left at x=-1.2; inner side = +x (towards 0), outer side = -x
     left_inner = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] > -1.2)
     left_outer = sum(1 for iod in tree_left.all_internodes if iod.child_node.position[0] < -1.2)
@@ -57,5 +65,5 @@ def test_simulate_vs_simulate_forest_single_tree_match(tmp_path):
     forest_b = simulate_forest(cfg)
     tree_b = forest_b.trees[0]
     assert len(tree_a.all_internodes) == len(tree_b.all_internodes)
-    for ia, ib in zip(tree_a.all_internodes, tree_b.all_internodes):
+    for ia, ib in zip(tree_a.all_internodes, tree_b.all_internodes, strict=True):
         np.testing.assert_allclose(ia.child_node.position, ib.child_node.position)

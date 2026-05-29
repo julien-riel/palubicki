@@ -7,8 +7,6 @@ import pytest
 
 from palubicki.config import load_config
 from palubicki.sim.simulator import simulate
-from palubicki.sim.tree import BudState
-
 
 pytestmark = pytest.mark.slow
 

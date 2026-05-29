@@ -4,8 +4,13 @@ import numpy as np
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material

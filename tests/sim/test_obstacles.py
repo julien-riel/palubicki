@@ -138,9 +138,9 @@ def test_obb_aabb_envelope():
 
 
 from pathlib import Path
+
 from palubicki.config import ObstacleMesh
 from palubicki.sim.obstacles import MeshObstacle
-
 
 CUBE_OBJ = Path(__file__).parent.parent / "fixtures" / "unit_cube.obj"
 
@@ -190,7 +190,10 @@ def test_mesh_aabb():
 
 from palubicki.config import ForestConfig
 from palubicki.sim.obstacles import (
-    build_obstacles, filter_markers, segment_blocked, any_contains,
+    any_contains,
+    build_obstacles,
+    filter_markers,
+    segment_blocked,
 )
 
 

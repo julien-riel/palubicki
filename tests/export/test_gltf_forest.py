@@ -1,12 +1,18 @@
-import pygltflib
-from pathlib import Path
 
-import numpy as np
-import pytest
+import pygltflib
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-    ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestConfig,
+    ForestSeed,
+    GeomConfig,
+    LightConfig,
+    ObstacleAABB,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.export.gltf import write_glb_forest
 from palubicki.sim.simulator import simulate_forest

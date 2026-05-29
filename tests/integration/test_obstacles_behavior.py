@@ -1,9 +1,17 @@
-import numpy as np
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-    ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    ForestConfig,
+    ForestSeed,
+    GeomConfig,
+    LightConfig,
+    ObstacleAABB,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.sim.simulator import simulate_forest
 

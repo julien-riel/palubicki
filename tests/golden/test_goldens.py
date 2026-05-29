@@ -7,8 +7,14 @@ import pygltflib
 import pytest
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.export.gltf import write_glb
 from palubicki.geom.builder import build_mesh
@@ -116,9 +122,19 @@ def test_golden_forest_v3(tmp_path):
     """Pin a hash for a deterministic V3 forest run."""
     import hashlib
     import json
+
     from palubicki.config import (
-        Config, EnvelopeConfig, ForestConfig, ForestSeed, GeomConfig, LightConfig,
-        ObstacleAABB, PhyllotaxyConfig, SheddingConfig, SimConfig, TropismConfig,
+        Config,
+        EnvelopeConfig,
+        ForestConfig,
+        ForestSeed,
+        GeomConfig,
+        LightConfig,
+        ObstacleAABB,
+        PhyllotaxyConfig,
+        SheddingConfig,
+        SimConfig,
+        TropismConfig,
     )
     from palubicki.sim.simulator import simulate_forest
 

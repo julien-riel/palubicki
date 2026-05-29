@@ -115,7 +115,7 @@ def build_leaves_primitive(
 
 def _collect_foliage_sites(
     tree: Tree, foliage_depth: int
-) -> list[tuple[np.ndarray, np.ndarray, "Internode | None"]]:
+) -> list[tuple[np.ndarray, np.ndarray, Internode | None]]:
     """Return list of (position, direction, source_internode) for foliage placement.
 
     Algorithm:
@@ -134,7 +134,7 @@ def _collect_foliage_sites(
     if foliage_depth < 1:
         return []
 
-    sites: list[tuple[np.ndarray, np.ndarray, "Internode | None"]] = []
+    sites: list[tuple[np.ndarray, np.ndarray, Internode | None]] = []
     apex_nodes: list[Node] = []
     for bud in tree.active_buds:
         if bud.state == BudState.DEAD:
@@ -156,7 +156,7 @@ def _collect_foliage_sites(
     if foliage_depth <= 1:
         return sites
 
-    visited: set[int] = set(id(n) for n in apex_nodes)
+    visited: set[int] = {id(n) for n in apex_nodes}
     for apex in apex_nodes:
         current = apex
         for _ in range(foliage_depth - 1):

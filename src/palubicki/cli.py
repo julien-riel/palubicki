@@ -4,14 +4,23 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from dataclasses import asdict, fields, is_dataclass
+from dataclasses import fields, is_dataclass
 from pathlib import Path
 
 import yaml
 
 from palubicki.config import (
-    Config, ConfigError, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig, _list_species, _load_packaged_species, load_config,
+    Config,
+    ConfigError,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
+    _list_species,
+    _load_packaged_species,
+    load_config,
 )
 from palubicki.export.gltf import ExportError, write_glb
 from palubicki.geom.builder import build_mesh
@@ -141,8 +150,8 @@ def _parse_size(value: str) -> tuple[int, int]:
         raise argparse.ArgumentTypeError(f"invalid --size {value!r}: expected WxH")
     try:
         w, h = int(parts[0]), int(parts[1])
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"invalid --size {value!r}: not integers")
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"invalid --size {value!r}: not integers") from err
     if w <= 0 or h <= 0:
         raise argparse.ArgumentTypeError(f"--size must be positive, got {value!r}")
     return (w, h)
@@ -159,10 +168,10 @@ def _parse_bg(value: str) -> tuple[float, float, float, float]:
     """Parse a --bg preset name → RGBA tuple."""
     try:
         return _BG_PRESETS[value]
-    except KeyError:
+    except KeyError as err:
         raise argparse.ArgumentTypeError(
             f"invalid --bg {value!r}: choose from {sorted(_BG_PRESETS)}"
-        )
+        ) from err
 
 
 def _parse_seed_list(value: str) -> list[int]:
@@ -172,8 +181,8 @@ def _parse_seed_list(value: str) -> list[int]:
         raise argparse.ArgumentTypeError(f"invalid --seed {value!r}: empty entry")
     try:
         return [int(p) for p in parts]
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"invalid --seed {value!r}: not all integers")
+    except ValueError as err:
+        raise argparse.ArgumentTypeError(f"invalid --seed {value!r}: not all integers") from err
 
 
 def _cmd_generate(args) -> int:
@@ -267,8 +276,8 @@ def _cmd_forest(args) -> int:
         return 2
 
     try:
-        from palubicki.sim.simulator import simulate_forest
         from palubicki.export.gltf import write_glb_forest
+        from palubicki.sim.simulator import simulate_forest
 
         forest = simulate_forest(cfg)
         asset_meta = {
@@ -301,7 +310,11 @@ def _cmd_forest(args) -> int:
 def _cmd_preview(args) -> int:
     try:
         from palubicki.render import (
-            Camera, RenderDependencyError, RenderError, render_mesh, save_png,
+            Camera,
+            RenderDependencyError,
+            RenderError,
+            render_mesh,
+            save_png,
         )
         from palubicki.render.io import _glb_to_mesh
     except ImportError:
@@ -372,6 +385,7 @@ def _cmd_dump_config(args) -> int:
 def _cmd_edit(args) -> int:
     try:
         import uvicorn
+
         from palubicki.edit.server import create_app
     except ImportError:
         print(

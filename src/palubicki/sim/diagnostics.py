@@ -317,7 +317,7 @@ def _trunk_base_diameter(root: Node) -> float:
 
 # ── Leaf area ─────────────────────────────────────────────────────────────
 
-def _total_leaf_area(tree: Tree, cfg: "Config") -> float:
+def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     """Sum of rendered leaf surface areas across foliage sites.
 
     Each foliage site emits ``cluster_count`` pairs of perpendicular blades.
@@ -372,9 +372,9 @@ def _total_leaf_area(tree: Tree, cfg: "Config") -> float:
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
-    tree: "Tree | list[Tree]",
+    tree: Tree | list[Tree],
     *,
-    cfg: "Config | None" = None,
+    cfg: Config | None = None,
 ) -> dict:
     """Compute structural metrics for one or many trees.
 

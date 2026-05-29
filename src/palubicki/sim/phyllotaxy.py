@@ -7,7 +7,6 @@ import numpy as np
 
 from palubicki.config import PhyllotaxyConfig
 
-
 # Salt for SeedSequence to namespace phyllotaxy jitter independently of other
 # RNG consumers (light_perception, internode_length jitter).
 _PHYLLO_SALT = int.from_bytes(b"phyl", "big")

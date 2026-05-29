@@ -2,13 +2,20 @@
 from __future__ import annotations
 
 from dataclasses import MISSING, fields
-from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
+from typing import Any, Literal, get_args, get_origin, get_type_hints
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, LightConfig, PhyllotaxyConfig,
-    SagConfig, SheddingConfig, SimConfig, TropismConfig, _list_species,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    LightConfig,
+    PhyllotaxyConfig,
+    SagConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
+    _list_species,
 )
-
 
 _SECTIONS: list[tuple[str, type, str]] = [
     ("envelope", EnvelopeConfig, "Envelope"),

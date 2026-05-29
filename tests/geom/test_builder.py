@@ -1,8 +1,12 @@
-import numpy as np
 
 from palubicki.config import (
-    Config, EnvelopeConfig, GeomConfig, PhyllotaxyConfig,
-    SheddingConfig, SimConfig, TropismConfig,
+    Config,
+    EnvelopeConfig,
+    GeomConfig,
+    PhyllotaxyConfig,
+    SheddingConfig,
+    SimConfig,
+    TropismConfig,
 )
 from palubicki.geom.builder import build_mesh
 from palubicki.sim.simulator import simulate
