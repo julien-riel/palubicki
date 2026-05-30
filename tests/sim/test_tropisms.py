@@ -301,12 +301,12 @@ def test_epinasty_young_branch_ignores_plagiotropism():
 def test_epinasty_old_branch_recovers_full_plagiotropism():
     """Epinasty on, age >> tau: result approaches the full-strength horizontal
     pull (the disabled result)."""
-    common = dict(
-        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
-        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
-        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
-        w_phototropism=0.0, w_direction_inertia=0.0,
-    )
+    common = {
+        "w_perception": 0.0, "w_orthotropy_main": 0.0, "w_orthotropy_lateral": 0.0,
+        "w_gravitropism_main": 0.0, "w_gravitropism_lateral": 0.0,
+        "w_plagiotropism_main": 0.0, "w_plagiotropism_lateral": 1.0,
+        "w_phototropism": 0.0, "w_direction_inertia": 0.0,
+    }
     cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
     full = growth_direction(v_perception=np.zeros(3), current_direction=cur,
                             cfg=TropismConfig(**common), is_main_axis=False)
@@ -314,7 +314,7 @@ def test_epinasty_old_branch_recovers_full_plagiotropism():
     d_old = growth_direction(v_perception=np.zeros(3), current_direction=cur,
                              cfg=cfg_on, is_main_axis=False, branch_age_years=80.0)
     np.testing.assert_allclose(d_old, full, atol=1e-3)
-    assert abs(float(np.dot(d_old, [0.0, 1.0, 0.0]))) < 1e-3  # horizontal
+    assert abs(float(np.dot(d_old, [0.0, 1.0, 0.0]))) < 1e-3  # near-zero vertical component
 
 
 def test_epinasty_monotone_in_age():
@@ -332,4 +332,4 @@ def test_epinasty_monotone_in_age():
         d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
                              cfg=cfg, is_main_axis=False, branch_age_years=age)
         horiz.append(float(d[0]))
-    assert all(b >= a - 1e-9 for a, b in zip(horiz, horiz[1:]))
+    assert all(b >= a - 1e-9 for a, b in zip(horiz, horiz[1:], strict=False))
