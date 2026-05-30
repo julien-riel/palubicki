@@ -686,3 +686,27 @@ def test_invalid_vigor_ref_raises(tmp_path):
             sim=SimConfig(vigor_ref=0.0),
             output=tmp_path / "out.glb",
         )
+
+
+def test_tropism_epinasty_defaults_off():
+    from palubicki.config import TropismConfig
+    c = TropismConfig()
+    assert c.epinasty_enabled is False
+    assert c.epinasty_tau_years == 8.0
+
+
+def test_tropism_epinasty_tau_years_zero_raises(tmp_path):
+    with pytest.raises(ConfigError, match="epinasty_tau_years"):
+        _make_config(
+            tropism=TropismConfig(epinasty_enabled=True, epinasty_tau_years=0.0),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_tropism_epinasty_disabled_with_zero_tau_is_valid(tmp_path):
+    # When disabled, tau_years is not validated — must NOT raise.
+    cfg = _make_config(
+        tropism=TropismConfig(epinasty_enabled=False, epinasty_tau_years=0.0),
+        output=tmp_path / "out.glb",
+    )
+    assert cfg.tropism.epinasty_tau_years == 0.0
