@@ -170,7 +170,9 @@ def test_golden_forest_v3(tmp_path):
     # Re-pinned for #20: vigor-driven internode length replaces the constant
     # length + age_factor model, so internode lengths (and thus the whole forest
     # geometry) change. Deterministic position-hash on the reference build.
-    EXPECTED = "5d512f80b4be682b82a977d942705af59d7ca82bf62c96bfd80caf686ff82c0f"
+    # Re-pinned for the co-located-bud fix (angular-partition tiebreak in
+    # space_competition.py): leaders survive, changing node positions forest-wide.
+    EXPECTED = "939087dc3e99485b26b407e309df7c0ff7d77ba35e1fa0fb7bd53710d2e7aca4"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")

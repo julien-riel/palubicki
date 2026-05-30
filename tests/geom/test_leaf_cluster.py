@@ -64,8 +64,10 @@ def test_cluster_count_5_emits_5x_vertices_per_bud():
 
 
 def test_aspect_ratio_narrows_blade_along_axis_u():
-    """With aspect=0.2, the width along axis_u is 0.2× the aspect=1.0 width.
-    Measured via the axis that changes most between the two calls (the u-axis).
+    """With aspect=0.2, the blade width along its LOCAL u-axis is 0.2× the
+    aspect=1.0 width. Measured in the leaf's own frame — recovered from the
+    geometry — so the assertion is invariant to how the bud happens to be
+    oriented in world space (it isn't aligned to any world axis in general).
     With ovate/entire defaults and n_planes=1, each bud has 17 verts."""
     tree = _small_tree()
     p1 = build_leaves_primitive(tree, leaf_size=0.06, cluster_count=1, aspect=1.0,
@@ -73,12 +75,14 @@ def test_aspect_ratio_narrows_blade_along_axis_u():
     p2 = build_leaves_primitive(tree, leaf_size=0.06, cluster_count=1, aspect=0.2,
                                 splay_deg=0.0, material=_stub_material())
     # Isolate the first bud's verts (17 verts per bud with ovate/entire defaults).
-    leaf1 = p1.positions[:17]
-    leaf2 = p2.positions[:17]
-    bbox1 = leaf1.max(axis=0) - leaf1.min(axis=0)
-    bbox2 = leaf2.max(axis=0) - leaf2.min(axis=0)
-    # The u-axis is whichever world axis shrank the most when aspect went from
-    # 1.0 to 0.2.  Pick it as argmin(bbox2 / bbox1) and verify the ratio ≈ 0.2.
-    ratios = np.where(bbox1 > 1e-6, bbox2 / bbox1, 1.0)
-    u_axis = int(np.argmin(ratios))
-    assert bbox2[u_axis] == pytest.approx(0.2 * bbox1[u_axis], rel=0.1)
+    leaf1 = p1.positions[:17].astype(np.float64)
+    leaf2 = p2.positions[:17].astype(np.float64)
+    # aspect scales ONLY the local u-component, so the per-vertex displacement
+    # leaf2 - leaf1 lies entirely along the (world-rotated) u-axis. Recover that
+    # axis as the dominant singular vector of the displacement, then compare the
+    # blade's extent projected onto it. No dependence on world-axis alignment.
+    delta = leaf2 - leaf1
+    u_hat = np.linalg.svd(delta, full_matrices=False)[2][0]
+    w1 = float(np.ptp(leaf1 @ u_hat))
+    w2 = float(np.ptp(leaf2 @ u_hat))
+    assert w2 == pytest.approx(0.2 * w1, rel=0.1)

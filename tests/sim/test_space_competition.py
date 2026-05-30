@@ -60,6 +60,38 @@ def test_symmetric_markers_average_to_bud_direction():
     np.testing.assert_allclose(res.direction[bud], [0, 1, 0], atol=1e-7)
 
 
+def test_colocated_buds_split_contested_marker_by_cone_alignment():
+    """Terminal and lateral emitted at the SAME node share a position, so the
+    distance key cannot separate them. A marker straight ahead of the terminal
+    must go to the terminal (best cone alignment), and a marker along the lateral
+    must go to the lateral — not be decided by bud-list index order.
+
+    Bud order mirrors the real simulator: laterals are appended BEFORE the
+    terminal, so the buggy index tiebreak would hand both markers to the lateral.
+    """
+    import math
+
+    branch = math.radians(75.0)  # lateral inclined 75deg off the vertical axis
+    lateral_dir = (math.sin(branch), 0.0, math.cos(branch))
+    terminal_dir = (0.0, 0.0, 1.0)
+
+    node = Node(position=np.zeros(3))
+    lateral = _make_bud((0, 0, 0), lateral_dir, parent=node)
+    terminal = _make_bud((0, 0, 0), terminal_dir, parent=node)
+
+    # Marker straight up (aligned with terminal); marker along the lateral.
+    up_marker = [0.0, 0.0, 1.0]
+    side_marker = [math.sin(branch), 0.0, math.cos(branch)]
+    cloud = MarkerCloud(np.array([up_marker, side_marker], dtype=float))
+
+    res = perceive([lateral, terminal], cloud, r_perception=5.0, theta_perception_deg=90.0)
+
+    assert res.quality[terminal] == 1
+    assert res.quality[lateral] == 1
+    np.testing.assert_allclose(res.direction[terminal], terminal_dir, atol=1e-7)
+    np.testing.assert_allclose(res.direction[lateral], lateral_dir, atol=1e-7)
+
+
 def test_empty_bud_list_returns_empty_result():
     """perceive() with no buds hits the early-return branch and returns empty dicts."""
     cloud = MarkerCloud(np.array([[0, 1, 0]], dtype=float))

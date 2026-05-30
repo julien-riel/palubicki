@@ -397,7 +397,10 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # blade geometry moved, so this sum-of-squares changed).
     # Re-pinned for #20: vigor-driven internode length changes node positions,
     # so leaf-blade positions (and this sum-of-squares) shift again.
-    EXPECTED_HASH = 21042832.38280265  # noqa: N806
+    # Re-pinned for the co-located-bud fix (angular-partition tiebreak in
+    # space_competition.py): terminals now keep their markers, the leader
+    # survives, and the whole tree topology (hence leaf-blade positions) shifts.
+    EXPECTED_HASH = 12954492.230345504  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )

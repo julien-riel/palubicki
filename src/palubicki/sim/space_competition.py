@@ -40,10 +40,12 @@ def perceive(
     idx_lists = markers.query_radius_batch(bud_positions, r_perception)
     per_bud_kept_idx: list[np.ndarray] = []
     per_bud_kept_dist: list[np.ndarray] = []
+    per_bud_kept_cos: list[np.ndarray] = []
     for bud, idx in zip(buds, idx_lists, strict=True):
         if len(idx) == 0:
             per_bud_kept_idx.append(np.empty(0, dtype=np.intp))
             per_bud_kept_dist.append(np.empty(0, dtype=np.float64))
+            per_bud_kept_cos.append(np.empty(0, dtype=np.float64))
             continue
         positions = markers.positions_for(idx)
         delta = positions - bud.position
@@ -56,6 +58,7 @@ def perceive(
         mask = in_cone & safe
         per_bud_kept_idx.append(idx[mask])
         per_bud_kept_dist.append(dist[mask])
+        per_bud_kept_cos.append(cos_angle[mask])
 
     # Pass 2: vectorised closest-bud competition.
     # The original code inserted markers into a dict during the bud loop and later iterated
@@ -68,10 +71,21 @@ def perceive(
     if total > 0:
         all_mid = np.concatenate(per_bud_kept_idx)
         all_dist = np.concatenate(per_bud_kept_dist)
+        all_cos = np.concatenate(per_bud_kept_cos)
         all_bi = np.repeat(np.arange(len(buds), dtype=np.intp), lengths)
-        # Stable lexsort: primary key = marker_id, secondary = distance. First occurrence per
-        # marker_id wins (ties broken by smallest bud_index, matching the original strict ``<``).
-        order = np.lexsort((all_dist, all_mid))
+        # Stable lexsort, keys listed least- to most-significant (last = primary):
+        #   primary   = marker_id   (group the claims for each marker)
+        #   secondary = distance    (nearest bud wins)
+        #   tertiary  = -cos_angle  (on a distance tie, the bud whose cone the marker
+        #               best aligns with wins — see below)
+        #   quaternary= bud_index   (final deterministic tiebreak, was the original key)
+        # The tertiary key resolves CO-LOCATED buds (a terminal and its laterals share
+        # the emission point, so distance is identical for every marker). Without it the
+        # tie fell through to bud_index, and since laterals are listed before the terminal
+        # they captured every contested marker — starving the leader (no conifer spire).
+        # By cone alignment instead, a vertical marker goes to the terminal and a side
+        # marker to the lateral pointing at it. First occurrence per marker_id wins.
+        order = np.lexsort((all_bi, -all_cos, all_dist, all_mid))
         sorted_mid = all_mid[order]
         sorted_bi = all_bi[order]
         keep = np.empty(len(sorted_mid), dtype=bool)
