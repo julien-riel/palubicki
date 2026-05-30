@@ -55,3 +55,30 @@ def test_load_species_latin_returns_na_taxa():
     assert m["birch"] == "Betula papyrifera"
     assert m["pine"] == "Pinus strobus"
     assert m["fir"] == "Abies balsamea"
+
+
+def test_extract_per_species_filters_by_latin(tmp_path):
+    csv_path = tmp_path / "wood_density.csv"
+    csv_path.write_text(
+        "Binomial,Wood density (g/cm^3)\n"
+        "Quercus rubra,0.60\n"
+        "Quercus rubra,0.64\n"
+        "Acer saccharum,0.62\n"
+        "Pinus strobus,0.34\n"
+    )
+    species_latin = {"oak": "Quercus rubra", "maple": "Acer saccharum",
+                     "pine": "Pinus strobus"}
+    props = extract.extract_per_species_csv(
+        csv_path,
+        latin_col="Binomial",
+        value_col="Wood density (g/cm^3)",
+        field="wood_density_g_cm3",
+        source="wood_density",
+        page="Dryad CSV",
+        species_latin=species_latin,
+    )
+    by_species = {p.species: p for p in props}
+    assert by_species["oak"].value == (0.6, 0.64)
+    assert by_species["pine"].value == (0.34, 0.34)
+    # A species with no matching rows yields no proposal.
+    assert "birch" not in by_species

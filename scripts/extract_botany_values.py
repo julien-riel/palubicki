@@ -96,6 +96,38 @@ def load_species_latin() -> dict[str, str]:
     return (yaml.safe_load(text) or {}).get("species_latin", {})
 
 
+def extract_per_species_csv(
+    path: Path,
+    *,
+    latin_col: str,
+    value_col: str,
+    field: str,
+    source: str,
+    page: str,
+    species_latin: dict[str, str],
+    lo_pct: float | None = None,
+    hi_pct: float | None = None,
+) -> list[Proposal]:
+    """One [lo, hi] Proposal per species whose latin name matches rows in `path`.
+
+    Rows are matched case-insensitively on `latin_col == species_latin[name]`.
+    Species with no matching/numeric rows are silently absent from the result
+    (logged by the caller, not here).
+    """
+    rows = _read_csv(path)
+    proposals: list[Proposal] = []
+    for cfg_name, latin in species_latin.items():
+        matched = [r for r in rows if (r.get(latin_col) or "").strip().lower() == latin.lower()]
+        vals = parse_numeric_column(matched, value_col)
+        if not vals:
+            continue
+        lo, hi = range_from_values(vals, lo_pct=lo_pct, hi_pct=hi_pct)
+        proposals.append(
+            Proposal(field, cfg_name, (round(lo, 3), round(hi, 3)), source, page)
+        )
+    return proposals
+
+
 def _extract_wood_density(cache: Path) -> list[Proposal]:
     """Global wood-density band from the Global Wood Density Database CSV.
 
