@@ -400,7 +400,14 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # Re-pinned for the co-located-bud fix (angular-partition tiebreak in
     # space_competition.py): terminals now keep their markers, the leader
     # survives, and the whole tree topology (hence leaf-blade positions) shifts.
-    EXPECTED_HASH = 12954492.230345504  # noqa: N806
+    # Re-pinned for #43: the oak species preset (configs/species/oak.yaml) was
+    # recalibrated against real-world measurements, moving the simulated tree
+    # (and leaf-blade positions). Re-pinned again for #45: epinasty ramps the
+    # plagiotropism weight with branch age, bending branches over years, so node
+    # and leaf-blade positions shift once more. Both PRs are slow-test-invisible
+    # (default CI runs `-m "not slow"`), so this golden drifted unnoticed until
+    # re-pinned here — value verified deterministic across repeated runs.
+    EXPECTED_HASH = 37084270.22277053  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
