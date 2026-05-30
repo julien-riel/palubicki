@@ -7,10 +7,10 @@ envelope:
   marker_count: 18000
 sim:
   shoot_extension_max: 0.18
-  vigor_ref: 1.0
+  vigor_ref: 11.0
   vigor_dormancy: 0.3
   vigor_smoothing: 0.7
-  vigor_diameter_gain: 0.5
+  vigor_diameter_gain: 0.25
   internode_length_jitter: 0.10
   lambda_apical: 0.65
   alpha_basipetal: 2.5
