@@ -104,11 +104,28 @@ ranges:
       page: "pp. 331-338 (branching-angle parameterisation)"
 
   species:
-    maple:
-      # Acer is decussate (opposite pairs, ~90deg rotation between successive
-      # nodes) rather than spiral, so the order-1 divergence is ~90deg, not the
-      # golden-angle band.
+    birch:  # Betula papyrifera — spiral phyllotaxis, slender
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
+    fir:  # Abies balsamea — spiral on the leader, whorled side sprays
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis)"
+    maple:  # Acer saccharum — decussate (opposite pairs)
       divergence_angle_deg__order1_mean:
         value: [80.0, 100.0]
         source: abop
         page: "ch. 4 (decussate/opposite phyllotaxis)"
+    oak:  # Quercus rubra — spiral phyllotaxis
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
+    pine:  # Pinus strobus — whorled (fascicled needles, branch whorls)
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral ontogeny underlying branch whorls)"
