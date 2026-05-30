@@ -16,7 +16,6 @@ import numpy as np
 
 from palubicki.geom.leaf_blade import _OUTLINE_FNS, _apply_margin
 
-
 OUT_DIR = Path(__file__).resolve().parent.parent / "tests" / "geom" / "visual"
 
 # Subset focused on what species presets actually use, plus pure-shape refs.

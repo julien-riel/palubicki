@@ -284,7 +284,8 @@ def _internode_length_metrics(
         by_order[axis_orders[id(L)]].append(float(L.length_target))
     out = {o: _stats(v) for o, v in by_order.items()}
     if by_order:
-        lo = min(by_order); hi = max(by_order)
+        lo = min(by_order)
+        hi = max(by_order)
         prox = float(np.mean(by_order[lo]))
         dist = float(np.mean(by_order[hi]))
     else:

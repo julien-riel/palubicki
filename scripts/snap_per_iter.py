@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 
 from palubicki.config import load_config
-from palubicki.geom.builder import build_mesh
 from palubicki.export.gltf import write_glb
+from palubicki.geom.builder import build_mesh
 from palubicki.render import Camera, render_mesh, save_png
 from palubicki.render.io import _glb_to_mesh
 from palubicki.sim.forest import build_forest
@@ -102,7 +102,7 @@ def main():
     t0 = time.time()
     w, h = (int(x) for x in args.size.lower().split("x"))
 
-    print(f"# iter  nodes  apex_y  mean_dev_deg  last_pitch_deg")
+    print("# iter  nodes  apex_y  mean_dev_deg  last_pitch_deg")
     for i in range(cfg.sim.max_iterations):
         if not any(t.active_buds for t in forest.trees):
             print(f"  break at iter {i}: no active buds")

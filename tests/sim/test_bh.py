@@ -1,5 +1,5 @@
-import pytest
 import numpy as np
+import pytest
 
 from palubicki.sim.bh import allocate
 from palubicki.sim.tree import Bud, Internode, Node, Tree
