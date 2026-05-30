@@ -9,6 +9,23 @@ vulgarisations — *ceci* est le matériau d'origine.
 institutionnel). Tout le canon « plantes procédurales » est hébergé en accès
 libre par le labo de Prusinkiewicz : <https://algorithmicbotany.org/papers/>.
 
+**Version machine :** ce document est le récit ; la version exploitable par le
+code est [`src/palubicki/configs/literature.yaml`](../../src/palubicki/configs/literature.yaml).
+Elle porte le bloc `sources:` (clé → citation/url/disponibilité) consommé par
+`scripts/fetch_botany_sources.py` (téléchargement) et
+`scripts/extract_botany_values.py` (extraction des valeurs), plus le bloc
+`ranges:` (bornes ✓/✗ par espèce) que charge `sim.diagnostics.MetricRanges`. Les
+deux peuvent diverger légèrement ; le `.md` reste la source narrative.
+
+**Espèces (taxons nord-américains) :** les presets sont calibrés sur *Betula
+papyrifera*, *Abies balsamea*, *Acer saccharum*, *Quercus rubra* et *Pinus
+strobus* (mapping `species_latin:` dans `literature.yaml`), choisis pour matcher
+les sources libres Silvics of North America et Wood Handbook. Les bornes
+architecturales (`tree_height`/`crown_radius`/`trunk_base_diameter`) ciblent un
+arbre **jeune (~30 ans)**, pas mature : le simulateur ne modélise pas 80+ ans.
+Les bornes d'angles/phyllotaxie et de densité du bois sont indépendantes de
+l'âge.
+
 ---
 
 ## 1. Le modèle implémenté

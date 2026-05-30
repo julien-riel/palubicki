@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -543,12 +544,50 @@ class MetricRanges:
       "insertion_angle_deg_vs_parent__orderN_mean" → metrics["insertion_angle_deg_vs_parent"][N]["mean"]
     A field absent from this class means no flag is rendered for that path.
     """
-    horton_bifurcation_ratio_mean: tuple[float, float] = (3.0, 5.0)
-    divergence_angle_deg__order1_mean: tuple[float, float] = (130.0, 145.0)
-    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] = (30.0, 65.0)
+    horton_bifurcation_ratio_mean: tuple[float, float] | None = (3.0, 5.0)
+    divergence_angle_deg__order1_mean: tuple[float, float] | None = (130.0, 145.0)
+    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] | None = (30.0, 65.0)
+    # Architectural bounds — measured by compute_metrics, read by format_report.
+    # Default None (no flag) so global-only behavior is unchanged; populated
+    # per-species from the manifest.
+    tree_height: tuple[float, float] | None = None
+    trunk_base_diameter: tuple[float, float] | None = None
+    crown_radius: tuple[float, float] | None = None
+
+    @classmethod
+    def from_species(cls, name: str | None) -> MetricRanges:
+        """Build bounds from configs/literature.yaml.
+
+        Merges ``ranges.species.<name>`` over ``ranges.global``. ``name=None``
+        (or a species with no override) yields the global bounds. Only fields
+        declared on this dataclass are honored; extra manifest keys are ignored
+        so the manifest can carry richer per-bound metadata (source, page).
+        """
+        manifest = _load_literature_manifest()
+        ranges = manifest.get("ranges", {})
+        merged = dict(ranges.get("global", {}))
+        if name is not None:
+            merged.update(ranges.get("species", {}).get(name, {}))
+
+        fields = {f.name for f in dataclasses.fields(cls)}
+        kwargs = {
+            key: tuple(entry["value"])
+            for key, entry in merged.items()
+            if key in fields
+        }
+        return cls(**kwargs)
 
 
-DEFAULT_RANGES = MetricRanges()
+def _load_literature_manifest() -> dict:
+    from importlib import resources
+
+    import yaml
+
+    text = resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
+    return yaml.safe_load(text) or {}
+
+
+DEFAULT_RANGES = MetricRanges.from_species(None)
 
 
 def _flag(value: float | None, bounds: tuple[float, float] | None) -> str:

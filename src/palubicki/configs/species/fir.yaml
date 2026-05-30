@@ -1,13 +1,20 @@
-# Abies-shaped sketch — orthotropic trunk, plagiotropic side sprays,
-# 2-ranked needles via distichous_on_plagiotropic. Not a faithful Abies model.
+# Abies balsamea (balsam fir) — orthotropic trunk, plagiotropic side sprays,
+# 2-ranked needles via distichous_on_plagiotropic.
+# Calibrated to a ~30-year-old tree (see literature.yaml ranges reference age).
+# Diagnose lever map (metric ✗ -> config knob):
+#   tree_height          -> envelope.ry, sim.shoot_extension_max, sim.vigor_ref
+#   crown_radius         -> envelope.rx / envelope.rz (crown overshoots rx ~30-50%)
+#   trunk_base_diameter  -> geom.pipe_exponent (higher=thinner), sim.vigor_diameter_gain
+#   divergence (order1)  -> phyllotaxy.mode + phyllotaxy.divergence_angle_deg
+#   bifurcation_ratio    -> sim.lambda_apical, sim.alpha_basipetal, shedding.*
 envelope:
   shape: cone
-  rx: 2.0
+  rx: 3.0
   ry: 9.5
-  rz: 2.0
+  rz: 3.0
   marker_count: 18000
 sim:
-  shoot_extension_max: 0.16
+  shoot_extension_max: 0.26
   vigor_ref: 3.0
   vigor_dormancy: 0.5
   vigor_smoothing: 0.5
@@ -15,7 +22,7 @@ sim:
   internode_length_jitter: 0.10
   lambda_apical: 0.88
   alpha_basipetal: 2.5
-  max_simulation_years: 50
+  max_simulation_years: 30
   elongation:
     enabled: true
     tau_years: 2.5
@@ -56,7 +63,7 @@ sag:
   enabled: false
 geom:
   ring_sides: 8
-  pipe_exponent: 2.30
+  pipe_exponent: 2.80
   r_tip: 0.007
   bark_color: [0.40, 0.28, 0.20]
   bark_texture: "proc:pine_bark"

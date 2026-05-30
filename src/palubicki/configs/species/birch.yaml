@@ -1,20 +1,27 @@
-# Betula pendula — monopodial pleureur, plagiotrope faible
+# Betula papyrifera (paper birch) — monopodial pleureur, plagiotrope faible
+# Calibrated to a ~30-year-old tree (see literature.yaml ranges reference age).
+# Diagnose lever map (metric ✗ -> config knob):
+#   tree_height          -> envelope.ry, sim.shoot_extension_max, sim.vigor_ref
+#   crown_radius         -> envelope.rx / envelope.rz (crown overshoots rx ~30-50%)
+#   trunk_base_diameter  -> geom.pipe_exponent (higher=thinner), sim.vigor_diameter_gain
+#   divergence (order1)  -> phyllotaxy.mode + phyllotaxy.divergence_angle_deg
+#   bifurcation_ratio    -> sim.lambda_apical, sim.alpha_basipetal, shedding.*
 envelope:
   shape: ellipsoid
   rx: 2.5
-  ry: 7.0
+  ry: 11.0
   rz: 2.5
   marker_count: 20000
 sim:
-  shoot_extension_max: 0.18
-  vigor_ref: 4.0
+  shoot_extension_max: 0.60
+  vigor_ref: 9.5
   vigor_dormancy: 0.5
   vigor_smoothing: 0.5
   vigor_diameter_gain: 0.25
   internode_length_jitter: 0.15
   lambda_apical: 0.95
   alpha_basipetal: 2.0
-  max_simulation_years: 50
+  max_simulation_years: 30
   elongation:
     enabled: true
     tau_years: 2.0
@@ -57,7 +64,7 @@ sag:
   rigid_axis_order: 1
 geom:
   ring_sides: 8
-  pipe_exponent: 2.25
+  pipe_exponent: 2.35
   r_tip: 0.006
   bark_color: [0.85, 0.82, 0.75]
   bark_texture: "proc:birch_bark"

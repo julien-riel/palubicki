@@ -1,0 +1,234 @@
+# Literature manifest — machine-readable companion to docs/botany/sources.md.
+#
+# Two blocks:
+#   sources:  bibliographic entries (key -> cite/url/doi/availability/format).
+#             `availability: free` + a `url` => fetchable by
+#             scripts/fetch_botany_sources.py; `paywall` entries are skipped
+#             (their `doi` is printed instead).
+#   ranges:   ✓/✗ bounds consumed by sim.diagnostics.MetricRanges. `global`
+#             holds the species-agnostic defaults; `species.<name>` overrides a
+#             subset. Each bound is {value: [lo, hi], source: <key>, page: ...}
+#             so a reviewer can open the cited source and check the number.
+#
+# Values here are seeded from the previously-hardcoded MetricRanges tuples plus
+# the maple decussate override; scripts/extract_botany_values.py is what grows
+# the `ranges` block from the cited sources over time.
+
+sources:
+  # ── Procedural-modelling canon (algorithmicbotany.org, free PDFs) ────────
+  abop:
+    cite: "Prusinkiewicz, P., Lindenmayer, A. (1990). The Algorithmic Beauty of Plants. Springer-Verlag."
+    url: "https://algorithmicbotany.org/papers/abop/abop.lowquality.pdf"
+    availability: free
+    format: pdf
+  honda1971:
+    cite: "Honda, H. (1971). Description of the form of trees by the parameters of the tree-like body. J. Theoretical Biology 31(2), 331-338."
+    doi: "10.1016/0022-5193(71)90191-3"
+    availability: paywall
+    format: pdf
+
+  # ── Structured trait/architecture databases (prefer these for extraction) ─
+  baad:
+    cite: "Falster, D.S. et al. (2015). BAAD: a Biomass And Allometry Database for woody plants. Ecology 96(5), 1445."
+    doi: "10.1890/14-1889.1"
+    url: "https://github.com/dfalster/baad/releases/download/v1.0.0/baad_data.rds"
+    availability: free
+    format: csv
+  try_db:
+    cite: "Kattge, J. et al. (2020). TRY plant trait database - enhanced coverage and open access. Global Change Biology 26(1), 119-188."
+    doi: "10.1111/gcb.14904"
+    url: "https://www.try-db.org/"
+    availability: free  # open access, but bulk export requires a data request
+    format: csv
+  wood_density:
+    cite: "Zanne, A.E. et al. (2009). Global wood density database. Dryad. (Chave et al. 2009, Ecology Letters 12, 351-366)."
+    doi: "10.5061/dryad.234"
+    # Landing page, not a direct file — Dryad serves the dataset behind its file
+    # API (GET /api/v2/datasets/doi%3A10.5061%2Fdryad.234 -> files -> download).
+    # Until the fetch script resolves that, drop the exported CSV into the cache
+    # by hand as docs/botany/sources/wood_density.csv; the extractor reads it.
+    url: "https://datadryad.org/stash/dataset/doi:10.5061/dryad.234"
+    availability: free
+    format: csv
+
+  # ── Public-domain PDFs with clean tables (good extraction targets) ───────
+  wood_handbook:
+    cite: "USDA Forest Products Laboratory (2021). Wood Handbook - Wood as an Engineering Material. FPL-GTR-282."
+    url: "https://www.fpl.fs.usda.gov/documnts/fplgtr/fplgtr282/fpl_gtr282.pdf"
+    availability: free
+    format: pdf
+  silvics:
+    cite: "Burns, R.M., Honkala, B.H. (1990). Silvics of North America. USDA Agriculture Handbook 654."
+    url: "https://www.srs.fs.usda.gov/pubs/misc/ag_654/table_of_contents.htm"
+    availability: free
+    format: pdf
+  flora_na:
+    cite: "Flora of North America Editorial Committee (1993+). Flora of North America North of Mexico. efloras.org."
+    url: "http://www.efloras.org/flora_page.aspx?flora_id=1"
+    availability: free
+    format: html
+
+  # ── Reference texts (no structured release; hand-transcription fallback) ──
+  niklas1992:
+    cite: "Niklas, K.J. (1992). Plant Biomechanics: An Engineering Approach to Plant Form and Function. Univ. of Chicago Press."
+    availability: paywall
+    format: book
+  wood_db:
+    cite: "The Wood Database (wood-database.com) + USDA NRS-38 specific-gravity tables. Per-species green/oven-dry density."
+    url: "https://www.wood-database.com/"
+    availability: free
+    format: html
+  flora_dims:
+    cite: "Consensus of USDA Silvics of North America, USDA PLANTS fact sheets, and Wikipedia species pages (cross-checked mature field dimensions)."
+    availability: free
+    format: html
+
+# config name -> latin binomial. Single source of truth shared by the extract
+# script (CSV/PDF filtering) and the docs. Realigned to North American taxa so
+# the free PDF sources (Silvics of North America, Wood Handbook) match.
+species_latin:
+  birch: "Betula papyrifera"
+  fir: "Abies balsamea"
+  maple: "Acer saccharum"
+  oak: "Quercus rubra"
+  pine: "Pinus strobus"
+
+ranges:
+  # Reference age ~30 years. The simulator models a YOUNG tree (maturity is 80+
+  # years and not worth simulating), so the architectural bounds below are
+  # dimensions at ~30 years, NOT mature field-guide sizes. These age-30 numbers
+  # are cross-checked growth/yield ESTIMATES (cited source: flora_dims/silvics),
+  # not values lifted from a single yield table — treat them as calibration
+  # targets, not gospel. Keep species configs at max_simulation_years ~= 30 so
+  # diagnose compares like with like. Angle/phyllotaxy + wood-density bounds are
+  # age-independent.
+  #
+  # Field names match the path convention documented on
+  # sim.diagnostics.MetricRanges (e.g. divergence_angle_deg__order1_mean ->
+  # metrics["divergence_angle_deg"][1]["mean"]).
+  global:
+    horton_bifurcation_ratio_mean:
+      value: [3.0, 5.0]
+      source: abop
+      page: "ch. 1 (Strahler/Horton ordering of branching systems)"
+    divergence_angle_deg__order1_mean:
+      # Spiral phyllotaxis clusters around the golden angle 137.5deg.
+      value: [130.0, 145.0]
+      source: abop
+      page: "ch. 4 (phyllotaxis, golden angle ~137.5deg)"
+    insertion_angle_deg_vs_parent__order1_mean:
+      value: [30.0, 65.0]
+      source: honda1971
+      page: "pp. 331-338 (branching-angle parameterisation)"
+
+  species:
+    birch:  # Betula papyrifera (paper birch) — spiral phyllotaxis, slender
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
+      tree_height:  # at ~30yr — fast early growth, short-lived pioneer
+        value: [9.0, 14.0]
+        source: flora_dims
+        page: "B. papyrifera ~9-14m at 30yr (fast pioneer; mature ~20m)"
+      crown_radius:
+        value: [2.0, 4.0]
+        source: flora_dims
+        page: "young crown spread ~4-8m -> radius 2-4m"
+      trunk_base_diameter:
+        value: [0.12, 0.22]
+        source: flora_dims
+        page: "30yr d.b.h. ~12-22cm"
+      reference:
+        wood_density_g_cm3:
+          value: [0.48, 0.55]
+          source: wood_db
+          page: "paper birch oven-dry density ~0.55"
+    fir:  # Abies balsamea (balsam fir) — spiral leader, whorled side sprays
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis)"
+      tree_height:  # at ~30yr — slow-growing shade-tolerant conifer
+        value: [7.0, 12.0]
+        source: flora_dims
+        page: "A. balsamea ~7-12m at 30yr (slow; mature 14-20m)"
+      crown_radius:
+        value: [1.5, 2.5]
+        source: flora_dims
+        page: "young narrow conical crown -> radius ~1.5-2.5m"
+      trunk_base_diameter:
+        value: [0.10, 0.20]
+        source: flora_dims
+        page: "30yr d.b.h. ~10-20cm"
+      reference:
+        wood_density_g_cm3:
+          value: [0.33, 0.40]
+          source: wood_db
+          page: "balsam fir oven-dry density ~0.34-0.40"
+    maple:  # Acer saccharum (sugar maple) — decussate (opposite pairs)
+      divergence_angle_deg__order1_mean:
+        value: [80.0, 100.0]
+        source: abop
+        page: "ch. 4 (decussate/opposite phyllotaxis)"
+      tree_height:  # at ~30yr — slow shade-tolerant, mature 25-35m
+        value: [8.0, 13.0]
+        source: flora_dims
+        page: "A. saccharum ~8-13m at 30yr (slow; mature 25-35m)"
+      crown_radius:
+        value: [2.5, 4.5]
+        source: flora_dims
+        page: "young crown spread ~5-9m -> radius 2.5-4.5m"
+      trunk_base_diameter:
+        value: [0.12, 0.25]
+        source: flora_dims
+        page: "30yr d.b.h. ~12-25cm"
+      reference:
+        wood_density_g_cm3:
+          value: [0.61, 0.66]
+          source: wood_db
+          page: "sugar/hard maple oven-dry density ~0.66"
+    oak:  # Quercus rubra (northern red oak) — spiral phyllotaxis
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
+      tree_height:  # at ~30yr — moderate-to-fast, mature 20-30m
+        value: [10.0, 15.0]
+        source: silvics
+        page: "Q. rubra ~10-15m at 30yr good site (AG-654 site index)"
+      crown_radius:
+        value: [3.0, 5.0]
+        source: flora_dims
+        page: "young crown spread ~6-10m -> radius 3-5m"
+      trunk_base_diameter:
+        value: [0.15, 0.30]
+        source: flora_dims
+        page: "30yr d.b.h. ~15-30cm (~0.5cm radial/yr)"
+      reference:
+        wood_density_g_cm3:
+          value: [0.63, 0.70]
+          source: wood_db
+          page: "northern red oak oven-dry density ~0.63-0.70"
+    pine:  # Pinus strobus (eastern white pine) — whorled branches
+      divergence_angle_deg__order1_mean:
+        value: [130.0, 145.0]
+        source: abop
+        page: "ch. 4 (spiral ontogeny underlying branch whorls)"
+      tree_height:  # at ~30yr — fast-growing conifer, mature 25-50m
+        value: [12.0, 18.0]
+        source: flora_dims
+        page: "P. strobus ~12-18m at 30yr (fast; mature 25m+)"
+      crown_radius:
+        value: [2.5, 4.0]
+        source: flora_dims
+        page: "young crown spread ~5-8m -> radius 2.5-4m"
+      trunk_base_diameter:
+        value: [0.18, 0.35]
+        source: flora_dims
+        page: "30yr d.b.h. ~18-35cm"
+      reference:
+        wood_density_g_cm3:
+          value: [0.34, 0.38]
+          source: wood_db
+          page: "eastern white pine oven-dry density ~0.35"
