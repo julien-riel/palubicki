@@ -395,7 +395,9 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # Re-pinned for #24: per-axis phyllotaxy ordinal rotated oak lateral
     # directions, shifting leaf-blade positions (vertex counts unchanged; the
     # blade geometry moved, so this sum-of-squares changed).
-    EXPECTED_HASH = 15789108.22025858  # noqa: N806
+    # Re-pinned for #20: vigor-driven internode length changes node positions,
+    # so leaf-blade positions (and this sum-of-squares) shift again.
+    EXPECTED_HASH = 21042832.38280265  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
