@@ -128,6 +128,16 @@ class TropismConfig:
     # horizontally. Independent of gravity (no pendula side effect).
     w_plagiotropism_main: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_plagiotropism_lateral: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    # Epinasty (#34): ramp the EFFECTIVE plagiotropism weight with branch age,
+    # 1 - exp(-age / epinasty_tau_years), so laterals emerge near the parent
+    # axis and arch toward horizontal over years. Disabled => ramp is
+    # identically 1.0 (bit-identical to the constant-weight behaviour).
+    epinasty_enabled: bool = field(
+        default=False, metadata={"ui": {"label": "Epinasty enabled"}}
+    )
+    epinasty_tau_years: float = field(
+        default=8.0, metadata={"ui": {"min": 0.5, "max": 30.0, "step": 0.5}}
+    )
     w_phototropism: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     w_direction_inertia: float = field(default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)  # not exposed; vec3 stays defaulted
@@ -443,6 +453,11 @@ class Config:
             v = getattr(t, fname)
             if v < 0:
                 raise ConfigError(f"tropism.{fname} must be >= 0, got {v}")
+        if t.epinasty_enabled and t.epinasty_tau_years <= 0:
+            raise ConfigError(
+                f"tropism.epinasty_tau_years must be > 0 when epinasty_enabled, "
+                f"got {t.epinasty_tau_years}"
+            )
 
         p = self.phyllotaxy
         if p.divergence_jitter_deg < 0:

@@ -259,6 +259,8 @@ def _grow_tree(
 
         light_grad = light_info.gradient[bud] if light_info else None
         is_main = (bud is bud.parent_node.terminal_bud)
+        parent_iod = bud.parent_node.parent_internode
+        branch_age_years = (t - parent_iod.birth_time) if parent_iod is not None else 0.0
         d = growth_direction(
             v_perception=res.direction[bud],
             current_direction=bud.direction,
@@ -266,6 +268,7 @@ def _grow_tree(
             is_main_axis=is_main,
             light_gradient=light_grad,
             axis_order=bud.axis_order,
+            branch_age_years=branch_age_years,
         )
         # U-turn check on the blended growth direction (envelope-boundary curl).
         if float(np.dot(d, bud.direction)) < cfg.sim.cos_min_perception:
