@@ -225,6 +225,57 @@ def _walk_axis_chains(root: Node) -> list[list[Internode]]:
     return chains
 
 
+def _longest_path_internodes(root: Node) -> int:
+    """Number of internodes in the longest root-to-leaf path. 0 when the
+    tree has no internodes. Memoized DFS (recursion depth = path length,
+    ~30 for the deepest preset, so the call stack stays shallow)."""
+    memo: dict[int, int] = {}
+
+    def depth(node: Node) -> int:
+        cached = memo.get(id(node))
+        if cached is not None:
+            return cached
+        kids = node.children_internodes
+        d = 0 if not kids else 1 + max(depth(c.child_node) for c in kids)
+        memo[id(node)] = d
+        return d
+
+    return depth(root)
+
+
+def _main_axis_continuation_rate(root: Node) -> float:
+    """Leader length as a fraction of the longest root-to-leaf path, both in
+    internodes. 1.0 = a perfectly monopodial leader IS the deepest axis;
+    low = the leader died/handed off early and a lateral took over.
+
+    This is the excurrent-form / leader-dominance signal #40 adds: a
+    decapitated conifer (terminal bud starved) collapses to ~0.03 because its
+    leader is 1-2 internodes while the longest path routes through a lateral
+    takeover. Excurrent conifers (pine/fir) run high (~0.7-1.0); decurrent
+    species (maple) sit lower and noisier as the central leader naturally
+    gives way. NaN for an internode-less tree.
+
+    Reuses _walk_axis_chains (the is_main_axis continuation walker) to find
+    the leader: the longest chain rooted at the trunk base that starts on the
+    main axis.
+    """
+    longest = _longest_path_internodes(root)
+    if longest == 0:
+        return float("nan")
+    leader = 0
+    for chain in _walk_axis_chains(root):
+        head = chain[0]
+        if head.parent_node.parent_internode is None and head.is_main_axis:
+            leader = max(leader, len(chain))
+    if leader == 0:
+        # Degenerate sim output: no main-axis-flagged trunk. Fall back to the
+        # longest chain rooted at the base so the metric still returns a value.
+        for chain in _walk_axis_chains(root):
+            if chain[0].parent_node.parent_internode is None:
+                leader = max(leader, len(chain))
+    return leader / longest
+
+
 def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     # why: Duplicated from sim/phyllotaxy.py. Both must agree on basis
     # convention so divergence measurements use the same in-plane basis
@@ -433,6 +484,7 @@ def compute_metrics(
     out["tree_height"] = height
     out["trunk_base_diameter"] = _trunk_base_diameter(tree.root)
     out["crown_radius"] = crown_radius
+    out["main_axis_continuation_rate"] = _main_axis_continuation_rate(tree.root)
     if cfg is not None:
         out["total_leaf_area"] = _total_leaf_area(tree, cfg)
     else:
@@ -449,6 +501,7 @@ _SCALAR_KEYS = (
     "tree_height",
     "trunk_base_diameter",
     "crown_radius",
+    "main_axis_continuation_rate",
     "total_leaf_area",
     "internode_length_proximal_mean",
     "internode_length_distal_mean",
@@ -553,6 +606,10 @@ class MetricRanges:
     tree_height: tuple[float, float] | None = None
     trunk_base_diameter: tuple[float, float] | None = None
     crown_radius: tuple[float, float] | None = None
+    # Leader dominance / excurrent form (#40). Default None (no flag);
+    # populated per-species from the manifest — excurrent conifers high,
+    # decurrent species lower.
+    main_axis_continuation_rate: tuple[float, float] | None = None
 
     @classmethod
     def from_species(cls, name: str | None) -> MetricRanges:
@@ -656,7 +713,8 @@ def format_report(
     lines.append("")
 
     lines.append("Architecture")
-    for k in ("tree_height", "trunk_base_diameter", "crown_radius", "total_leaf_area",
+    for k in ("tree_height", "trunk_base_diameter", "crown_radius",
+              "main_axis_continuation_rate", "total_leaf_area",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))

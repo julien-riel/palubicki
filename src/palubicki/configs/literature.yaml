@@ -139,6 +139,10 @@ ranges:
         value: [0.12, 0.22]
         source: flora_dims
         page: "30yr d.b.h. ~12-22cm"
+      main_axis_continuation_rate:  # young excurrent pioneer; leader still leads
+        value: [0.4, 1.0]
+        source: flora_dims
+        page: "B. papyrifera excurrent when young (single leader); sim ~0.63-0.67"
       reference:
         wood_density_g_cm3:
           value: [0.48, 0.55]
@@ -161,6 +165,10 @@ ranges:
         value: [0.10, 0.20]
         source: flora_dims
         page: "30yr d.b.h. ~10-20cm"
+      main_axis_continuation_rate:  # strongly excurrent spire — single dominant leader
+        value: [0.6, 1.0]
+        source: flora_dims
+        page: "A. balsamea classic excurrent conifer (narrow conical spire); sim ~1.0"
       reference:
         wood_density_g_cm3:
           value: [0.33, 0.40]
@@ -183,6 +191,10 @@ ranges:
         value: [0.12, 0.25]
         source: flora_dims
         page: "30yr d.b.h. ~12-25cm"
+      main_axis_continuation_rate:  # decurrent — central leader gives way to codominants
+        value: [0.2, 1.0]
+        source: flora_dims
+        page: "A. saccharum decurrent (rounded crown, no single leader); sim ~0.33-0.93, low+noisy"
       reference:
         wood_density_g_cm3:
           value: [0.61, 0.66]
@@ -205,6 +217,10 @@ ranges:
         value: [0.15, 0.30]
         source: flora_dims
         page: "30yr d.b.h. ~15-30cm (~0.5cm radial/yr)"
+      main_axis_continuation_rate:  # young excurrent, decurrent only with age
+        value: [0.45, 1.0]
+        source: flora_dims
+        page: "Q. rubra excurrent when young (central leader to ~mid-life); sim ~1.0. Bug drove it to ~0.25"
       reference:
         wood_density_g_cm3:
           value: [0.63, 0.70]
@@ -227,6 +243,10 @@ ranges:
         value: [0.18, 0.35]
         source: flora_dims
         page: "30yr d.b.h. ~18-35cm"
+      main_axis_continuation_rate:  # excurrent — whorled branches off one monopodial leader
+        value: [0.5, 1.0]
+        source: flora_dims
+        page: "P. strobus excurrent (whorls off a dominant leader); sim ~0.67-0.97. Co-located-bud bug drove it far lower"
       reference:
         wood_density_g_cm3:
           value: [0.34, 0.38]
