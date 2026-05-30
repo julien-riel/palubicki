@@ -1,6 +1,8 @@
 # src/palubicki/sim/tropisms.py
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 from palubicki.config import TropismConfig
@@ -17,6 +19,7 @@ def growth_direction(
     is_main_axis: bool,
     light_gradient: np.ndarray | None = None,
     axis_order: int = 0,
+    branch_age_years: float = 0.0,
 ) -> np.ndarray:
     """Blend perception + orthotropy (UP) + gravitropy (DOWN) + photo + inertia.
 
@@ -44,6 +47,9 @@ def growth_direction(
     w_ortho = cfg.w_orthotropy_main if is_main_axis else cfg.w_orthotropy_lateral
     w_gravi = cfg.w_gravitropism_main if is_main_axis else cfg.w_gravitropism_lateral
     w_plagio = cfg.w_plagiotropism_main if is_main_axis else cfg.w_plagiotropism_lateral
+    if cfg.epinasty_enabled and cfg.epinasty_tau_years > 0.0:
+        ramp = 1.0 - math.exp(-max(0.0, branch_age_years) / cfg.epinasty_tau_years)
+        w_plagio = w_plagio * ramp
 
     # Plagiotropism: project current_direction onto the XY plane (horizontal).
     # If current_direction is near-vertical (|dot(UP)| >= 0.99) the projection

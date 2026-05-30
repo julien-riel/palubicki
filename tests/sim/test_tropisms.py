@@ -262,3 +262,74 @@ def test_plagiotropism_main_vs_lateral():
         is_main_axis=False,
     )
     assert abs(float(np.dot(d_lat, [0.0, 1.0, 0.0]))) < 1e-6
+
+
+def test_epinasty_disabled_matches_constant_weight():
+    """Default (disabled) epinasty leaves plagiotropism at full strength
+    regardless of branch_age_years."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=0.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    base = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                            cfg=cfg, is_main_axis=False)
+    for age in (0.0, 5.0, 50.0):
+        d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                             cfg=cfg, is_main_axis=False, branch_age_years=age)
+        np.testing.assert_allclose(d, base, atol=1e-12)
+
+
+def test_epinasty_young_branch_ignores_plagiotropism():
+    """Epinasty on, age 0: ramp=0 disables the horizontal pull; only inertia
+    remains, so the lateral keeps its current direction."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=1.0,
+        epinasty_enabled=True, epinasty_tau_years=8.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                         cfg=cfg, is_main_axis=False, branch_age_years=0.0)
+    np.testing.assert_allclose(d, cur, atol=1e-7)
+
+
+def test_epinasty_old_branch_recovers_full_plagiotropism():
+    """Epinasty on, age >> tau: result approaches the full-strength horizontal
+    pull (the disabled result)."""
+    common = dict(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=0.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    full = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                            cfg=TropismConfig(**common), is_main_axis=False)
+    cfg_on = TropismConfig(**common, epinasty_enabled=True, epinasty_tau_years=8.0)
+    d_old = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                             cfg=cfg_on, is_main_axis=False, branch_age_years=80.0)
+    np.testing.assert_allclose(d_old, full, atol=1e-3)
+    assert abs(float(np.dot(d_old, [0.0, 1.0, 0.0]))) < 1e-3  # horizontal
+
+
+def test_epinasty_monotone_in_age():
+    """The horizontal (x) component grows monotonically with branch age."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=1.0,
+        epinasty_enabled=True, epinasty_tau_years=8.0,
+    )
+    cur = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
+    horiz = []
+    for age in (0.0, 4.0, 8.0, 16.0, 32.0):
+        d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                             cfg=cfg, is_main_axis=False, branch_age_years=age)
+        horiz.append(float(d[0]))
+    assert all(b >= a - 1e-9 for a, b in zip(horiz, horiz[1:]))
