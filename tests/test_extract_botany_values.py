@@ -82,3 +82,22 @@ def test_extract_per_species_filters_by_latin(tmp_path):
     assert by_species["pine"].value == (0.34, 0.34)
     # A species with no matching rows yields no proposal.
     assert "birch" not in by_species
+
+
+def test_dotted_field_nests_under_reference(tmp_path, monkeypatch):
+    manifest = tmp_path / "literature.yaml"
+    manifest.write_text("ranges:\n  global: {}\n  species: {}\n")
+    monkeypatch.setattr(extract, "_manifest_path", lambda: manifest)
+
+    extract._merge_into_manifest([
+        extract.Proposal("reference.wood_density_g_cm3", "oak", (0.6, 0.66),
+                         "wood_density", "Dryad CSV"),
+        extract.Proposal("tree_height", "oak", (18.0, 28.0), "silvics", "p.1"),
+    ])
+
+    import yaml
+    data = yaml.safe_load(manifest.read_text())
+    oak = data["ranges"]["species"]["oak"]
+    assert oak["reference"]["wood_density_g_cm3"]["value"] == [0.6, 0.66]
+    assert oak["tree_height"]["value"] == [18.0, 28.0]
+    assert "reference.wood_density_g_cm3" not in oak

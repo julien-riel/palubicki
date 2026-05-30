@@ -221,7 +221,12 @@ def _merge_into_manifest(proposals: list[Proposal]) -> None:
             bucket = ranges.setdefault("global", {})
         else:
             bucket = ranges.setdefault("species", {}).setdefault(p.species, {})
-        bucket[p.field] = {"value": list(p.value), "source": p.source, "page": p.page}
+        # Dotted field path (e.g. "reference.wood_density_g_cm3") nests; the last
+        # segment holds the {value, source, page} entry.
+        *parents, leaf = p.field.split(".")
+        for seg in parents:
+            bucket = bucket.setdefault(seg, {})
+        bucket[leaf] = {"value": list(p.value), "source": p.source, "page": p.page}
     path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
 
 
