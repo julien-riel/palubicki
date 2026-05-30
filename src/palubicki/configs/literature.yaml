@@ -69,6 +69,16 @@ sources:
     availability: paywall
     format: book
 
+# config name -> latin binomial. Single source of truth shared by the extract
+# script (CSV/PDF filtering) and the docs. Realigned to North American taxa so
+# the free PDF sources (Silvics of North America, Wood Handbook) match.
+species_latin:
+  birch: "Betula papyrifera"
+  fir: "Abies balsamea"
+  maple: "Acer saccharum"
+  oak: "Quercus rubra"
+  pine: "Pinus strobus"
+
 ranges:
   # Species-agnostic defaults. Field names match the path convention documented
   # on sim.diagnostics.MetricRanges (e.g. divergence_angle_deg__order1_mean ->

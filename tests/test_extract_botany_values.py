@@ -46,3 +46,12 @@ def test_parse_numeric_column_skips_non_numeric():
         {"species": "Pinus", "height_m": "30.0"},
     ]
     assert extract.parse_numeric_column(rows, "height_m") == [12.5, 30.0]
+
+
+def test_load_species_latin_returns_na_taxa():
+    m = extract.load_species_latin()
+    assert m["oak"] == "Quercus rubra"
+    assert m["maple"] == "Acer saccharum"
+    assert m["birch"] == "Betula papyrifera"
+    assert m["pine"] == "Pinus strobus"
+    assert m["fir"] == "Abies balsamea"

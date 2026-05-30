@@ -90,6 +90,12 @@ def _read_csv(path: Path) -> list[dict]:
         return list(csv.DictReader(f))
 
 
+def load_species_latin() -> dict[str, str]:
+    """config name -> latin binomial, from the manifest's species_latin block."""
+    text = resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
+    return (yaml.safe_load(text) or {}).get("species_latin", {})
+
+
 def _extract_wood_density(cache: Path) -> list[Proposal]:
     """Global wood-density band from the Global Wood Density Database CSV.
 
