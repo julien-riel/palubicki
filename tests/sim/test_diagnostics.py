@@ -608,18 +608,21 @@ def test_diagnostics_doesnt_mutate_tree():
 
 def test_internode_length_by_order_present_and_tapers():
     import numpy as np
-    from palubicki.sim.tree import Internode, Node, Tree
+
     from palubicki.sim.diagnostics import compute_metrics
+    from palubicki.sim.tree import Internode, Node, Tree
     # trunk (order 0, long) -> lateral (order 1, short)
     root = Node(position=np.zeros(3))
     mid = Node(position=np.array([0.0, 2.0, 0.0]))
     trunk = Internode(parent_node=root, child_node=mid, length=2.0, is_main_axis=True)
     trunk.length_target = 2.0
-    root.children_internodes.append(trunk); mid.parent_internode = trunk
+    root.children_internodes.append(trunk)
+    mid.parent_internode = trunk
     tip = Node(position=np.array([1.0, 2.5, 0.0]))
     lat = Internode(parent_node=mid, child_node=tip, length=0.5, is_main_axis=False)
     lat.length_target = 0.5
-    mid.children_internodes.append(lat); tip.parent_internode = lat
+    mid.children_internodes.append(lat)
+    tip.parent_internode = lat
     tree = Tree(root=root, all_internodes=[trunk, lat])
     m = compute_metrics(tree)
     assert "internode_length_by_order" in m
@@ -629,14 +632,16 @@ def test_internode_length_by_order_present_and_tapers():
 
 def test_internode_length_metrics_aggregate_multi_seed():
     import numpy as np
-    from palubicki.sim.tree import Internode, Node, Tree
+
     from palubicki.sim.diagnostics import compute_metrics
+    from palubicki.sim.tree import Internode, Node, Tree
     def _tree(scale):
         root = Node(position=np.zeros(3))
         mid = Node(position=np.array([0.0, scale, 0.0]))
         trunk = Internode(parent_node=root, child_node=mid, length=scale, is_main_axis=True)
         trunk.length_target = scale
-        root.children_internodes.append(trunk); mid.parent_internode = trunk
+        root.children_internodes.append(trunk)
+        mid.parent_internode = trunk
         return Tree(root=root, all_internodes=[trunk])
     agg = compute_metrics([_tree(1.0), _tree(2.0)])
     assert "internode_length_proximal_mean" in agg
