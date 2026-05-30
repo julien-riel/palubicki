@@ -71,14 +71,15 @@ def _box_triangles(amin: np.ndarray, amax: np.ndarray, R: np.ndarray | None) -> 
     ], dtype=np.float64)
     if R is not None:
         corners = corners @ R.T
-    # 6 faces, 2 triangles each, with outward normals
+    # 6 faces, 2 triangles each, wound CCW-from-outside so the geometric winding
+    # agrees with the outward normals below (glTF 2.0 §3.7.2 front face) — #33.
     faces_idx = np.array([
-        [0, 1, 2], [0, 2, 3],   # z0 face (normal -z)
-        [4, 6, 5], [4, 7, 6],   # z1 face (normal +z)
-        [0, 4, 5], [0, 5, 1],   # y0 face (normal -y)
-        [3, 2, 6], [3, 6, 7],   # y1 face (normal +y)
-        [0, 3, 7], [0, 7, 4],   # x0 face (normal -x)
-        [1, 5, 6], [1, 6, 2],   # x1 face (normal +x)
+        [0, 2, 1], [0, 3, 2],   # z0 face (normal -z)
+        [4, 5, 6], [4, 6, 7],   # z1 face (normal +z)
+        [0, 5, 4], [0, 1, 5],   # y0 face (normal -y)
+        [3, 6, 2], [3, 7, 6],   # y1 face (normal +y)
+        [0, 7, 3], [0, 4, 7],   # x0 face (normal -x)
+        [1, 6, 5], [1, 2, 6],   # x1 face (normal +x)
     ], dtype=np.uint32).reshape(-1)
     # Per-vertex normals = approximate by averaging face normals; for a box we just
     # use a single normal pointing outward from centroid (visual debug quality).
@@ -125,6 +126,7 @@ def _uv_sphere(center: np.ndarray, radius: float, *, n_lat: int, n_lon: int):
             b = a + 1
             c = a + stride
             d = c + 1
-            idx.extend([a, c, b, b, c, d])
+            # CCW-from-outside so winding agrees with the outward radial normals (#33).
+            idx.extend([a, b, c, b, d, c])
     idx_arr = np.asarray(idx, dtype=np.uint32)
     return pos_arr, norm_arr, uv_arr, idx_arr

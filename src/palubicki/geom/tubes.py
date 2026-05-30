@@ -285,8 +285,10 @@ def _emit_chain_tube(
     normals_flat = normals.reshape(n_nodes * columns, 3)
     uvs_flat = uvs.reshape(n_nodes * columns, 2)
 
-    # Vectorised quad indices: per segment i, per side k, emit two tris [a,b,c,a,c,d]
-    # with a = ring0+k, b = ring1+k, c = ring1+k+1, d = ring0+k+1.
+    # Vectorised quad indices: per segment i, per side k, emit two tris [a,c,b,a,d,c]
+    # with a = ring0+k, b = ring1+k, c = ring1+k+1, d = ring0+k+1. This winding is
+    # CCW as seen from outside (glTF 2.0 §3.7.2 front face), agreeing with the outward
+    # radial normals so single-sided bark survives back-face culling (#33).
     n_seg = n_nodes - 1
     i_arr = np.arange(n_seg)
     k_arr = np.arange(ring_sides)
@@ -296,7 +298,7 @@ def _emit_chain_tube(
     b = ring1 + k_arr[None, :]
     c = ring1 + k_arr[None, :] + 1
     d = ring0 + k_arr[None, :] + 1
-    indices = np.stack([a, b, c, a, c, d], axis=-1).reshape(-1).astype(np.int64)
+    indices = np.stack([a, c, b, a, d, c], axis=-1).reshape(-1).astype(np.int64)
 
     colors_flat = None
     if stops is not None:
@@ -342,6 +344,9 @@ def _emit_root_cap(
     a = ring0_start + k_arr
     b = ring0_start + k_arr + 1
     centers = np.full_like(a, center_index)
+    # [center, b, a] already winds CCW-from-below, agreeing with the (0,-1,0) cap
+    # normal — do NOT flip it alongside the walls (#33). The wall fix made the walls
+    # match this cap's existing outward orientation, not the other way around.
     indices = np.stack([centers, b, a], axis=-1).reshape(-1).astype(np.int64)
     return positions, normals, uvs, cap_color, indices
 

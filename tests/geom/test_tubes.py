@@ -90,6 +90,34 @@ def _tree_with_lateral(main_n=2, lat_n=2, r=0.05):
     return Tree(root=root, all_internodes=iods)
 
 
+def _winding_dots(positions, normals, indices):
+    """Per-triangle ``cross(v1-v0, v2-v0) · mean_vertex_normal``.
+
+    A positive value means the triangle's geometric winding agrees with its stored
+    outward normal — i.e. the face is CCW as seen from outside, which is glTF 2.0's
+    front-face convention. The center vertex of the root cap carries a (0,-1,0)
+    normal, so the mean dominates on the y-axis and this also catches cap inversion.
+    """
+    tris = np.asarray(indices, dtype=np.int64).reshape(-1, 3)
+    v0 = positions[tris[:, 0]]
+    v1 = positions[tris[:, 1]]
+    v2 = positions[tris[:, 2]]
+    geo = np.cross(v1 - v0, v2 - v0)
+    stored = (normals[tris[:, 0]] + normals[tris[:, 1]] + normals[tris[:, 2]]) / 3.0
+    return np.einsum("ij,ij->i", geo, stored)
+
+
+def test_tube_and_cap_winding_agrees_with_normals():
+    """Every bark triangle (tube walls + root cap) must wind CCW-from-outside, i.e.
+    its geometric normal agrees with its stored outward normal (glTF 2.0 §3.7.2).
+    Regression for #33 — the existing test_normals_radial_* only checks normal
+    direction, never winding, so the inward-wound bark went unnoticed."""
+    tree = _vertical_chain(n=4)
+    prim = build_bark_primitive(tree, ring_sides=8, material=_mat())
+    dots = _winding_dots(prim.positions, prim.normals, prim.indices)
+    assert np.all(dots > 0), f"{int((dots <= 0).sum())} of {dots.size} bark triangles wound inward"
+
+
 def test_lateral_chain_produces_valid_primitive():
     """Lateral branches create additional chains; mesh should be finite and index-valid."""
     tree = _tree_with_lateral(main_n=2, lat_n=2)
@@ -162,14 +190,17 @@ def test_vertical_chain_geometric_pin():
     assert np.allclose(prim.positions[20], [0.0, 0.0, 0.0], atol=1e-12)
 
     # --- Tube indices (segment 0, k=0..3 → 24 ints) ---
-    # k=0: a=0,b=5,c=6,d=1  → [0,5,6, 0,6,1]
-    # k=1: a=1,b=6,c=7,d=2  → [1,6,7, 1,7,2]
-    # k=2: a=2,b=7,c=8,d=3  → [2,7,8, 2,8,3]
-    # k=3: a=3,b=8,c=9,d=4  → [3,8,9, 3,9,4]
-    expected_seg0 = [0,5,6,0,6,1, 1,6,7,1,7,2, 2,7,8,2,8,3, 3,8,9,3,9,4]
+    # Re-pinned for #33: walls now emit [a,c,b,a,d,c] (CCW-from-outside, front faces
+    # agree with the outward normals) instead of the old inward-wound [a,b,c,a,c,d].
+    # k=0: a=0,b=5,c=6,d=1  → [0,6,5, 0,1,6]
+    # k=1: a=1,b=6,c=7,d=2  → [1,7,6, 1,2,7]
+    # k=2: a=2,b=7,c=8,d=3  → [2,8,7, 2,3,8]
+    # k=3: a=3,b=8,c=9,d=4  → [3,9,8, 3,4,9]
+    expected_seg0 = [0,6,5,0,1,6, 1,7,6,1,2,7, 2,8,7,2,3,8, 3,9,8,3,4,9]
     assert prim.indices[:24].tolist() == expected_seg0
 
-    # --- Cap indices: [center=20, ring0[k+1], ring0[k]] for k=0..3 ---
+    # --- Cap indices: [center=20, ring0[k+1], ring0[k]] for k=0..3 (unchanged by #33:
+    #     the cap was already wound CCW-from-below, agreeing with its (0,-1,0) normal) ---
     assert prim.indices[72:75].tolist() == [20, 1, 0]
     assert prim.indices[75:78].tolist() == [20, 2, 1]
     assert prim.indices[78:81].tolist() == [20, 3, 2]
