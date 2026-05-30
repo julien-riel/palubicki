@@ -57,8 +57,9 @@ def test_architectural_fields_default_none():
 
 
 def test_each_species_has_manifest_entry():
-    import yaml
     from importlib import resources
+
+    import yaml
 
     data = yaml.safe_load(
         resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
