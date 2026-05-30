@@ -129,10 +129,10 @@ def extract_per_species_csv(
 
 
 def _extract_wood_density(cache: Path) -> list[Proposal]:
-    """Global wood-density band from the Global Wood Density Database CSV.
+    """Per-species wood-density bands from the Global Wood Density Database CSV.
 
-    Demonstrates the structured-DB path: read a column, take a percentile band.
-    Surfaced as a global trait bound (mechanics feed sag/flexibility, #20).
+    User drops the Dryad export at docs/botany/sources/wood_density.csv. Surfaced
+    as reference data (mechanics feed sag/flexibility, #20); not flagged.
     """
     path = cache / "wood_density.csv"
     if not path.exists():
@@ -140,20 +140,27 @@ def _extract_wood_density(cache: Path) -> list[Proposal]:
     rows = _read_csv(path)
     if not rows:
         return []
-    # The Dryad export column is "Wood density (g/cm^3), oven dry mass/fresh
-    # volume"; match on the "wood density" prefix to survive header drift.
-    col = next(
+    latin_col = next(
+        (c for c in rows[0] if c and c.lower() in ("binomial", "species", "name")),
+        None,
+    )
+    value_col = next(
         (c for c in rows[0] if c and c.lower().startswith("wood density")),
         None,
     )
-    if col is None:
+    if latin_col is None or value_col is None:
         return []
-    vals = parse_numeric_column(rows, col)
-    if not vals:
-        return []
-    lo, hi = range_from_values(vals, lo_pct=5, hi_pct=95)
-    return [Proposal("wood_density_g_cm3", None, (round(lo, 3), round(hi, 3)),
-                     "wood_density", "Dryad CSV, 5-95th pct across all taxa")]
+    return extract_per_species_csv(
+        path,
+        latin_col=latin_col,
+        value_col=value_col,
+        field="reference.wood_density_g_cm3",
+        source="wood_density",
+        page="Dryad CSV, per-species 5-95th pct",
+        species_latin=load_species_latin(),
+        lo_pct=5,
+        hi_pct=95,
+    )
 
 
 # Map source key -> extractor. Add PDF-table extractors here as sources are

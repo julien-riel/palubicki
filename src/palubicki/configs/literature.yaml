@@ -62,6 +62,11 @@ sources:
     url: "https://www.srs.fs.usda.gov/pubs/misc/ag_654/table_of_contents.htm"
     availability: free
     format: pdf
+  flora_na:
+    cite: "Flora of North America Editorial Committee (1993+). Flora of North America North of Mexico. efloras.org."
+    url: "http://www.efloras.org/flora_page.aspx?flora_id=1"
+    availability: free
+    format: html
 
   # ── Reference texts (no structured release; hand-transcription fallback) ──
   niklas1992:
