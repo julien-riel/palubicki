@@ -677,3 +677,85 @@ def test_bifurcation_ratio_in_sane_range_per_species(species):
     # near-1 bif = no branching pattern), not to enforce botanical strictness.
     assert not math.isnan(bif), f"{species}: bif_ratio_mean is NaN — tree may be degenerate"
     assert 2.0 <= bif <= 6.0, f"{species}: bif_ratio_mean={bif:.3f} outside [2.0, 6.0]"
+
+
+# ── main_axis_continuation_rate (#40) ─────────────────────────────────────
+
+def test_main_axis_continuation_rate_y_shape():
+    """Leader = trunk only (1 internode); longest root→leaf path = trunk +
+    one lateral = 2 internodes. Rate = 1/2."""
+    tree = _make_tree_y_shape()
+    m = compute_metrics(tree)
+    assert m["main_axis_continuation_rate"] == pytest.approx(0.5)
+
+
+def test_main_axis_continuation_rate_monopodial_is_one():
+    """A perfectly monopodial leader IS the deepest path → rate 1.0."""
+    tree = _make_pectinate_3level()
+    m = compute_metrics(tree)
+    assert m["main_axis_continuation_rate"] == pytest.approx(1.0)
+
+
+def test_main_axis_continuation_rate_single_internode():
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    tree = Tree(root=root)
+    iod = _link(root, child, is_main_axis=True)
+    tree.all_internodes.append(iod)
+    m = compute_metrics(tree)
+    assert m["main_axis_continuation_rate"] == pytest.approx(1.0)
+
+
+def test_main_axis_continuation_rate_empty_tree_is_nan():
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    m = compute_metrics(tree)
+    assert math.isnan(m["main_axis_continuation_rate"])
+
+
+def test_main_axis_continuation_rate_decapitated_leader_is_low():
+    """Leader dies after 1 internode; a lateral takes over and grows a long
+    sympodial chain (the 'decapitated conifer' failure mode #40 guards).
+    Rate must collapse well below any conifer floor.
+
+        root → m → (leader stops)
+                 ↘ l1 → l2 → l3 → l4   (lateral takeover)
+    """
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    m1 = Node(position=np.array([0.0, 1.0, 0.0]))
+    tree = Tree(root=root)
+    trunk = _link(root, m1, is_main_axis=True)  # leader: 1 internode, dead end
+    tree.all_internodes.append(trunk)
+    prev = m1
+    iods = [trunk]
+    for i in range(4):  # lateral chain of 4 internodes off the trunk's tip
+        nxt = Node(position=np.array([float(i + 1), 1.0, 0.0]))
+        lat = _link(prev, nxt, is_main_axis=False)
+        iods.append(lat)
+        prev = nxt
+    tree.all_internodes.extend(iods[1:])
+    m = compute_metrics(tree)
+    # leader = 1 internode; longest path = trunk + 4 laterals = 5 → 0.2
+    assert m["main_axis_continuation_rate"] == pytest.approx(0.2)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir"])
+def test_main_axis_continuation_rate_sane_per_species(species):
+    """Acceptance: a healthy (post-fix) preset keeps a recognisable leader.
+    All five presets clear 0.3 for seed 0; the decapitated-conifer bug this
+    metric guards drops to ~0.03. The bound catches harness/sim regressions,
+    not botanical strictness — see configs/literature.yaml for the per-species
+    ✓/✗ bounds."""
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species=species)
+    tree = simulate(cfg)
+    m = compute_metrics(tree, cfg=cfg)
+    rate = m["main_axis_continuation_rate"]
+    assert not math.isnan(rate), f"{species}: main_axis_continuation_rate is NaN"
+    assert rate >= 0.3, f"{species}: main_axis_continuation_rate={rate:.3f} < 0.3"

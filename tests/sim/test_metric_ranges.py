@@ -74,3 +74,41 @@ def test_oak_divergence_is_spiral_band():
 
     # Quercus is spiral phyllotaxis -> golden-angle band, not decussate.
     assert MetricRanges.from_species("oak").divergence_angle_deg__order1_mean == (130.0, 145.0)
+
+
+def test_main_axis_continuation_rate_is_architectural_field_default_none():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    fields = {f.name for f in __import__("dataclasses").fields(MetricRanges)}
+    assert "main_axis_continuation_rate" in fields
+    # Default None -> no flag unless a species override supplies a bound.
+    assert MetricRanges().main_axis_continuation_rate is None
+    assert MetricRanges.from_species(None).main_axis_continuation_rate is None
+
+
+def test_main_axis_continuation_rate_per_species_bounds():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    # Excurrent conifers carry high floors (single dominant leader); the
+    # decurrent maple sits low (central leader gives way). Floors all clear
+    # the ~0.03 a decapitated leader produces, so the empirical loop flags it.
+    assert MetricRanges.from_species("fir").main_axis_continuation_rate == (0.6, 1.0)
+    assert MetricRanges.from_species("pine").main_axis_continuation_rate == (0.5, 1.0)
+    assert MetricRanges.from_species("oak").main_axis_continuation_rate == (0.45, 1.0)
+    assert MetricRanges.from_species("birch").main_axis_continuation_rate == (0.4, 1.0)
+    assert MetricRanges.from_species("maple").main_axis_continuation_rate == (0.2, 1.0)
+
+
+def test_each_species_has_main_axis_continuation_bound():
+    from importlib import resources
+
+    import yaml
+
+    data = yaml.safe_load(
+        resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
+    )
+    species = data["ranges"]["species"]
+    for name in ("birch", "fir", "maple", "oak", "pine"):
+        assert "main_axis_continuation_rate" in species[name], (
+            f"{name} missing main_axis_continuation_rate bound"
+        )
