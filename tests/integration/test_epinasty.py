@@ -16,6 +16,12 @@ def _angle_to_xy_plane_deg(direction: np.ndarray) -> float:
 
 
 def _structural_depth(tree) -> dict:
+    """BFS from root; returns {node_id: branch_depth}.
+
+    branch_depth counts non-main-axis edges from the root: trunk nodes are 0,
+    first-order laterals 1, etc. Independent of ``axis_order`` (which sympodial
+    promotion resets), so it reflects true topological branch order.
+    """
     node_depth = {id(tree.root): 0}
     for iod in tree.all_internodes:
         parent_depth = node_depth.get(id(iod.parent_node))
@@ -29,6 +35,7 @@ def _structural_depth(tree) -> dict:
 
 def _grow_oak(tmp_path, *, epinasty: bool):
     overrides = {"sim.max_simulation_years": 30, "envelope.marker_count": 8000}
+    # OFF path relies on TropismConfig.epinasty_enabled defaulting to False.
     if epinasty:
         overrides["tropism.epinasty_enabled"] = True
         overrides["tropism.epinasty_tau_years"] = 8.0
@@ -90,6 +97,7 @@ def test_epinasty_young_wood_steeper_than_old_wood(tmp_path):
             continue
         age = t_end - parent.birth_time
         ang = _angle_to_xy_plane_deg(d)
+        # tau=8 -> ramp ~0.63 at age=tau (still steep); 2*tau=16 -> ~0.86 (arched).
         if age <= 8.0:
             young.append(ang)
         elif age >= 16.0:
