@@ -86,3 +86,18 @@ def test_higher_vigor_tip_is_thicker():
     tree, ia, ib = _two_tip_tree(5.0, 0.1)
     compute_radii(tree, r_tip=0.01, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=1.0)
     assert ia.diameter > ib.diameter
+
+
+def test_saturating_coupling_bounds_outlier_tips():
+    """BH flux is heavy-tailed; a tip with enormous vigor must NOT explode its
+    radius. The saturating factor caps the tip multiplier at (1 + gain), so even
+    vigor=10000 stays within r_tip * (1 + gain)."""
+    r_tip, gain = 0.01, 0.3
+    tree, ia, ib = _two_tip_tree(10000.0, 0.0)
+    compute_radii(tree, r_tip=r_tip, exponent=2.0, vigor_ref=5.0, vigor_diameter_gain=gain)
+    # ia radius = diameter/2; bounded by r_tip*(1+gain)
+    assert ia.diameter / 2.0 <= r_tip * (1.0 + gain) + 1e-12
+    # and it does approach the bound for a huge vigor
+    assert ia.diameter / 2.0 > r_tip * (1.0 + gain) - 1e-6
+    # zero-vigor tip stays at exactly r_tip
+    assert abs(ib.diameter / 2.0 - r_tip) < 1e-12
