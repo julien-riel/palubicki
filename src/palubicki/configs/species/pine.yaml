@@ -1,20 +1,27 @@
-# Pinus sylvestris — monopodial strict, whorled, plagiotrope fort
+# Pinus strobus (eastern white pine) — monopodial strict, whorled, plagiotrope fort
+# Calibrated to a ~30-year-old tree (see literature.yaml ranges reference age).
+# Diagnose lever map (metric ✗ -> config knob):
+#   tree_height          -> envelope.ry, sim.shoot_extension_max, sim.vigor_ref
+#   crown_radius         -> envelope.rx / envelope.rz (crown overshoots rx ~30-50%)
+#   trunk_base_diameter  -> geom.pipe_exponent (higher=thinner), sim.vigor_diameter_gain
+#   divergence (order1)  -> phyllotaxy.mode (whorled)
+#   bifurcation_ratio    -> sim.lambda_apical, sim.alpha_basipetal, shedding.*
 envelope:
   shape: cone
-  rx: 2.5
-  ry: 9.0
-  rz: 2.5
+  rx: 4.4
+  ry: 19.0
+  rz: 4.4
   marker_count: 18000
 sim:
-  shoot_extension_max: 0.18
-  vigor_ref: 11.0
+  shoot_extension_max: 0.70
+  vigor_ref: 20.0
   vigor_dormancy: 0.3
   vigor_smoothing: 0.7
-  vigor_diameter_gain: 0.25
+  vigor_diameter_gain: 0.16
   internode_length_jitter: 0.10
   lambda_apical: 0.65
   alpha_basipetal: 2.5
-  max_simulation_years: 50
+  max_simulation_years: 30
   elongation:
     enabled: true
     tau_years: 2.5
@@ -55,7 +62,7 @@ sag:
   enabled: false
 geom:
   ring_sides: 8
-  pipe_exponent: 2.30
+  pipe_exponent: 3.18
   r_tip: 0.007
   bark_color: [0.45, 0.25, 0.18]
   bark_texture: "proc:pine_bark"

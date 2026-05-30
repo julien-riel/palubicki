@@ -1,20 +1,27 @@
-# Acer campestre — decussate, sympodial, reiterating, sun/shade leaves
+# Acer saccharum (sugar maple) — decussate, sympodial, reiterating, sun/shade leaves
+# Calibrated to a ~30-year-old tree (see literature.yaml ranges reference age).
+# Diagnose lever map (metric ✗ -> config knob):
+#   tree_height          -> envelope.ry, sim.shoot_extension_max, sim.vigor_ref
+#   crown_radius         -> envelope.rx / envelope.rz (crown overshoots rx ~30-50%)
+#   trunk_base_diameter  -> geom.pipe_exponent (higher=thinner), sim.vigor_diameter_gain
+#   divergence (order1)  -> phyllotaxy.mode (decussate ~90deg)
+#   bifurcation_ratio    -> sim.lambda_apical, sim.alpha_basipetal, shedding.*
 envelope:
   shape: ellipsoid
-  rx: 4.0
-  ry: 5.5
-  rz: 4.0
+  rx: 3.0
+  ry: 11.0
+  rz: 3.0
   marker_count: 22000
 sim:
-  shoot_extension_max: 0.16
-  vigor_ref: 1.6
+  shoot_extension_max: 0.30
+  vigor_ref: 2.6
   vigor_dormancy: 0.5
   vigor_smoothing: 0.5
-  vigor_diameter_gain: 0.25
+  vigor_diameter_gain: 0.18
   internode_length_jitter: 0.10
   lambda_apical: 0.80
   alpha_basipetal: 2.1
-  max_simulation_years: 42
+  max_simulation_years: 30
   elongation:
     enabled: true
     tau_years: 3.0
@@ -61,7 +68,7 @@ light:
   k_absorption: 0.55
 geom:
   ring_sides: 10
-  pipe_exponent: 2.40
+  pipe_exponent: 3.40
   r_tip: 0.007
   bark_color: [0.40, 0.28, 0.18]
   bark_texture: "proc:oak_bark"
