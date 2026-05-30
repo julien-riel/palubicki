@@ -142,6 +142,65 @@ def test_build_forest_obstacles_filter_markers():
     assert 0.3 * cfg.envelope.marker_count < forest.markers.alive_count < 0.7 * cfg.envelope.marker_count
 
 
+def test_overlapping_envelopes_thinned_to_uniform_density():
+    """Two overlapping envelopes → the overlap region keeps ~one envelope's worth
+    of markers, not two (uniform union density, #41)."""
+    from palubicki.config import ForestConfig, ForestSeed
+    from palubicki.sim.envelope import points_inside
+
+    # Spheres of radius 2 at x=0 and x=2 → heavy overlap.
+    cfg = Config(
+        envelope=EnvelopeConfig(shape="sphere", rx=2.0, ry=2.0, rz=2.0, marker_count=4000),
+        sim=SimConfig(), tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
+        output=Path("/tmp/x.glb"), seed=7,
+        forest=ForestConfig(seeds=(
+            ForestSeed(position=(0.0, 0.0, 0.0)),
+            ForestSeed(position=(2.0, 0.0, 0.0)),
+        )),
+    )
+    forest = build_forest(cfg)
+    pts = forest.markers.alive_positions()
+
+    # Total is below 2× (overlap was thinned) but above 1× (the two crescents survive).
+    assert cfg.envelope.marker_count < len(pts) < 2 * cfg.envelope.marker_count
+
+    env_a = forest.per_tree_cfgs[0].envelope
+    env_b = forest.per_tree_cfgs[1].envelope
+    in_a = points_inside(env_a, pts)
+    in_b = points_inside(env_b, pts)
+    overlap = in_a & in_b
+    only_a = in_a & ~in_b
+    # Density in the overlap (per unit volume) must match the non-overlap density,
+    # not double it. Compare marker count per envelope volume fraction via the
+    # analytic lens volume vs. the single-cap volume.
+    R, d = 2.0, 2.0  # sphere radius, center separation
+    # Lens (intersection of two equal spheres) volume:
+    lens_vol = (np.pi * (4 * R + d) * (2 * R - d) ** 2) / 12.0
+    sphere_vol = 4.0 / 3.0 * np.pi * R**3
+    only_a_vol = sphere_vol - lens_vol  # crescent of A outside B
+    overlap_density = overlap.sum() / lens_vol
+    crescent_density = only_a.sum() / only_a_vol
+    # Within 15% — uniform, NOT the ~2× the old additive sampling produced.
+    assert abs(overlap_density - crescent_density) / crescent_density < 0.15, (
+        f"overlap_density={overlap_density:.1f}, crescent_density={crescent_density:.1f}"
+    )
+
+
+def test_points_inside_matches_sampler():
+    """points_inside counts every sampled marker as inside its own envelope, and
+    excludes a far-away point."""
+    from palubicki.sim.envelope import points_inside, sample_markers
+
+    for shape in ("sphere", "ellipsoid", "half_ellipsoid", "cone"):
+        env = EnvelopeConfig(shape=shape, rx=1.5, ry=2.5, rz=1.0,
+                             marker_count=500, center=(3.0, 1.0, -2.0))
+        pts = sample_markers(env, np.random.default_rng(0))
+        assert points_inside(env, pts).all(), f"{shape}: sampled point reported outside"
+        far = np.array([[100.0, 100.0, 100.0]])
+        assert not points_inside(env, far).any(), f"{shape}: far point reported inside"
+
+
 def test_all_active_buds_deterministic_order():
     from palubicki.config import ForestConfig, ForestSeed
     cfg = _base_cfg(forest=ForestConfig(seeds=(

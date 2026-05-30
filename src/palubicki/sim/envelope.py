@@ -25,6 +25,38 @@ def sample_markers(cfg: EnvelopeConfig, rng: np.random.Generator) -> np.ndarray:
     return pts + np.array(cfg.center)
 
 
+def points_inside(cfg: EnvelopeConfig, pts: np.ndarray) -> np.ndarray:
+    """Boolean mask: which of ``pts`` (N, 3) lie inside the translated envelope ``cfg``.
+
+    The inequalities mirror ``sample_markers`` exactly (with a tiny epsilon to absorb
+    float round-trips through scale + translate), so a marker is always counted as
+    inside the envelope that sampled it. Used to flatten the marker density of
+    overlapping envelopes to a uniform union (see ``forest.build_forest``)."""
+    pts = np.asarray(pts, dtype=np.float64)
+    if len(pts) == 0:
+        return np.zeros(0, dtype=bool)
+    d = pts - np.asarray(cfg.center, dtype=np.float64)
+    eps = 1e-9
+    if cfg.shape == "sphere":
+        return np.einsum("ij,ij->i", d, d) <= (cfg.rx * cfg.rx) * (1.0 + eps)
+    if cfg.shape in ("ellipsoid", "half_ellipsoid"):
+        r = np.array([cfg.rx, cfg.ry, cfg.rz], dtype=np.float64)
+        inside = np.einsum("ij,ij->i", d / r, d / r) <= 1.0 + eps
+        if cfg.shape == "half_ellipsoid":
+            inside &= d[:, 1] >= -eps
+        return inside
+    if cfg.shape == "cone":
+        dy = d[:, 1]
+        rf = 1.0 - dy / cfg.ry
+        in_height = (dy >= -eps) & (dy <= cfg.ry + eps)
+        safe_rf = np.where(rf > eps, rf, np.inf)  # apex: radial must be ~0 → big denom
+        rx = cfg.rx * safe_rf
+        rz = cfg.rz * safe_rf
+        radial = (d[:, 0] / rx) ** 2 + (d[:, 2] / rz) ** 2
+        return in_height & (radial <= 1.0 + eps)
+    raise ValueError(f"unknown envelope shape: {cfg.shape!r}")
+
+
 def _sample_unit_ball(rng: np.random.Generator, n: int) -> np.ndarray:
     """Uniform sampling in the unit sphere via rejection."""
     out = np.empty((n, 3), dtype=np.float64)

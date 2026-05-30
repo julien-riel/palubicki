@@ -10,16 +10,13 @@ Ce fichier fait foi pour la priorisation (pas l'ordre des issues GitHub).
 
 Priorisé le 2026-05-30. Principe : **correctness → filet de mesure de la boucle →
 réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
-
-
-2. **#41 — bug forêt : anti-crown-shyness** · `bug`, **bloque un test** (xfail). Les marqueurs sont additifs là où les envelopes se chevauchent (~3:1 côté voisin) → les couronnes poussent *l'une vers l'autre*. Fix : densité spatiale **uniforme** sur la région d'union. (cf. mémoire `project_forest_marker_density.md`)
-3. **#40 — métrique de continuation d'axe principal** · arme le filet ✓/✗ : `main_axis_continuation_rate` + borne par espèce dans `literature.yaml`, pour qu'un conifère décapité soit flaggé. Extension de #32 ; **fournit la mesure pour valider #36**.
-4. **#36 — couronne de pin clairsemée** · réalisme. BH winner-take-all → ~90 % des latéraux du pin reçoivent zéro flux. À regarder : split acropète en cône étroit, `shedding`/`k_absorption`, plancher de flux éventuel. Mesuré par #40.
-5. **#37 — light grid en diamètres pure-pipe** · cohérence light↔geom, second-ordre, petit. Passer `vigor_diameter_gain` à travers `rebuild_from_*`. Bon « warm-up ».
-6. **#29 — visualiseur des internes de sim** · observabilité de la boucle (marqueurs/envelope/bourgeons/light, timeline). Capture opt-in. Aurait aidé #24 ; accélère #36/#41.
-7. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7).
-8. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
-9. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
+1. **#40 — métrique de continuation d'axe principal** · arme le filet ✓/✗ : `main_axis_continuation_rate` + borne par espèce dans `literature.yaml`, pour qu'un conifère décapité soit flaggé. Extension de #32 ; **fournit la mesure pour valider #36**.
+2. **#36 — couronne de pin clairsemée** · réalisme. BH winner-take-all → ~90 % des latéraux du pin reçoivent zéro flux. À regarder : split acropète en cône étroit, `shedding`/`k_absorption`, plancher de flux éventuel. Mesuré par #40.
+3. **#37 — light grid en diamètres pure-pipe** · cohérence light↔geom, second-ordre, petit. Passer `vigor_diameter_gain` à travers `rebuild_from_*`. Bon « warm-up ».
+4. **#29 — visualiseur des internes de sim** · observabilité de la boucle (marqueurs/envelope/bourgeons/light, timeline). Capture opt-in. Aurait aidé #24 ; accélère #36/#41.
+5. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7).
+6. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
+7. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
 
 ## Fait
 
@@ -39,6 +36,7 @@ réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
 | #32 | Bornes de littérature par espèce (`literature.yaml`) | #43 |
 | #33 | Bug rendu : enroulement des triangles inversé (écorce culled en glTF) | #38 |
 | #35 | Bug phyllotaxie : rotation inter-verticille (verticilles empilés) | #39 |
+| #41 | Bug forêt : densité de marqueurs **uniforme sur l'union** (anti-crown-shyness) | #46 |
 | — | Outillage : ruff + CI + refactor simulateur | #19 |
 1. **#34 — épinastie** · *en cours (branche `issue-34-…`)*. Le poids plagiotrope monte avec l'âge de la branche (`t - birth_time`) au lieu d'être plein dès le 1ᵉʳ nœud → ramure mature arquée. À finir et fusionner.
 
@@ -46,4 +44,5 @@ réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
 > **Notes de boucle empirique** (les bugs « corrects dans la fonction, faux sur l'arbre ») :
 > #24 — `node_index` global entrelacé entre chaînes (refactor step-major) ; correctif : ordinal par axe (`Bud.axis_node_ordinal`).
 > #35 — entrelacement corrigé sur la primitive mais **invisible** au rendu du pin (azimut poussé gouverné par `w_perception`, golden inchangé).
+> #41 — `sample_markers` correct par envelope, mais concaténer N envelopes **double la densité** dans le chevauchement → marqueurs attracteurs tirent les couronnes l'une vers l'autre. Correctif : amincir chaque marqueur avec proba `1/m` (m = nb d'envelopes le contenant) → densité d'union uniforme, dépletion partagée (vraie crown shyness). Mesuré par un **différentiel contrôlé par baseline solo** (le même arbre seul vs avec voisin), car l'asymétrie phyllotactique intrinsèque (~120 internodes) noie le signal inter-arbre en absolu.
 > #20 a engendré #36/#37 et motivé #40.

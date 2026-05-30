@@ -14,7 +14,7 @@ from palubicki.config import (
     _coerce,
     _load_packaged_species,
 )
-from palubicki.sim.envelope import sample_markers
+from palubicki.sim.envelope import points_inside, sample_markers
 from palubicki.sim.markers import MarkerCloud
 from palubicki.sim.obstacles import build_obstacles, filter_markers
 from palubicki.sim.tree import Bud, Node, Tree
@@ -152,6 +152,7 @@ def build_forest(cfg: Config) -> Forest:
         trees.append(Tree(root=root, active_buds=[bud]))
 
     all_markers = np.concatenate(marker_chunks, axis=0) if marker_chunks else np.zeros((0, 3))
+    all_markers = _thin_overlaps(all_markers, per_tree_cfgs, cfg.seed)
     filtered = filter_markers(all_markers, obstacles)
     cloud = MarkerCloud(filtered)
 
@@ -162,6 +163,33 @@ def build_forest(cfg: Config) -> Forest:
         per_tree_cfgs=per_tree_cfgs,
         markers=cloud,
     )
+
+
+def _thin_overlaps(markers: np.ndarray, per_tree_cfgs: list, seed: int) -> np.ndarray:
+    """Flatten the marker density of overlapping envelopes to a uniform union.
+
+    Each tree samples ``marker_count`` markers inside its own envelope, so where
+    two envelopes overlap the concatenated cloud has additive density (~m× for m
+    overlapping envelopes). Markers are attractors, so the inner-facing (overlap)
+    side of each crown gets a density bonus and the crowns grow *toward* each other
+    — anti-crown-shyness (#41). We restore uniform density by keeping each marker
+    with probability ``1 / m``, where ``m`` is the number of envelopes that contain
+    it: the overlap region then holds one envelope's worth of markers, shared by the
+    competing trees (true depletion → crown shyness), not m envelopes' worth.
+
+    Single-envelope forests have m≡1 everywhere, so this is a no-op (the marker
+    cloud — and thus a lone tree — is byte-for-byte unchanged)."""
+    if len(per_tree_cfgs) < 2 or len(markers) == 0:
+        return markers
+    membership = np.zeros(len(markers), dtype=np.int64)
+    for ptc in per_tree_cfgs:
+        membership += points_inside(ptc.envelope, markers).astype(np.int64)
+    # Every marker lies inside the envelope that sampled it, so membership >= 1;
+    # clamp guards against a float round-trip leaving a boundary marker at 0.
+    membership = np.maximum(membership, 1)
+    rng = np.random.default_rng(seed)
+    keep = rng.random(len(markers)) < (1.0 / membership)
+    return markers[keep]
 
 
 def forest_light_bounds(envelopes: list[EnvelopeConfig], obstacles: list) -> tuple[np.ndarray, np.ndarray]:
