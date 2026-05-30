@@ -64,6 +64,17 @@ def lateral_bud_directions(
             math.radians(cfg.divergence_angle_deg) * node_index
             + (math.pi / 2.0) * (node_index % 2)
         )
+    elif effective_mode == "whorled":
+        # Inter-whorl offset: alternate successive whorls by half the member
+        # spacing (pi/k = 180deg/k) so the k members interleave radially instead
+        # of stacking into k vertical ranks. Without this, a divergence equal to
+        # the member spacing (e.g. pine's 72deg = 360/5) rotates each whorl by
+        # exactly one member, collapsing every whorl onto the same k azimuths.
+        # Mirrors the decussate half-spacing idiom above.
+        base_azimuth = (
+            math.radians(cfg.divergence_angle_deg) * node_index
+            + (math.pi / k) * (node_index % 2)
+        )
     elif effective_mode == "distichous":
         # Fixed 180° flip per node; divergence_angle_deg is ignored here.
         base_azimuth = math.pi * node_index
