@@ -167,10 +167,10 @@ def test_golden_forest_v3(tmp_path):
             for iod in node.children_internodes:
                 stack.append(iod.child_node)
     digest = hashlib.sha256(json.dumps(sorted(positions), sort_keys=True, default=list).encode()).hexdigest()
-    # Re-pinned for #24: phyllotaxy divergence now advances per-axis
-    # (Bud.axis_node_ordinal) instead of the global, interleaved node_index, so
-    # lateral bud directions — and thus the whole forest geometry — change.
-    EXPECTED = "deaef41f96739f039175f4add9ea97f6aede3e6e58f2bc6a2bea6fee675fa471"
+    # Re-pinned for #20: vigor-driven internode length replaces the constant
+    # length + age_factor model, so internode lengths (and thus the whole forest
+    # geometry) change. Deterministic position-hash on the reference build.
+    EXPECTED = "5d512f80b4be682b82a977d942705af59d7ca82bf62c96bfd80caf686ff82c0f"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")
