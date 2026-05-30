@@ -37,7 +37,8 @@ def test_per_tree_config_applies_oak_preset(tmp_path):
     seed_entry = ForestSeed(position=(0.0, 0.0, 0.0), species="oak")
     derived = per_tree_config(cfg, seed_entry, tree_index=0)
     assert derived.envelope.shape == "half_ellipsoid"
-    assert derived.envelope.rx == pytest.approx(5.0)
+    # rx retuned 5.0 -> 2.3 when oak was calibrated to age-30 bounds (#32).
+    assert derived.envelope.rx == pytest.approx(2.3)
     assert derived.phyllotaxy.branch_angle_by_order == (60.0, 40.0, 30.0, 25.0)
     assert derived.envelope.center == (0.0, 0.0, 0.0)
 
