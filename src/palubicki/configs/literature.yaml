@@ -73,6 +73,15 @@ sources:
     cite: "Niklas, K.J. (1992). Plant Biomechanics: An Engineering Approach to Plant Form and Function. Univ. of Chicago Press."
     availability: paywall
     format: book
+  wood_db:
+    cite: "The Wood Database (wood-database.com) + USDA NRS-38 specific-gravity tables. Per-species green/oven-dry density."
+    url: "https://www.wood-database.com/"
+    availability: free
+    format: html
+  flora_dims:
+    cite: "Consensus of USDA Silvics of North America, USDA PLANTS fact sheets, and Wikipedia species pages (cross-checked mature field dimensions)."
+    availability: free
+    format: html
 
 # config name -> latin binomial. Single source of truth shared by the extract
 # script (CSV/PDF filtering) and the docs. Realigned to North American taxa so
@@ -104,28 +113,113 @@ ranges:
       page: "pp. 331-338 (branching-angle parameterisation)"
 
   species:
-    birch:  # Betula papyrifera — spiral phyllotaxis, slender
+    birch:  # Betula papyrifera (paper birch) — spiral phyllotaxis, slender
       divergence_angle_deg__order1_mean:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
-    fir:  # Abies balsamea — spiral on the leader, whorled side sprays
+      tree_height:
+        value: [15.0, 20.0]
+        source: flora_dims
+        page: "B. papyrifera mature height ~20m (Wikipedia/Silvics consensus)"
+      crown_radius:
+        value: [3.0, 6.0]
+        source: flora_dims
+        page: "crown spread ~6-12m -> radius 3-6m"
+      trunk_base_diameter:
+        value: [0.3, 0.75]
+        source: flora_dims
+        page: "d.b.h. 0.3-0.75m (commonly 12-16in)"
+      reference:
+        wood_density_g_cm3:
+          value: [0.48, 0.55]
+          source: wood_db
+          page: "paper birch oven-dry density ~0.55"
+    fir:  # Abies balsamea (balsam fir) — spiral leader, whorled side sprays
       divergence_angle_deg__order1_mean:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis)"
-    maple:  # Acer saccharum — decussate (opposite pairs)
+      tree_height:
+        value: [14.0, 20.0]
+        source: flora_dims
+        page: "A. balsamea typically 14-20m (Wikipedia/Silvics)"
+      crown_radius:
+        value: [2.3, 3.8]
+        source: flora_dims
+        page: "spread 15-25ft -> radius ~2.3-3.8m (narrow conical)"
+      trunk_base_diameter:
+        value: [0.3, 0.6]
+        source: flora_dims
+        page: "mature d.b.h. ~0.3-0.6m"
+      reference:
+        wood_density_g_cm3:
+          value: [0.33, 0.40]
+          source: wood_db
+          page: "balsam fir oven-dry density ~0.34-0.40"
+    maple:  # Acer saccharum (sugar maple) — decussate (opposite pairs)
       divergence_angle_deg__order1_mean:
         value: [80.0, 100.0]
         source: abop
         page: "ch. 4 (decussate/opposite phyllotaxis)"
-    oak:  # Quercus rubra — spiral phyllotaxis
+      tree_height:
+        value: [25.0, 35.0]
+        source: flora_dims
+        page: "A. saccharum 25-35m (Wikipedia/Silvics)"
+      crown_radius:
+        value: [6.0, 10.5]
+        source: flora_dims
+        page: "crown spread 12-21m -> radius 6-10.5m"
+      trunk_base_diameter:
+        value: [0.75, 0.9]
+        source: flora_dims
+        page: "mature d.b.h. 0.76-0.91m"
+      reference:
+        wood_density_g_cm3:
+          value: [0.61, 0.66]
+          source: wood_db
+          page: "sugar/hard maple oven-dry density ~0.66"
+    oak:  # Quercus rubra (northern red oak) — spiral phyllotaxis
       divergence_angle_deg__order1_mean:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
-    pine:  # Pinus strobus — whorled (fascicled needles, branch whorls)
+      tree_height:
+        value: [20.0, 30.0]
+        source: silvics
+        page: "Q. rubra 20-30m on good sites (AG-654)"
+      crown_radius:
+        value: [7.5, 11.5]
+        source: flora_dims
+        page: "open-grown spread 50-75ft -> radius 7.5-11.5m"
+      trunk_base_diameter:
+        value: [0.6, 0.9]
+        source: silvics
+        page: "mature d.b.h. 61-91cm (AG-654)"
+      reference:
+        wood_density_g_cm3:
+          value: [0.63, 0.70]
+          source: wood_db
+          page: "northern red oak oven-dry density ~0.63-0.70"
+    pine:  # Pinus strobus (eastern white pine) — whorled branches
       divergence_angle_deg__order1_mean:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral ontogeny underlying branch whorls)"
+      tree_height:
+        value: [15.0, 24.0]
+        source: flora_dims
+        page: "P. strobus typical mature 15-24m"
+      crown_radius:
+        value: [3.8, 5.3]
+        source: flora_dims
+        page: "spread 25-35ft -> radius 3.8-5.3m"
+      trunk_base_diameter:
+        value: [1.0, 1.6]
+        source: flora_dims
+        page: "larger pines d.b.h. 1.0-1.6m (Wikipedia)"
+      reference:
+        wood_density_g_cm3:
+          value: [0.34, 0.38]
+          source: wood_db
+          page: "eastern white pine oven-dry density ~0.35"
