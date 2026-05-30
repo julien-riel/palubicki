@@ -544,9 +544,15 @@ class MetricRanges:
       "insertion_angle_deg_vs_parent__orderN_mean" → metrics["insertion_angle_deg_vs_parent"][N]["mean"]
     A field absent from this class means no flag is rendered for that path.
     """
-    horton_bifurcation_ratio_mean: tuple[float, float] = (3.0, 5.0)
-    divergence_angle_deg__order1_mean: tuple[float, float] = (130.0, 145.0)
-    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] = (30.0, 65.0)
+    horton_bifurcation_ratio_mean: tuple[float, float] | None = (3.0, 5.0)
+    divergence_angle_deg__order1_mean: tuple[float, float] | None = (130.0, 145.0)
+    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] | None = (30.0, 65.0)
+    # Architectural bounds — measured by compute_metrics, read by format_report.
+    # Default None (no flag) so global-only behavior is unchanged; populated
+    # per-species from the manifest.
+    tree_height: tuple[float, float] | None = None
+    trunk_base_diameter: tuple[float, float] | None = None
+    crown_radius: tuple[float, float] | None = None
 
     @classmethod
     def from_species(cls, name: str | None) -> MetricRanges:

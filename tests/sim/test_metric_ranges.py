@@ -36,3 +36,21 @@ def test_default_ranges_matches_global():
     from palubicki.sim.diagnostics import DEFAULT_RANGES, MetricRanges
 
     assert MetricRanges.from_species(None) == DEFAULT_RANGES
+
+
+def test_metric_ranges_has_architectural_fields():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    fields = {f.name for f in __import__("dataclasses").fields(MetricRanges)}
+    assert "tree_height" in fields
+    assert "trunk_base_diameter" in fields
+    assert "crown_radius" in fields
+
+
+def test_architectural_fields_default_none():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    r = MetricRanges()
+    assert r.tree_height is None
+    assert r.crown_radius is None
+    assert r.trunk_base_diameter is None
