@@ -1,0 +1,99 @@
+# Literature manifest — machine-readable companion to docs/botany/sources.md.
+#
+# Two blocks:
+#   sources:  bibliographic entries (key -> cite/url/doi/availability/format).
+#             `availability: free` + a `url` => fetchable by
+#             scripts/fetch_botany_sources.py; `paywall` entries are skipped
+#             (their `doi` is printed instead).
+#   ranges:   ✓/✗ bounds consumed by sim.diagnostics.MetricRanges. `global`
+#             holds the species-agnostic defaults; `species.<name>` overrides a
+#             subset. Each bound is {value: [lo, hi], source: <key>, page: ...}
+#             so a reviewer can open the cited source and check the number.
+#
+# Values here are seeded from the previously-hardcoded MetricRanges tuples plus
+# the maple decussate override; scripts/extract_botany_values.py is what grows
+# the `ranges` block from the cited sources over time.
+
+sources:
+  # ── Procedural-modelling canon (algorithmicbotany.org, free PDFs) ────────
+  abop:
+    cite: "Prusinkiewicz, P., Lindenmayer, A. (1990). The Algorithmic Beauty of Plants. Springer-Verlag."
+    url: "https://algorithmicbotany.org/papers/abop/abop.lowquality.pdf"
+    availability: free
+    format: pdf
+  honda1971:
+    cite: "Honda, H. (1971). Description of the form of trees by the parameters of the tree-like body. J. Theoretical Biology 31(2), 331-338."
+    doi: "10.1016/0022-5193(71)90191-3"
+    availability: paywall
+    format: pdf
+
+  # ── Structured trait/architecture databases (prefer these for extraction) ─
+  baad:
+    cite: "Falster, D.S. et al. (2015). BAAD: a Biomass And Allometry Database for woody plants. Ecology 96(5), 1445."
+    doi: "10.1890/14-1889.1"
+    url: "https://github.com/dfalster/baad/releases/download/v1.0.0/baad_data.rds"
+    availability: free
+    format: csv
+  try_db:
+    cite: "Kattge, J. et al. (2020). TRY plant trait database - enhanced coverage and open access. Global Change Biology 26(1), 119-188."
+    doi: "10.1111/gcb.14904"
+    url: "https://www.try-db.org/"
+    availability: free  # open access, but bulk export requires a data request
+    format: csv
+  wood_density:
+    cite: "Zanne, A.E. et al. (2009). Global wood density database. Dryad. (Chave et al. 2009, Ecology Letters 12, 351-366)."
+    doi: "10.5061/dryad.234"
+    # Landing page, not a direct file — Dryad serves the dataset behind its file
+    # API (GET /api/v2/datasets/doi%3A10.5061%2Fdryad.234 -> files -> download).
+    # Until the fetch script resolves that, drop the exported CSV into the cache
+    # by hand as docs/botany/sources/wood_density.csv; the extractor reads it.
+    url: "https://datadryad.org/stash/dataset/doi:10.5061/dryad.234"
+    availability: free
+    format: csv
+
+  # ── Public-domain PDFs with clean tables (good extraction targets) ───────
+  wood_handbook:
+    cite: "USDA Forest Products Laboratory (2021). Wood Handbook - Wood as an Engineering Material. FPL-GTR-282."
+    url: "https://www.fpl.fs.usda.gov/documnts/fplgtr/fplgtr282/fpl_gtr282.pdf"
+    availability: free
+    format: pdf
+  silvics:
+    cite: "Burns, R.M., Honkala, B.H. (1990). Silvics of North America. USDA Agriculture Handbook 654."
+    url: "https://www.srs.fs.usda.gov/pubs/misc/ag_654/table_of_contents.htm"
+    availability: free
+    format: pdf
+
+  # ── Reference texts (no structured release; hand-transcription fallback) ──
+  niklas1992:
+    cite: "Niklas, K.J. (1992). Plant Biomechanics: An Engineering Approach to Plant Form and Function. Univ. of Chicago Press."
+    availability: paywall
+    format: book
+
+ranges:
+  # Species-agnostic defaults. Field names match the path convention documented
+  # on sim.diagnostics.MetricRanges (e.g. divergence_angle_deg__order1_mean ->
+  # metrics["divergence_angle_deg"][1]["mean"]).
+  global:
+    horton_bifurcation_ratio_mean:
+      value: [3.0, 5.0]
+      source: abop
+      page: "ch. 1 (Strahler/Horton ordering of branching systems)"
+    divergence_angle_deg__order1_mean:
+      # Spiral phyllotaxis clusters around the golden angle 137.5deg.
+      value: [130.0, 145.0]
+      source: abop
+      page: "ch. 4 (phyllotaxis, golden angle ~137.5deg)"
+    insertion_angle_deg_vs_parent__order1_mean:
+      value: [30.0, 65.0]
+      source: honda1971
+      page: "pp. 331-338 (branching-angle parameterisation)"
+
+  species:
+    maple:
+      # Acer is decussate (opposite pairs, ~90deg rotation between successive
+      # nodes) rather than spiral, so the order-1 divergence is ~90deg, not the
+      # golden-angle band.
+      divergence_angle_deg__order1_mean:
+        value: [80.0, 100.0]
+        source: abop
+        page: "ch. 4 (decussate/opposite phyllotaxis)"

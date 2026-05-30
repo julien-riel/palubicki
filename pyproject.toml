@@ -31,6 +31,12 @@ edit = [
     "uvicorn[standard]>=0.27",
     "httpx>=0.27",
 ]
+# Literature-manifest tooling (scripts/fetch_botany_sources.py,
+# scripts/extract_botany_values.py). Fetch + CSV extraction use only stdlib;
+# pdfplumber is needed only for PDF-table extractors.
+botany = [
+    "pdfplumber>=0.11",
+]
 
 [project.scripts]
 palubicki = "palubicki.cli:main"
@@ -40,6 +46,7 @@ packages = ["src/palubicki"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/palubicki/configs/species" = "palubicki/configs/species"
+"src/palubicki/configs/literature.yaml" = "palubicki/configs/literature.yaml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

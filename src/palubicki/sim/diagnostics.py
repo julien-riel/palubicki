@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -547,8 +548,40 @@ class MetricRanges:
     divergence_angle_deg__order1_mean: tuple[float, float] = (130.0, 145.0)
     insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] = (30.0, 65.0)
 
+    @classmethod
+    def from_species(cls, name: str | None) -> MetricRanges:
+        """Build bounds from configs/literature.yaml.
 
-DEFAULT_RANGES = MetricRanges()
+        Merges ``ranges.species.<name>`` over ``ranges.global``. ``name=None``
+        (or a species with no override) yields the global bounds. Only fields
+        declared on this dataclass are honored; extra manifest keys are ignored
+        so the manifest can carry richer per-bound metadata (source, page).
+        """
+        manifest = _load_literature_manifest()
+        ranges = manifest.get("ranges", {})
+        merged = dict(ranges.get("global", {}))
+        if name is not None:
+            merged.update(ranges.get("species", {}).get(name, {}))
+
+        fields = {f.name for f in dataclasses.fields(cls)}
+        kwargs = {
+            key: tuple(entry["value"])
+            for key, entry in merged.items()
+            if key in fields
+        }
+        return cls(**kwargs)
+
+
+def _load_literature_manifest() -> dict:
+    from importlib import resources
+
+    import yaml
+
+    text = resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
+    return yaml.safe_load(text) or {}
+
+
+DEFAULT_RANGES = MetricRanges.from_species(None)
 
 
 def _flag(value: float | None, bounds: tuple[float, float] | None) -> str:

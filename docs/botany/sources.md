@@ -9,6 +9,14 @@ vulgarisations — *ceci* est le matériau d'origine.
 institutionnel). Tout le canon « plantes procédurales » est hébergé en accès
 libre par le labo de Prusinkiewicz : <https://algorithmicbotany.org/papers/>.
 
+**Version machine :** ce document est le récit ; la version exploitable par le
+code est [`src/palubicki/configs/literature.yaml`](../../src/palubicki/configs/literature.yaml).
+Elle porte le bloc `sources:` (clé → citation/url/disponibilité) consommé par
+`scripts/fetch_botany_sources.py` (téléchargement) et
+`scripts/extract_botany_values.py` (extraction des valeurs), plus le bloc
+`ranges:` (bornes ✓/✗ par espèce) que charge `sim.diagnostics.MetricRanges`. Les
+deux peuvent diverger légèrement ; le `.md` reste la source narrative.
+
 ---
 
 ## 1. Le modèle implémenté

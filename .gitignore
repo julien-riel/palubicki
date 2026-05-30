@@ -52,3 +52,7 @@ tests/golden/*.actual.glb
 
 # Generated tree artifacts — large binaries, regenerate via palubicki generate
 out/*.glb
+
+# Botany source cache — downloaded PDFs/CSVs, regenerate via
+# scripts/fetch_botany_sources.py (only the manifest of links is versioned)
+docs/botany/sources/

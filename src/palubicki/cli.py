@@ -456,7 +456,7 @@ def _cmd_diagnose(args) -> int:
         format="%(message)s",
     )
 
-    from palubicki.sim.diagnostics import compute_metrics, format_report
+    from palubicki.sim.diagnostics import MetricRanges, compute_metrics, format_report
 
     seeds: list[int] = args.seed if isinstance(args.seed, list) else [args.seed]
 
@@ -484,7 +484,8 @@ def _cmd_diagnose(args) -> int:
     if args.json:
         print(json.dumps(metrics, indent=2, default=str))
     else:
-        print(format_report(metrics, seeds=seeds, species=args.species))
+        ranges = MetricRanges.from_species(args.species)
+        print(format_report(metrics, ranges=ranges, seeds=seeds, species=args.species))
     return 0
 
 
