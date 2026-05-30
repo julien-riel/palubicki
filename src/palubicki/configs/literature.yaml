@@ -94,8 +94,17 @@ species_latin:
   pine: "Pinus strobus"
 
 ranges:
-  # Species-agnostic defaults. Field names match the path convention documented
-  # on sim.diagnostics.MetricRanges (e.g. divergence_angle_deg__order1_mean ->
+  # Reference age ~30 years. The simulator models a YOUNG tree (maturity is 80+
+  # years and not worth simulating), so the architectural bounds below are
+  # dimensions at ~30 years, NOT mature field-guide sizes. These age-30 numbers
+  # are cross-checked growth/yield ESTIMATES (cited source: flora_dims/silvics),
+  # not values lifted from a single yield table — treat them as calibration
+  # targets, not gospel. Keep species configs at max_simulation_years ~= 30 so
+  # diagnose compares like with like. Angle/phyllotaxy + wood-density bounds are
+  # age-independent.
+  #
+  # Field names match the path convention documented on
+  # sim.diagnostics.MetricRanges (e.g. divergence_angle_deg__order1_mean ->
   # metrics["divergence_angle_deg"][1]["mean"]).
   global:
     horton_bifurcation_ratio_mean:
@@ -118,18 +127,18 @@ ranges:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
-      tree_height:
-        value: [15.0, 20.0]
+      tree_height:  # at ~30yr — fast early growth, short-lived pioneer
+        value: [9.0, 14.0]
         source: flora_dims
-        page: "B. papyrifera mature height ~20m (Wikipedia/Silvics consensus)"
+        page: "B. papyrifera ~9-14m at 30yr (fast pioneer; mature ~20m)"
       crown_radius:
-        value: [3.0, 6.0]
+        value: [2.0, 4.0]
         source: flora_dims
-        page: "crown spread ~6-12m -> radius 3-6m"
+        page: "young crown spread ~4-8m -> radius 2-4m"
       trunk_base_diameter:
-        value: [0.3, 0.75]
+        value: [0.12, 0.22]
         source: flora_dims
-        page: "d.b.h. 0.3-0.75m (commonly 12-16in)"
+        page: "30yr d.b.h. ~12-22cm"
       reference:
         wood_density_g_cm3:
           value: [0.48, 0.55]
@@ -140,18 +149,18 @@ ranges:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis)"
-      tree_height:
-        value: [14.0, 20.0]
+      tree_height:  # at ~30yr — slow-growing shade-tolerant conifer
+        value: [7.0, 12.0]
         source: flora_dims
-        page: "A. balsamea typically 14-20m (Wikipedia/Silvics)"
+        page: "A. balsamea ~7-12m at 30yr (slow; mature 14-20m)"
       crown_radius:
-        value: [2.3, 3.8]
+        value: [1.5, 2.5]
         source: flora_dims
-        page: "spread 15-25ft -> radius ~2.3-3.8m (narrow conical)"
+        page: "young narrow conical crown -> radius ~1.5-2.5m"
       trunk_base_diameter:
-        value: [0.3, 0.6]
+        value: [0.10, 0.20]
         source: flora_dims
-        page: "mature d.b.h. ~0.3-0.6m"
+        page: "30yr d.b.h. ~10-20cm"
       reference:
         wood_density_g_cm3:
           value: [0.33, 0.40]
@@ -162,18 +171,18 @@ ranges:
         value: [80.0, 100.0]
         source: abop
         page: "ch. 4 (decussate/opposite phyllotaxis)"
-      tree_height:
-        value: [25.0, 35.0]
+      tree_height:  # at ~30yr — slow shade-tolerant, mature 25-35m
+        value: [8.0, 13.0]
         source: flora_dims
-        page: "A. saccharum 25-35m (Wikipedia/Silvics)"
+        page: "A. saccharum ~8-13m at 30yr (slow; mature 25-35m)"
       crown_radius:
-        value: [6.0, 10.5]
+        value: [2.5, 4.5]
         source: flora_dims
-        page: "crown spread 12-21m -> radius 6-10.5m"
+        page: "young crown spread ~5-9m -> radius 2.5-4.5m"
       trunk_base_diameter:
-        value: [0.75, 0.9]
+        value: [0.12, 0.25]
         source: flora_dims
-        page: "mature d.b.h. 0.76-0.91m"
+        page: "30yr d.b.h. ~12-25cm"
       reference:
         wood_density_g_cm3:
           value: [0.61, 0.66]
@@ -184,18 +193,18 @@ ranges:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral phyllotaxis, golden angle ~137.5deg)"
-      tree_height:
-        value: [20.0, 30.0]
+      tree_height:  # at ~30yr — moderate-to-fast, mature 20-30m
+        value: [10.0, 15.0]
         source: silvics
-        page: "Q. rubra 20-30m on good sites (AG-654)"
+        page: "Q. rubra ~10-15m at 30yr good site (AG-654 site index)"
       crown_radius:
-        value: [7.5, 11.5]
+        value: [3.0, 5.0]
         source: flora_dims
-        page: "open-grown spread 50-75ft -> radius 7.5-11.5m"
+        page: "young crown spread ~6-10m -> radius 3-5m"
       trunk_base_diameter:
-        value: [0.6, 0.9]
-        source: silvics
-        page: "mature d.b.h. 61-91cm (AG-654)"
+        value: [0.15, 0.30]
+        source: flora_dims
+        page: "30yr d.b.h. ~15-30cm (~0.5cm radial/yr)"
       reference:
         wood_density_g_cm3:
           value: [0.63, 0.70]
@@ -206,18 +215,18 @@ ranges:
         value: [130.0, 145.0]
         source: abop
         page: "ch. 4 (spiral ontogeny underlying branch whorls)"
-      tree_height:
-        value: [15.0, 24.0]
+      tree_height:  # at ~30yr — fast-growing conifer, mature 25-50m
+        value: [12.0, 18.0]
         source: flora_dims
-        page: "P. strobus typical mature 15-24m"
+        page: "P. strobus ~12-18m at 30yr (fast; mature 25m+)"
       crown_radius:
-        value: [3.8, 5.3]
+        value: [2.5, 4.0]
         source: flora_dims
-        page: "spread 25-35ft -> radius 3.8-5.3m"
+        page: "young crown spread ~5-8m -> radius 2.5-4m"
       trunk_base_diameter:
-        value: [1.0, 1.6]
+        value: [0.18, 0.35]
         source: flora_dims
-        page: "larger pines d.b.h. 1.0-1.6m (Wikipedia)"
+        page: "30yr d.b.h. ~18-35cm"
       reference:
         wood_density_g_cm3:
           value: [0.34, 0.38]
