@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 from palubicki.sim.tree import Bud, Node, Tree
 
 
@@ -12,8 +10,8 @@ def allocate(
     alpha: float,
     lambda_apical: float,
     v_subtree: dict[int, float] | None = None,
-) -> dict[Bud, int]:
-    """Borchert-Honda two-pass allocation. Returns floor(v_b) per bud.
+) -> dict[Bud, float]:
+    """Borchert-Honda two-pass allocation. Returns the continuous flux v_b per bud.
 
     If ``v_subtree`` is provided (precomputed by ``compute_v_subtree``), the basipetal
     pass is skipped — useful when the caller also feeds shedding from the same dict.
@@ -23,9 +21,9 @@ def allocate(
     v_total = alpha * v_subtree[id(tree.root)]
 
     # Acropetal pass: distribute v_total downward
-    n_by_bud: dict[Bud, int] = dict.fromkeys(tree.active_buds, 0)
-    _distribute(tree.root, v_total, quality, v_subtree, lambda_apical, n_by_bud)
-    return n_by_bud
+    v_by_bud: dict[Bud, float] = dict.fromkeys(tree.active_buds, 0.0)
+    _distribute(tree.root, v_total, quality, v_subtree, lambda_apical, v_by_bud)
+    return v_by_bud
 
 
 def compute_v_subtree(tree: Tree, quality: dict[Bud, int]) -> dict[int, float]:
@@ -60,7 +58,7 @@ def _distribute(
     quality: dict[Bud, int],
     v_subtree: dict[int, float],
     lam: float,
-    n_by_bud: dict[Bud, int],
+    v_by_bud: dict[Bud, float],
 ) -> None:
     """Iterative pre-order: distribute resource v_here to each node's buds/children."""
     # Stack carries (node, v_here) pairs
@@ -90,18 +88,18 @@ def _distribute(
                 # all quality in one group — give it all proportionally
                 for b in buds:
                     qb = quality.get(b, 0)
-                    n_by_bud[b] = math.floor(v_here * qb / total_q)
+                    v_by_bud[b] = v_here * qb / total_q
                 continue
             v_terminal = v_here * (lam * q_m) / denom if terminal else 0.0
             v_lateral = v_here - v_terminal
             if terminal:
-                n_by_bud[terminal] = math.floor(v_terminal)
+                v_by_bud[terminal] = v_terminal
             if laterals:
                 lat_q_total = q_l
                 for b in laterals:
                     qb = quality.get(b, 0)
                     share = qb / lat_q_total if lat_q_total > 0 else 0.0
-                    n_by_bud[b] = math.floor(v_lateral * share)
+                    v_by_bud[b] = v_lateral * share
             continue
 
         # Otherwise: split between main axis (child + maybe terminal_bud) and laterals
@@ -131,7 +129,7 @@ def _distribute(
         if main_child:
             stack.append((main_child.child_node, v_main))
         elif terminal_here is not None and q_main > 0:
-            n_by_bud[terminal_here] = math.floor(v_main)
+            v_by_bud[terminal_here] = v_main
 
         if q_lat > 0:
             for iod in lateral_children:
@@ -140,7 +138,7 @@ def _distribute(
             for b in laterals_here:
                 qb = quality.get(b, 0)
                 share = qb / q_lat
-                n_by_bud[b] = math.floor(v_lat * share)
+                v_by_bud[b] = v_lat * share
 
 
 def _node_buds(node: Node) -> list[Bud]:

@@ -15,7 +15,7 @@ from palubicki.sim.simulator import simulate
 def _cfg(tmp_path, enable_leaves=True):
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.5, ry=1.0, rz=0.5, marker_count=300),
-        sim=SimConfig(r_perception=0.3, r_kill=0.1, internode_length=0.1, max_simulation_years=6.0),
+        sim=SimConfig(r_perception=0.3, r_kill=0.1, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=6.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),
@@ -55,7 +55,7 @@ def test_build_mesh_applies_flare_from_config():
     def cfg(factor):
         return Config(
             envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=400),
-            sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=8.0),
+            sim=SimConfig(r_perception=0.4, r_kill=0.12, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=8.0),
             tropism=TropismConfig(),
             phyllotaxy=PhyllotaxyConfig(),
             shedding=SheddingConfig(enabled=False),
@@ -73,7 +73,7 @@ def test_build_mesh_applies_flare_from_config():
 def _cfg_blend(tmp_path, *, young):
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.5, ry=1.0, rz=0.5, marker_count=200),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=4.0),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=4.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),

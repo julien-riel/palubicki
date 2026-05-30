@@ -34,7 +34,7 @@ def _nonbg_ratio(img: np.ndarray, bg_rgb=(255, 255, 255), tol=8) -> float:
 def _v1_cfg(out: Path) -> Config:
     return Config(
         envelope=EnvelopeConfig(shape="ellipsoid", rx=0.7, ry=1.4, rz=0.7, marker_count=600),
-        sim=SimConfig(r_perception=0.4, r_kill=0.12, internode_length=0.1, max_simulation_years=10.0),
+        sim=SimConfig(r_perception=0.4, r_kill=0.12, shoot_extension_max=0.1, vigor_dormancy=0.5, max_simulation_years=10.0),
         tropism=TropismConfig(),
         phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(enabled=False),

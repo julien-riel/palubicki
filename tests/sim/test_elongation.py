@@ -1,57 +1,37 @@
-"""Unit tests for sim/elongation.py — sigmoid ramp + age_factor."""
+"""Unit tests for sim/elongation.py — shoot_extension + sigmoid ramp."""
 import math
 
 import pytest
 
 from palubicki.config import ElongationConfig
+from palubicki.sim.elongation import shoot_extension
 
 
-def test_compute_target_disabled_returns_base():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=False)
-    assert compute_target_with_age(0.18, birth_time=20.0, total_years=40.0, cfg=cfg) == 0.18
+def test_shoot_extension_zero_vigor_is_zero():
+    assert shoot_extension(0.0, shoot_extension_max=0.3, vigor_ref=1.0) == 0.0
 
 
-def test_compute_target_no_age_decay_returns_base():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True, age_factor_decay=0.0)
-    assert compute_target_with_age(0.18, birth_time=20.0, total_years=40.0, cfg=cfg) == 0.18
+def test_shoot_extension_saturates_below_max():
+    # exp(-100/1.0) underflows to 0.0 in IEEE 754; result is indistinguishable from max
+    got = shoot_extension(100.0, shoot_extension_max=0.3, vigor_ref=1.0)
+    assert got <= 0.3
+    assert got == pytest.approx(0.3, abs=1e-6)
 
 
-def test_compute_target_at_birth_zero_is_full_base():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True, age_factor_min=0.5, age_factor_decay=0.7)
-    assert compute_target_with_age(0.20, birth_time=0.0, total_years=40.0, cfg=cfg) == pytest.approx(0.20)
+def test_shoot_extension_knee_at_vigor_ref():
+    got = shoot_extension(1.0, shoot_extension_max=0.3, vigor_ref=1.0)
+    assert got == pytest.approx(0.3 * (1.0 - math.exp(-1.0)))
 
 
-def test_compute_target_at_birth_max_equals_age_factor_min_times_base():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True, age_factor_min=0.4, age_factor_decay=1.0)
-    got = compute_target_with_age(0.20, birth_time=40.0, total_years=40.0, cfg=cfg)
-    assert got == pytest.approx(0.20 * 0.4, rel=1e-9)
+def test_shoot_extension_monotonic_in_vigor():
+    a = shoot_extension(0.5, shoot_extension_max=0.3, vigor_ref=1.0)
+    b = shoot_extension(1.5, shoot_extension_max=0.3, vigor_ref=1.0)
+    assert b > a
 
 
-def test_compute_target_monotonic_decay_with_birth():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True, age_factor_min=0.3, age_factor_decay=1.0)
-    early = compute_target_with_age(0.20, birth_time=5.0, total_years=40.0, cfg=cfg)
-    mid = compute_target_with_age(0.20, birth_time=20.0, total_years=40.0, cfg=cfg)
-    late = compute_target_with_age(0.20, birth_time=35.0, total_years=40.0, cfg=cfg)
-    assert early > mid > late
-
-
-def test_compute_target_total_years_zero_returns_base():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True)
-    assert compute_target_with_age(0.20, birth_time=0.0, total_years=0.0, cfg=cfg) == 0.20
-
-
-def test_compute_target_birth_past_max_is_clamped():
-    from palubicki.sim.elongation import compute_target_with_age
-    cfg = ElongationConfig(enabled=True, age_factor_min=0.4, age_factor_decay=1.0)
-    clamped = compute_target_with_age(0.20, birth_time=99.0, total_years=40.0, cfg=cfg)
-    at_max = compute_target_with_age(0.20, birth_time=40.0, total_years=40.0, cfg=cfg)
-    assert clamped == pytest.approx(at_max)
+def test_shoot_extension_near_linear_for_small_vigor():
+    got = shoot_extension(0.01, shoot_extension_max=0.3, vigor_ref=1.0)
+    assert got == pytest.approx(0.3 * 0.01, rel=1e-2)
 
 
 import numpy as np
@@ -82,7 +62,7 @@ def test_update_lengths_disabled_is_noop():
 def test_update_lengths_at_birth_is_small_fraction_of_target():
     from palubicki.sim.elongation import update_lengths
     tree = _single_internode(birth=10, target=0.5)
-    cfg = ElongationConfig(enabled=True, tau_years=3.0, age_factor_decay=0.0)
+    cfg = ElongationConfig(enabled=True, tau_years=3.0)
     update_lengths(tree, current_time=10.0, cfg=cfg)
     assert tree.all_internodes[0].length == pytest.approx(0.5 * (1.0 / (1.0 + math.exp(2.0))), rel=1e-9)
 

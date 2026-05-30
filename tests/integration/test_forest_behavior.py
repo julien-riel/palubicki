@@ -26,10 +26,18 @@ def test_two_trees_compete_for_space(tmp_path):
     enough spacing to be discriminating: spacing=1.2 (inner gap=2.4, env_rx=1.5
     → envelopes overlap) and max_simulation_years=18 surface a clear outer-favored
     margin without being overly slow.
+
+    shoot_extension_max is pinned to 0.1 here so trees stay within their own
+    envelopes. With the #20 vigor model's default (0.3), main axes saturate near
+    0.3 and grow clear across the midline into the neighbor's home half — then the
+    half-space inner/outer classification below counts invading internodes as
+    "inner" and swamps the genuine cross-tree depletion signal. At 0.1 the trees
+    stay contained and the marker-depletion asymmetry (the thing under test) is
+    measured cleanly. vigor_dormancy=0.5 keeps the EMA-warmup from starving growth.
     """
     cfg = Config(
         envelope=EnvelopeConfig(rx=1.5, ry=3.0, rz=1.5, marker_count=3000),
-        sim=SimConfig(max_simulation_years=18.0),
+        sim=SimConfig(max_simulation_years=18.0, shoot_extension_max=0.1, vigor_dormancy=0.5),
         tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
         shedding=SheddingConfig(), geom=GeomConfig(), light=LightConfig(),
         output=tmp_path / "x.glb", seed=42,

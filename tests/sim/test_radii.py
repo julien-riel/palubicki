@@ -57,3 +57,47 @@ def test_update_diameters_incremental_idempotent():
     update_diameters_incremental(tree, r_tip=0.005, exponent=2.49)
     second = [iod.diameter for iod in tree.all_internodes]
     assert first == second
+
+
+def _two_tip_tree(vigor_a: float, vigor_b: float):
+    root = Node(position=np.zeros(3))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    trunk = Internode(parent_node=root, child_node=mid, length=1.0, is_main_axis=True)
+    root.children_internodes.append(trunk)
+    mid.parent_internode = trunk
+    a_node = Node(position=np.array([0.5, 2.0, 0.0]))
+    b_node = Node(position=np.array([-0.5, 2.0, 0.0]))
+    ia = Internode(parent_node=mid, child_node=a_node, length=1.0, is_main_axis=True, vigor=vigor_a)
+    ib = Internode(parent_node=mid, child_node=b_node, length=1.0, is_main_axis=False, vigor=vigor_b)
+    mid.children_internodes.extend([ia, ib])
+    a_node.parent_internode = ia
+    b_node.parent_internode = ib
+    tree = Tree(root=root, all_internodes=[trunk, ia, ib])
+    return tree, ia, ib
+
+
+def test_gain_zero_recovers_pure_pipe_model():
+    tree, ia, ib = _two_tip_tree(5.0, 0.1)
+    compute_radii(tree, r_tip=0.01, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=0.0)
+    assert ia.diameter == ib.diameter  # vigor ignored
+
+
+def test_higher_vigor_tip_is_thicker():
+    tree, ia, ib = _two_tip_tree(5.0, 0.1)
+    compute_radii(tree, r_tip=0.01, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=1.0)
+    assert ia.diameter > ib.diameter
+
+
+def test_saturating_coupling_bounds_outlier_tips():
+    """BH flux is heavy-tailed; a tip with enormous vigor must NOT explode its
+    radius. The saturating factor caps the tip multiplier at (1 + gain), so even
+    vigor=10000 stays within r_tip * (1 + gain)."""
+    r_tip, gain = 0.01, 0.3
+    tree, ia, ib = _two_tip_tree(10000.0, 0.0)
+    compute_radii(tree, r_tip=r_tip, exponent=2.0, vigor_ref=5.0, vigor_diameter_gain=gain)
+    # ia radius = diameter/2; bounded by r_tip*(1+gain)
+    assert ia.diameter / 2.0 <= r_tip * (1.0 + gain) + 1e-12
+    # and it does approach the bound for a huge vigor
+    assert ia.diameter / 2.0 > r_tip * (1.0 + gain) - 1e-6
+    # zero-vigor tip stays at exactly r_tip
+    assert abs(ib.diameter / 2.0 - r_tip) < 1e-12

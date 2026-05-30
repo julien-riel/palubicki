@@ -31,6 +31,10 @@ class Bud:
     # advance by a constant step along any single axis — this counter is per-axis,
     # giving correct spiral/decussate/distichous divergence on the real tree (#24).
     axis_node_ordinal: int = 0
+    # EMA of this bud's per-iteration BH flux v_b. Governs the hysteresis
+    # dormancy decision (recent_vigor < vigor_dormancy -> DORMANT) so a single
+    # starved/lucky iteration cannot flip the bud's state. Updated each iteration.
+    recent_vigor: float = 0.0
 
 
 @dataclass(eq=False)
@@ -59,6 +63,9 @@ class Internode:
     light_factor: float = 1.0
     birth_time: float = 0.0
     length_target: float = 0.0
+    # The continuous BH flux v_b that produced this internode. Drives the
+    # vigor-seeded tip radius in radii.py and the internode-length diagnostics.
+    vigor: float = 0.0
     quality_history: deque[float] = field(init=False)
 
     def __post_init__(self) -> None:

@@ -40,9 +40,13 @@ class SimConfig:
     r_perception: float = field(default=0.6, metadata={"ui": {"min": 0.1, "max": 3.0, "step": 0.05}})
     theta_perception_deg: float = field(default=90.0, metadata={"ui": {"min": 10.0, "max": 180.0, "step": 5.0}})
     r_kill: float = field(default=0.15, metadata={"ui": {"min": 0.01, "max": 1.0, "step": 0.01}})
-    internode_length: float = field(default=0.1, metadata={"ui": {"min": 0.02, "max": 0.5, "step": 0.01}})
     alpha_basipetal: float = field(default=2.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     lambda_apical: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}})
+    shoot_extension_max: float = field(default=0.3, metadata={"ui": {"min": 0.02, "max": 1.0, "step": 0.01}})
+    vigor_ref: float = field(default=1.0, metadata={"ui": {"min": 0.05, "max": 5.0, "step": 0.05}})
+    vigor_dormancy: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
+    vigor_smoothing: float = field(default=0.5, metadata={"ui": {"min": 0.05, "max": 1.0, "step": 0.05}})
+    vigor_diameter_gain: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     dt_years: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 2.0, "step": 0.05}})
     max_simulation_years: float = field(
         default=30.0, metadata={"ui": {"min": 1.0, "max": 80.0, "step": 1.0}}
@@ -51,23 +55,14 @@ class SimConfig:
     # active. Default spans the whole year => no seasonal gating. Only bites
     # when dt_years < 1.0 (sub-annual steps). Not exposed in UI (vec2).
     annual_growth_period: tuple[float, float] = (0.0, 1.0)
-    re_perceive_per_substep: bool = field(default=True, metadata={"ui": {"label": "Re-perceive per substep"}})
     # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
     # is sitting at the envelope boundary (markers only behind/below). It goes
     # DORMANT instead of folding back. -0.2 ≈ allow 100° before bending; raise
     # toward 0.0 to be strict, lower toward -1.0 to disable.
     cos_min_perception: float = field(default=-0.2, metadata={"ui": {"min": -1.0, "max": 1.0, "step": 0.05}})
-    # Hard cap on internodes a single bud can extend in one iteration.
-    # Default 1 matches the original Palubicki BHse: each iteration re-evaluates
-    # perception, light, and competition; each apical bud either extends by one
-    # internode or stays dormant. Higher values let vigorous buds outpace others
-    # but also exhaust nearby markers faster (n internodes worth of growth +
-    # r_kill in a single year), and re-introduce the "wineglass" fold-back when
-    # the trunk shoots through the envelope in one iteration.
-    n_substeps_max: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
-    # Gaussian jitter (σ as a fraction of internode_length) applied per new
-    # internode. 0.0 = exact constant length; 0.10-0.15 = realistic variability.
-    # The drawn factor is clamped to [0.5, 1.5] regardless of σ.
+    # Gaussian jitter (σ as a fraction of the computed shoot extension) applied
+    # per new internode. 0.0 = exact computed length; 0.10-0.15 = realistic
+    # variability. The drawn factor is clamped to [0.5, 1.5] regardless of σ.
     internode_length_jitter: float = field(
         default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
     )
@@ -204,7 +199,7 @@ class SagConfig:
 
 @dataclass(frozen=True)
 class ElongationConfig:
-    """Progressive internode elongation (S-curve) + age_factor on target length.
+    """Progressive internode elongation (S-curve).
 
     Each Internode records its birth_time and length_target at creation.
     Its effective ``length`` ramps from 0 toward ``length_target`` via a sigmoid
@@ -214,12 +209,6 @@ class ElongationConfig:
     enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
     tau_years: float = field(
         default=3.0, metadata={"ui": {"min": 0.5, "max": 10.0, "step": 0.1}}
-    )
-    age_factor_min: float = field(
-        default=0.5, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}}
-    )
-    age_factor_decay: float = field(
-        default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.1}}
     )
 
 
@@ -382,8 +371,16 @@ class Config:
             raise ConfigError(f"sim.r_perception must be > 0, got {s.r_perception}")
         if s.r_kill <= 0:
             raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
-        if s.internode_length <= 0:
-            raise ConfigError(f"sim.internode_length must be > 0, got {s.internode_length}")
+        if s.shoot_extension_max <= 0:
+            raise ConfigError(f"sim.shoot_extension_max must be > 0, got {s.shoot_extension_max}")
+        if s.vigor_ref <= 0:
+            raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
+        if s.vigor_dormancy < 0:
+            raise ConfigError(f"sim.vigor_dormancy must be >= 0, got {s.vigor_dormancy}")
+        if not (0.0 < s.vigor_smoothing <= 1.0):
+            raise ConfigError(f"sim.vigor_smoothing must be in (0, 1], got {s.vigor_smoothing}")
+        if s.vigor_diameter_gain < 0:
+            raise ConfigError(f"sim.vigor_diameter_gain must be >= 0, got {s.vigor_diameter_gain}")
         if not (0.0 <= s.internode_length_jitter <= 0.5):
             raise ConfigError(
                 f"sim.internode_length_jitter must be in [0, 0.5], got {s.internode_length_jitter}"
@@ -414,14 +411,6 @@ class Config:
         e = self.sim.elongation
         if e.tau_years <= 0:
             raise ConfigError(f"sim.elongation.tau_years must be > 0, got {e.tau_years}")
-        if not (0.1 <= e.age_factor_min <= 1.0):
-            raise ConfigError(
-                f"sim.elongation.age_factor_min must be in [0.1, 1.0], got {e.age_factor_min}"
-            )
-        if e.age_factor_decay < 0:
-            raise ConfigError(
-                f"sim.elongation.age_factor_decay must be >= 0, got {e.age_factor_decay}"
-            )
         bb = s.bud_break_bias
         if bb.mode not in ("uniform", "acrotonic", "basitonic", "mesotonic"):
             raise ConfigError(

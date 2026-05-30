@@ -1,8 +1,22 @@
 # palubicki
 
-Self-organizing 3D tree generator based on Palubicki, Horel, Longay, Runions, Lane, Měch, Prusinkiewicz — *Self-organizing tree models for image synthesis*, SIGGRAPH 2009.
+**Un simulateur d'arbres et de plantes : génération procédurale *réaliste*,
+fondée sur la botanique.** L'objectif n'est pas de dessiner des arbres mais de
+les *faire pousser* — la forme émerge de règles biologiques (compétition pour
+l'espace et la lumière, allocation de ressources, tropismes, sénescence)
+plutôt que d'être sculptée à la main. Chaque arbre est le résultat d'une
+**simulation** année par année, pas d'un gabarit.
+
+Basé sur Palubicki, Horel, Longay, Runions, Lane, Měch, Prusinkiewicz —
+*Self-organizing tree models for image synthesis*, SIGGRAPH 2009.
 
 V1 implements the BHse model: marker points distributed in a parametric envelope drive bud competition for space; Borchert-Honda allocation routes resources from the root to the buds; tropisms (gravity, photo direction, inertia) bias growth; low-quality branches are shed. Output is a `.glb` (glTF 2.0 binary) usable in any standard viewer.
+
+> **Comment on travaille ici** — beaucoup de réglages pilotent un comportement
+> *émergent* qu'aucune table de constantes ne donne d'avance. On les accorde par
+> une **boucle empirique auto-correctrice** : poser un départ plausible →
+> observer les diagnostics → corriger un levier → recommencer jusqu'à ce que ça
+> lise vrai. Voir [`docs/mindset-boucle-empirique.md`](docs/mindset-boucle-empirique.md).
 
 ## Install
 
@@ -62,18 +76,36 @@ import matplotlib.pyplot as plt
 plt.imshow(render_glb("oak.glb"))
 ```
 
-### Editor — tune parameters live in a browser
+### Visualiseur web — voir le `.glb` et déboguer la simulation
+
+Le visualiseur web est un éditeur three.js servi localement : il **charge et
+affiche le `.glb` généré** dans le navigateur, le re-simule à la volée quand on
+bouge les paramètres, et expose des **aides de débogage visuel** pour comprendre
+ce que la sim a produit.
 
 ```bash
 pip install -e ".[edit]"
 palubicki edit --species oak --seed 42
 ```
 
-Opens `http://127.0.0.1:8765/` with sliders for the most-tweaked parameters
-on the left, a three.js viewer on the right, and a **Régénérer** button to
-re-run the simulation with the current values. Use **Export .glb** to save
-the current tree and **Export YAML** to dump the current config (re-usable
-with `palubicki generate --config`).
+Ouvre `http://127.0.0.1:8765/` :
+
+- **Panneau de paramètres** (à gauche) — sliders pour les réglages les plus
+  tweakés, sélecteur d'espèce, bouton **Régénérer** pour relancer la simulation
+  avec les valeurs courantes.
+- **Visualiseur 3D** (à droite) — rendu three.js du `.glb` avec `OrbitControls`
+  (rotation / zoom / pan).
+- **Affichage de débogage** — surcouche du viewer avec **Toggle leaves** (isoler
+  le squelette ligneux du feuillage) et **Wireframe** (inspecter la
+  tessellation et la topologie des tubes). C'est par là qu'on lit *ce que la
+  simulation a réellement construit* plutôt que ce qu'on croit avoir réglé.
+- **Export** — **Export .glb** sauve l'arbre courant ; **Export YAML** vide la
+  config courante (réutilisable avec `palubicki generate --config`).
+
+Pour des métriques chiffrées (hauteur, longueurs d'internode proximales vs
+distales, diamètre de base, indices de Strahler / Horton), le complément en
+ligne de commande est `palubicki diagnose` — l'œil quantitatif de la boucle
+empirique décrite plus haut.
 
 ### V2 — voxel light shadowing (BHls hybrid)
 
@@ -230,10 +262,59 @@ iteration-count behavior.
 
 ## Architecture
 
+Le pipeline est strictement étagé : la **simulation** ne connaît ni géométrie ni
+glTF ; la **géométrie** ne connaît pas le format d'export ; chaque couche produit
+un artefact neutre consommé par la suivante.
+
+```mermaid
+flowchart TD
+    cfg["Config YAML / presets d'espèces<br/>(config.py)"]
+    cli["CLI — orchestration<br/>(cli.py)"]
+
+    subgraph sim["sim/ — simulation pure (sans géométrie)"]
+        markers["Marker cloud<br/>(enveloppe paramétrique)"]
+        buds["Compétition des bourgeons<br/>pour l'espace + la lumière"]
+        bh["Allocation Borchert-Honda<br/>(racine → bourgeons)"]
+        trop["Tropismes<br/>(gravité, photo, plagio, inertie)"]
+        life["Cycle de vie<br/>(vigueur, élongation, sénescence, shedding)"]
+        tree["Tree (squelette + attributs)"]
+        markers --> buds --> bh --> trop --> life --> tree
+    end
+
+    subgraph geom["geom/ — squelette → maillage"]
+        tubes["Tubes tessellés<br/>(repères de transport parallèle)"]
+        leaves["Clusters de feuilles<br/>paramétriques"]
+        mesh["Mesh neutre"]
+        tubes --> mesh
+        leaves --> mesh
+    end
+
+    export["export/ — Mesh → .glb<br/>(glTF 2.0 core, config embarquée)"]
+    glb([".glb"])
+
+    cfg --> cli
+    cli --> sim
+    tree --> geom
+    mesh --> export --> glb
+
+    glb --> viewer["Visualiseur web<br/>(edit/ — three.js, debug)"]
+    glb --> preview["preview — PNG<br/>(render/, matplotlib)"]
+    tree --> diag["diagnose — métriques<br/>(hauteur, internodes, Strahler/Horton)"]
+
+    diag -.->|boucle empirique<br/>auto-correctrice| cfg
+```
+
 - `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
 - `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + parametric leaf clusters (1..N cross-quads per bud). Outputs a neutral `Mesh`.
 - `src/palubicki/export/` — `Mesh` → `.glb`. Core glTF 2.0, no extensions, max viewer compatibility.
+- `src/palubicki/render/` — `.glb` → PNG (diagnostic, matplotlib).
+- `src/palubicki/edit/` — visualiseur web three.js + serveur de re-simulation live.
 - `src/palubicki/cli.py` — orchestrates.
+
+La boucle pointillée `diagnose → config` est le cœur méthodologique du projet :
+on accorde les paramètres en réagissant aux métriques mesurées, pas à des valeurs
+posées d'avance (voir
+[`docs/mindset-boucle-empirique.md`](docs/mindset-boucle-empirique.md)).
 
 ## Configuration
 

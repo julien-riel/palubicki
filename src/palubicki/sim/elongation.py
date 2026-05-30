@@ -1,4 +1,4 @@
-"""Progressive internode elongation (S-curve) + age_factor on target length.
+"""Progressive internode elongation (S-curve).
 
 Spec: docs/superpowers/specs/2026-05-27-phase2d-temporal-dynamics-design.md (§4.3)
 
@@ -18,26 +18,18 @@ from palubicki.config import ElongationConfig
 from palubicki.sim.tree import Tree
 
 
-def compute_target_with_age(
-    base_length: float,
-    birth_time: float,
-    total_years: float,
-    cfg: ElongationConfig,
-) -> float:
-    """target_length = base_length × age_factor(birth_time / total_years)."""
-    if not cfg.enabled or total_years <= 0:
-        return base_length
-    decay = cfg.age_factor_decay
-    if decay <= 0:
-        return base_length
-    t_norm = min(1.0, birth_time / total_years)
-    base = math.exp(-decay * t_norm)
-    base_at_one = math.exp(-decay)
-    factor = (
-        cfg.age_factor_min
-        + (1.0 - cfg.age_factor_min) * (base - base_at_one) / (1.0 - base_at_one)
-    )
-    return base_length * factor
+def shoot_extension(v_b: float, shoot_extension_max: float, vigor_ref: float) -> float:
+    """Saturating physiological length response to BH flux.
+
+    length = shoot_extension_max * (1 - exp(-v_b / vigor_ref))
+
+    Small v_b is ~linear in resource; large v_b asymptotes to a finite annual
+    shoot extension (a meristem rate limit, not an arbitrary clamp). Replaces the
+    old top-down age_factor(birth_time) decay (#20).
+    """
+    if vigor_ref <= 0:
+        return shoot_extension_max
+    return shoot_extension_max * (1.0 - math.exp(-v_b / vigor_ref))
 
 
 def update_lengths(tree: Tree, current_time: float, cfg: ElongationConfig) -> None:
