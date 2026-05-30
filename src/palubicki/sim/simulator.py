@@ -243,6 +243,12 @@ def _grow_tree(
         v_b = float(v_by_bud.get(bud, 0.0))
         # Hysteresis: smooth v_b, then threshold the EMA. A single starved/lucky
         # iteration cannot flip the bud's active/dormant state (#20).
+        # Warmup note: recent_vigor starts at 0, so a bud's first evaluation only
+        # reaches s*v_b — a marginal lateral can sit DORMANT one extra iteration
+        # while its EMA climbs. This is intentional hysteresis, NOT a bug: dormant
+        # buds are re-evaluated every iteration (they stay in new_active), so it is
+        # a one-iteration lag, not a kill. Do not "fix" it by seeding recent_vigor
+        # = v_b — that removes the lag the hysteresis is meant to provide.
         bud.recent_vigor = (1.0 - s) * bud.recent_vigor + s * v_b
         v_perc = res.direction[bud]
         v_perc_norm = float(np.linalg.norm(v_perc))
