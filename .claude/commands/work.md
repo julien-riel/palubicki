@@ -1,10 +1,20 @@
 ---
-description: Start work on a GitHub issue — runs a fixed-order ceremony (self-assign, branch, empty commit, push, draft PR) for julien-riel/palubicki. Aborts on any precondition failure; may suggest destructive recovery commands but never runs them without explicit user confirmation.
+description: Start work on a GitHub issue — runs a fixed-order ceremony (self-assign, branch, empty commit, push, draft PR) for julien-riel/palubicki. With no issue number, picks the next ticket from docs/roadmap.md. Aborts on any precondition failure; may suggest destructive recovery commands but never runs them without explicit user confirmation. Reminds, at ticket completion, to update docs/roadmap.md + docs/botany/simulator-gap-analysis.md.
 ---
 
 # Start work on an issue
 
 `/work <N>` — runs the issue-bootstrap ceremony for issue `#N` on `julien-riel/palubicki`, in a fixed order, with hard aborts. One issue, one branch, one draft PR — opened *before* the first real commit. After this skill exits cleanly the next step is to write code on the branch.
+
+`/work` (no number) — consult the roadmap to pick the next ticket (see step 0), confirm with the user, then run the same ceremony.
+
+## Step 0 — Identify the issue (only when `N` is omitted)
+
+If the user gave an explicit `<N>`, skip this step and go straight to the preconditions.
+
+If no number was given, **read `docs/roadmap.md`** and take the **first item in the "À faire (dans l'ordre)" list** — that is the canonical priority order, not GitHub's issue order. Skip any item already marked *en cours* whose branch is owned by someone else; an *en cours* item on a branch you can resume is a hint to resume, not to re-bootstrap (precondition 5 will catch a duplicate branch anyway).
+
+Announce the pick in one line — *"roadmap → next is #<N> — <title>. Proceed? (y / n)"* — and wait for `y` before touching git. On `n`, stop. Once confirmed, `N` is fixed and the rest of the ceremony is identical.
 
 ## Preconditions (refuse-to-proceed gates)
 
@@ -69,6 +79,15 @@ If all five pass, proceed.
    - `gh pr create` has no equivalent of GitLab's `--squash-before-merge` or `--remove-source-branch`; squash-vs-merge and branch deletion are decided at merge time (e.g. `gh pr merge --squash --delete-branch`) or via repo settings, not at create.
 
 9. **Print the PR URL** that `gh` returned. Done.
+
+## When the ticket is finished (reminder for later, not part of the bootstrap)
+
+This belongs to the *end* of the work, not `/work` itself — but record it here so it isn't forgotten. Before marking the PR ready / merging, **update both docs in the same PR** so they never drift from the code:
+
+- **`docs/roadmap.md`** — move the finished issue out of "À faire (dans l'ordre)" into the "Fait" table (with its PR number), and re-check the ordering of what remains (a finished ticket often unblocks or reprioritizes the next ones).
+- **`docs/botany/simulator-gap-analysis.md`** — flip the relevant row(s) from ❌/🟡 to ✅ / the right Δ, update the section verdict, and refresh the "Last reviewed" line + the "Top remaining recommendations" list if the change affects them.
+
+If the ticket was purely software/tooling (no botanical concept touched), the gap-analysis may not need an edit — say so explicitly rather than skipping silently.
 
 ## Abort rules
 

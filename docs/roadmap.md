@@ -1,34 +1,47 @@
-L'ordre des issues sur github.
+# Roadmap
 
-> Méthode de travail transversale : la **boucle empirique auto-correctrice**
-> (poser → observer les diagnostics → corriger → recommencer jusqu'à ce que ça
-> lise vrai) — [`mindset-boucle-empirique.md`](mindset-boucle-empirique.md).
+Ce fichier fait foi pour la priorisation (pas l'ordre des issues GitHub).
+
+> **Méthode transversale — boucle empirique auto-correctrice** : poser → observer
+> les diagnostics → corriger → recommencer jusqu'à ce que ça lise vrai
+> ([`mindset-boucle-empirique.md`](mindset-boucle-empirique.md)).
+
+## À faire (dans l'ordre)
+
+Priorisé le 2026-05-30. Principe : **correctness → filet de mesure de la boucle →
+réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
+
+1. **#34 — épinastie** · *en cours (branche `issue-34-…`)*. Le poids plagiotrope monte avec l'âge de la branche (`t - birth_time`) au lieu d'être plein dès le 1ᵉʳ nœud → ramure mature arquée. À finir et fusionner.
+2. **#41 — bug forêt : anti-crown-shyness** · `bug`, **bloque un test** (xfail). Les marqueurs sont additifs là où les envelopes se chevauchent (~3:1 côté voisin) → les couronnes poussent *l'une vers l'autre*. Fix : densité spatiale **uniforme** sur la région d'union. (cf. mémoire `project_forest_marker_density.md`)
+3. **#40 — métrique de continuation d'axe principal** · arme le filet ✓/✗ : `main_axis_continuation_rate` + borne par espèce dans `literature.yaml`, pour qu'un conifère décapité soit flaggé. Extension de #32 ; **fournit la mesure pour valider #36**.
+4. **#36 — couronne de pin clairsemée** · réalisme. BH winner-take-all → ~90 % des latéraux du pin reçoivent zéro flux. À regarder : split acropète en cône étroit, `shedding`/`k_absorption`, plancher de flux éventuel. Mesuré par #40.
+5. **#37 — light grid en diamètres pure-pipe** · cohérence light↔geom, second-ordre, petit. Passer `vigor_diameter_gain` à travers `rebuild_from_*`. Bon « warm-up ».
+6. **#29 — visualiseur des internes de sim** · observabilité de la boucle (marqueurs/envelope/bourgeons/light, timeline). Capture opt-in. Aurait aidé #24 ; accélère #36/#41.
+7. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7).
+8. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
+9. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
 
 ## Fait
 
-- #1 — harness de diagnostic (métriques d'arbre générées)
-- #2 — phyllotaxie distique explicite (bourgeon unique, alternance 180°)
-- #3 — biais de débourrement (acrotone / mésotone / basitone)
-- #4 — blade de feuille paramétrique (forme + marge), avec suivi #18
-- #8 — évasement racinaire à la base du tronc (expansion radiale + contreforts ondulés optionnels, variation par arbre) ; polish au rendu, couche sim intacte (PR #21)
-- #9 — variation d'écorce mélangée par `Internode.diameter` (teinte jeune → mature → sénescente, COLOR_0 par sommet ; pilotée par le diamètre, couche sim intacte) (PR #22)
-- #10 — fondation temporelle / axe phénologique : horloge en années fractionnaires (`sim/clock.py`), `max_iterations` → `dt_years` + `max_simulation_years`, `birth_iteration` → `birth_time`, `tau_iterations` → `tau_years`, fenêtre de croissance annuelle `annual_growth_period`, suppression de `Bud.age`. Contrat d'invariance : à `dt_years=1.0` les arbres sont bit-identiques (goldens inchangés) (PR #23)
-- Outillage (hors issue) — config ruff + CI GitHub Actions + refactor du simulateur (PR #19)
+| # | Livré | PR |
+|---|---|---|
+| #1 | Harness de diagnostic (métriques d'arbre) | #13 |
+| #2 | Phyllotaxie distique (bourgeon unique, 180°) | #15 |
+| #3 | Biais de débourrement (acro/méso/basitone) | #16 |
+| #4 | Blade de feuille paramétrique (forme + marge) | #17, #18 |
+| #8 | Évasement racinaire (+ contreforts ondulés) | #21 |
+| #9 | Variation d'écorce par `Internode.diameter` | #22 |
+| #10 | Axe temporel / phénologie (années fractionnaires, `Clock`) | #23 |
+| #20 | Longueur d'internode pilotée par la vigueur (flux BH continu) | #31 |
+| #24 | Phyllotaxie : ordinal **par axe** (azimut brouillé par `node_index` global) | #28 |
+| #25 | Test phyllotaxie au grain fin (divergence successive par axe) | #28 |
+| #26 | Loader config récursif (`_coerce`) + fix coercion overrides forêt | #30 |
+| #32 | Bornes de littérature par espèce (`literature.yaml`) | #43 |
+| #33 | Bug rendu : enroulement des triangles inversé (écorce culled en glTF) | #38 |
+| #35 | Bug phyllotaxie : rotation inter-verticille (verticilles empilés) | #39 |
+| — | Outillage : ruff + CI + refactor simulateur | #19 |
 
-## Reste à faire (dans l'ordre)
-
-Revue transversale du 2026-05-29 (`2026-05-29-codebase-review.md`) — trois nouvelles priorités passent en tête du backlog existant.
-
-Évaluation botanique + informatique du 2026-05-29 (première revue de la chaîne **geom→render→export**, jamais auditée jusque-là) — trois éléments de plus : un **bug de rendu confirmé** (#33), un **bug de phyllotaxie** (#35), et l'**épinastie** (#34, réalisme de la ramure mature, débloquée par #10).
-
-1. ~~#24 — **bug phyllotaxie**~~ ✅ **FAIT** : l'azimut de divergence était piloté par un compteur `node_index` **global** (entrelacé entre chaînes depuis le refactor step-major), donc spirale / décussé / distique corrects *dans la fonction* mais brouillés *par axe sur l'arbre*. Correctif livré : un ordinal **par axe** (`Bud.axis_node_ordinal`) — le terminal hérite `parent+1`, les latéraux/réserves repartent à 0, le latéral promu (sympodial) hérite l'ordinal de l'axe parent ; `node_index` conservé pour le salage RNG / identité. Précondition levée pour que pin / érable / sapin « lisent » vrai.
-2. ~~#25 — test au grain fin~~ ✅ **FAIT** (livré avec #24) : `tests/sim/test_phyllotaxy_per_axis.py` fait pousser de vrais arbres et asserte l'angle de divergence *successif par axe* + parité décussé/distique, mesuré dans le repère d'émission (jauge-exacte). Échoue franchement sur le code pré-correctif, garde contre la régression.
-3. ~~#26 — loader config récursif~~ ✅ **FAIT** (PR #30) : les 6 blocs de coercion manuels de `load_config` + le doublon `forest.py` remplacés par un loader récursif unique `_coerce` (descend dans les champs dataclass, normalise les tuples avec cast int/float + déballage `Optional`, rejette les clés inconnues avec le chemin pointé ; types résolus via `typing.get_type_hints`). Bug latent corrigé : le chemin des overrides par-graine de `per_tree_config` ne coerçait **rien** (passage direct par `replace()`), donc un override `sim.bud_break_bias` (dict) ou `sim.annual_growth_period` (list) survivait non-coercé en mode forêt — le cas dict plantait même `__post_init__`. Les deux points d'entrée partagent désormais `_coerce`. Garde de régression : `tests/sim/test_forest_species.py::test_forest_override_coerces_bud_break_and_growth_period`. Dé-risque #20 et #14.
-4. #20 — longueur d'internode pilotée par la vigueur (flux Borchert-Honda continu ; retire `age_factor` + le cap `n_substeps_max`). Rend les quantités de croissance émergentes plutôt qu'imposées. S'appuie sur #10 (fait) pour démêler le proxy itération-comme-temps.
-5. #33 — **bug rendu (enroulement des triangles)** : tous les triangles des tubes (et des obstacles) sont enroulés à l'envers — la normale géométrique est l'opposé de la normale stockée (orientée vers l'extérieur). Confirmé sur `pine2.glb` : 23 312 / 23 320 faces d'écorce vers l'intérieur (produit scalaire ≈ −0,99). En glTF 2.0 les faces avant sont CCW, donc tout viewer conforme avec back-face culling **élimine l'écorce**. Masqué jusqu'ici : matériau écorce simple-face, preview matplotlib en `abs(n·L)`, aucun test n'asserte l'enroulement. Correctif : réordonner les indices (`geom/tubes.py:288-299`, `geom/obstacle_geom.py:74-82`) + retourner le cap (`tubes.py:345`) + test de régression winding↔normale. Correction de correctness sur du livrable — à faire tôt.
-6. ~~#35 — **bug phyllotaxie (verticilles)**~~ ✅ **FAIT** (PR #39) : le mode `whorled` n'appliquait aucune rotation inter-verticille — Pine (`whorl_count=5`, `divergence=72°=360/5`) empilait tous les verticilles sur 5 azimuts (5 « rangs » verticaux). Correctif sur le patron de `decussate` : un décalage d'un demi-pas `(π/k)·(node_index % 2)` ajouté au `base_azimuth` verticillé (`phyllotaxy.py`), donc les verticilles pairs/impairs alternent sur deux grilles décalées de 180°/k → 2k azimuts entrelacés. Garde de régression dans `test_phyllotaxy_per_axis.py` : la config pin passe de 5 à >5 azimuts distincts (jitter 0, lumière off → jauge-exacte). **Nuance importante** : l'entrelacement est corrigé au niveau de la *primitive / des bourgeons*, mais n'apparaît **pas** dans la silhouette rendue du pin — l'arbre pousse en masse récursive de latéraux (le tronc `is_main_axis` ≈ 2 entre-nœuds, donc pas de « rangs » verticillés globaux à entrelacer) et l'azimut *poussé* est gouverné par la perception spatiale (`w_perception=1.0`), pas par la graine phyllotaxique. Réduire la perception pour exposer l'entrelacement a été investigué (rendus avant/après) puis **écarté** : ça densifie la couronne sans révéler de rangs, et forcerait un re-pin du golden pour un effet invisible. Golden du pin inchangé (géométrie bit-identique). Même classe de défaut que #24 (« correct dans la fonction, faux sur l'arbre »).
-7. #32 — sourcer les bornes de littérature de `MetricRanges` depuis un manifeste cité (`configs/literature.yaml`, par espèce + fallback global) + script `scripts/fetch_botany_sources.py` pour télécharger les PDF botaniques (cache gitignoré, valeurs curées à la main). Branche le flag ✓/✗ de `diagnose` sur des valeurs sourcées et **par espèce** — le maillon « valeurs de référence » de la boucle empirique auto-correctrice. S'appuie sur #1 (harness) ; outille directement la recalibration de #20.
-8. #34 — **épinastie** : la plagiotropie (`tropisms.py:46,54-73`) est un mélange à poids fixe par pas, sans dépendance à l'âge ; une branche atteint son angle plagiotrope final dès le premier nœud. Faire monter le poids effectif avec l'âge de la branche (`t - birth_time`, dispo via #10) pour reproduire la ramure mature arquée. Débloquée par #10 (fait) ; signalée dans `botany/simulator-gap-analysis.md` §4 mais jamais tracée. Recouvre la même boucle de croissance que #20.
-9. #14 — promouvoir les feuilles en attribut de `Node` (`Leaf` + `LeafState`). Refactor architectural, débloque tout ce qui suit côté foliage. La fondation temporelle (#10) étant en place, `LeafState` peut intégrer `leaf_age` en années dès sa conception.
-10. #6 puis #5, #7 — la suite foliage, construite sur #10 (fait) + #14 (donc `LeafState` conçu une seule fois).
-11. #11, #12 — beaucoup plus tard. La phénologie (#10) étant posée, #11 (croissance déterminée + fleurs, événement saisonnier) n'est plus bloqué côté infrastructure temporelle.
+> **Notes de boucle empirique** (les bugs « corrects dans la fonction, faux sur l'arbre ») :
+> #24 — `node_index` global entrelacé entre chaînes (refactor step-major) ; correctif : ordinal par axe (`Bud.axis_node_ordinal`).
+> #35 — entrelacement corrigé sur la primitive mais **invisible** au rendu du pin (azimut poussé gouverné par `w_perception`, golden inchangé).
+> #20 a engendré #36/#37 et motivé #40.
