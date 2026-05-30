@@ -97,6 +97,22 @@ def _axis_chains(root):
     return chains
 
 
+def _whorl_member_azimuths(tree):
+    """All lateral-bud azimuths (deg, in the emission frame) across every node on
+    every anatomical axis. For whorled mode each node contributes whorl_count
+    members; binning these across successive whorls reveals whether the whorls
+    interleave or collapse onto a single set of ranks."""
+    azs = []
+    for chain in _axis_chains(tree.root):
+        for node in chain:
+            if node.terminal_bud is None or not node.lateral_buds:
+                continue
+            g = node.terminal_bud.direction
+            for bud in node.lateral_buds:
+                azs.append(_base_azimuth_deg(bud.direction, g) % 360.0)
+    return azs
+
+
 def _divergence_steps(tree):
     """Wrapped azimuth steps (deg) between successive nodes' first laterals along
     every anatomical axis."""
@@ -162,3 +178,28 @@ def test_decussate_alternates_90_on_every_axis():
 def test_distichous_flips_180_on_every_axis():
     """Distichous: successive same-axis nodes flip ~180° (2-ranked)."""
     _assert_mode("distichous", {}, 180.0)
+
+
+def test_whorled_interleaves_across_successive_whorls():
+    """Issue #35: successive whorls must be rotationally offset so members
+    interleave radially instead of stacking into whorl_count vertical ranks.
+
+    Pine (whorl_count=5, divergence=72°=360/5) is the degenerate case the bug
+    exposed: with no inter-whorl offset every whorl lands on the same 5 azimuths,
+    so all measured member azimuths collapse to exactly whorl_count distinct
+    directions. The half-spacing alternation offsets odd whorls by 36°, so the
+    union across successive whorls occupies 2·whorl_count directions.
+
+    Jitter is 0 in _make_cfg, so emission-frame azimuths are exact and bin to
+    nearest degree cleanly (the per-axis oracle is gauge-exact to <0.01°)."""
+    whorl_count = 5
+    extra = {"whorl_count": whorl_count, "divergence_angle_deg": 72.0}
+    distinct_by_seed = []
+    for seed in SEEDS:
+        tree = simulate(_make_cfg("whorled", extra, seed))
+        binned = {round(a) % 360 for a in _whorl_member_azimuths(tree)}
+        distinct_by_seed.append(len(binned))
+    assert all(n > whorl_count for n in distinct_by_seed), (
+        f"whorled azimuths stack into <= whorl_count ranks: distinct directions "
+        f"per seed = {distinct_by_seed} (expected > {whorl_count})"
+    )
