@@ -218,3 +218,13 @@ def test_index_html_has_debug_controls(client):
         "layer-buds-toggle", "layer-shed-toggle",
     ):
         assert f'id="{el_id}"' in text, f"missing debug control id: {el_id}"
+
+
+def test_app_js_has_debug_overlay_logic(client):
+    body = client.get("/static/app.js").text
+    for sym in (
+        "fetchDebugTimeline", "buildDebugLayers", "setFrame",
+        "togglePlay", "debug-capture-toggle", "timeline-slider",
+        "THREE.Points", "BufferGeometry",
+    ):
+        assert sym in body, f"missing app.js debug symbol: {sym}"
