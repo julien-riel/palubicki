@@ -18,6 +18,15 @@ class MarkerCloud:
     def alive_count(self) -> int:
         return int(self._alive.sum())
 
+    @property
+    def positions(self) -> np.ndarray:
+        """All marker positions in original index space (alive or dead)."""
+        return self._positions
+
+    def alive_mask(self) -> np.ndarray:
+        """Copy of the per-marker alive boolean mask (original index space)."""
+        return self._alive.copy()
+
     def alive_positions(self) -> np.ndarray:
         return self._positions[self._alive]
 
