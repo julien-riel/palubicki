@@ -173,13 +173,14 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
 def build_rachis_primitive(
     tree, *, material, leaf_size, foliage_depth, leaf_kind, leaflet_specs,
     ring_sides=5, needle_cluster_spacing=0.0, sun_shade_k=0.0, splay_deg=0.0,
+    droop_deg=0.0,
 ):
     """Thin stem tubes for petiole + rachis(es), lifted at every selected leaf
     site. Empty primitive for leaf_kind='simple' (no rachis)."""
     # Function-local import to avoid a leaves<->compound_leaf import cycle.
     from palubicki.geom.leaves import (
-        _basis_perpendicular_to,
         compute_effective_leaf_size,
+        leaf_basis,
         selected_leaves,
     )
 
@@ -208,16 +209,14 @@ def build_rachis_primitive(
         needle_cluster_spacing=needle_cluster_spacing,
     )
     splay_rad = math.radians(splay_deg)
+    droop_rad = math.radians(droop_deg)
     pos_chunks, nrm_chunks, uv_chunks, idx_chunks = [], [], [], []
     cursor = 0
     for leaf, stem_dir, source_iod, render_pos in records:
         eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
-        d = np.asarray(stem_dir, dtype=np.float64)
-        d = d / np.linalg.norm(d)
-        right, forward = _basis_perpendicular_to(d)
-        az = leaf.azimuth
-        rot_axis_u = math.cos(az) * right + math.sin(az) * forward
-        leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
+        rot_axis_u, leaf_up, _ = leaf_basis(
+            stem_dir, leaf.azimuth, splay_rad, droop_rad
+        )
         center = np.asarray(render_pos, dtype=np.float64)
 
         def lift(uv, _center=center, _u=rot_axis_u, _up=leaf_up, _eff=eff):

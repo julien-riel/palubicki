@@ -11,6 +11,40 @@ from palubicki.sim.tree import BudState, Internode, Leaf, LeafState, Node, Tree
 
 _MAX_CLUSTERS_PER_INTERNODE = 8
 
+_DOWN = np.array([0.0, -1.0, 0.0])
+
+
+def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0):
+    """The per-leaf orthogonal-ish frame: (rot_axis_u, leaf_up, rot_axis_w).
+
+    rot_axis_u is the lateral (blade-width) axis at phyllotactic ``azimuth``;
+    rot_axis_w is the blade normal; leaf_up is the petiole / blade-length axis,
+    tilted off the stem by ``splay_rad``. ``droop_rad`` > 0 rigidly rotates all
+    three axes toward gravity (-Y), so the petiole and blade bend down together
+    while the rot_axis_u<->leaf_up angle (the cos(splay) blade-area shear) is
+    preserved. droop_rad == 0 reproduces the legacy inline math exactly.
+    """
+    d = np.asarray(direction, dtype=np.float64)
+    d = d / np.linalg.norm(d)
+    right, forward = _basis_perpendicular_to(d)
+    rot_axis_u = math.cos(azimuth) * right + math.sin(azimuth) * forward
+    rot_axis_w = -math.sin(azimuth) * right + math.cos(azimuth) * forward
+    leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
+    if droop_rad != 0.0:
+        k = np.cross(leaf_up, _DOWN)
+        kn = float(np.linalg.norm(k))
+        if kn > 1e-9:
+            k = k / kn
+            c, s = math.cos(droop_rad), math.sin(droop_rad)
+
+            def _rot(v):
+                return v * c + np.cross(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
+
+            rot_axis_u = _rot(rot_axis_u)
+            leaf_up = _rot(leaf_up)
+            rot_axis_w = _rot(rot_axis_w)
+    return rot_axis_u, leaf_up, rot_axis_w
+
 
 def compute_effective_leaf_size(
     internode: Internode | None,
@@ -222,7 +256,7 @@ def selected_leaves(
 
 def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
                         leaflets, blade_pos_unit, blade_uv, blade_idx,
-                        out_pos, out_norm, out_uv, out_idx, base):
+                        out_pos, out_norm, out_uv, out_idx, base, droop_rad=0.0):
     """Lift one (possibly compound) leaf into its leaflet blades at ``center``.
 
     Reconstructs the leaf basis from the render-time stem ``direction`` + the
@@ -235,17 +269,12 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
     The simple identity leaflet ``((0,0), 0.0, 1.0)`` reproduces the legacy
     single-blade (or cross, for ``n_planes==2``) geometry byte-for-byte.
     """
-    d = np.asarray(direction, dtype=np.float64)
-    d = d / np.linalg.norm(d)
-    right, forward = _basis_perpendicular_to(d)
-
+    rot_axis_u, leaf_up, rot_axis_w = leaf_basis(
+        direction, azimuth, splay_rad, droop_rad
+    )
     blade_v_count = blade_pos_unit.shape[0]
     blade_i_count = blade_idx.shape[0]
     leaf_center = np.asarray(center, dtype=np.float64)
-
-    rot_axis_u = math.cos(azimuth) * right + math.sin(azimuth) * forward
-    rot_axis_w = -math.sin(azimuth) * right + math.cos(azimuth) * forward
-    leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
 
     per_leaflet_v = n_planes * blade_v_count
     per_leaflet_i = n_planes * blade_i_count
