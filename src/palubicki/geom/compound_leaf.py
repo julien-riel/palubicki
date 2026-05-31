@@ -35,8 +35,16 @@ def compound_layout(
     rachis_length: float,
     petiole_length: float,
     rachis_radius: float,
+    petiole_taper: float = 1.0,
 ) -> CompoundLayout:
     if kind == "simple":
+        if petiole_length > 0.0:
+            r0 = rachis_radius
+            r1 = rachis_radius * petiole_taper
+            return CompoundLayout(
+                leaflets=[((0.0, petiole_length), 0.0, 1.0)],
+                rachis_segments=[((0.0, 0.0), (0.0, petiole_length), r0, r1)],
+            )
         return CompoundLayout(leaflets=[((0.0, 0.0), 0.0, 1.0)], rachis_segments=[])
     if kind == "pinnate":
         return _pinnate(leaflet_count, terminal_leaflet, rachis_length,
