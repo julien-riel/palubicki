@@ -119,6 +119,9 @@ def _axis_orders(root: Node) -> dict[int, int]:
 
 # ── Geometry helpers ──────────────────────────────────────────────────────
 
+_UP = np.array([0.0, 1.0, 0.0])
+
+
 def _tangent(iod: Internode) -> np.ndarray:
     v = np.asarray(iod.child_node.position - iod.parent_node.position,
                    dtype=np.float64)
@@ -243,6 +246,28 @@ def _longest_path_internodes(root: Node) -> int:
     return depth(root)
 
 
+def _leader_chain(root: Node) -> list[Internode]:
+    """The leader as an ordered list of internodes: the longest is_main_axis
+    continuation chain rooted at the trunk base. Empty when the tree has no
+    internodes.
+
+    Degenerate sim output (no main-axis-flagged trunk) falls back to the longest
+    chain rooted at the base so callers still get a value. Reuses
+    _walk_axis_chains (the is_main_axis continuation walker).
+    """
+    best: list[Internode] = []
+    for chain in _walk_axis_chains(root):
+        head = chain[0]
+        if (head.parent_node.parent_internode is None and head.is_main_axis
+                and len(chain) > len(best)):
+            best = chain
+    if not best:
+        for chain in _walk_axis_chains(root):
+            if chain[0].parent_node.parent_internode is None and len(chain) > len(best):
+                best = chain
+    return best
+
+
 def _main_axis_continuation_rate(root: Node) -> float:
     """Leader length as a fraction of the longest root-to-leaf path, both in
     internodes. 1.0 = a perfectly monopodial leader IS the deepest axis;
@@ -255,25 +280,36 @@ def _main_axis_continuation_rate(root: Node) -> float:
     species (maple) sit lower and noisier as the central leader naturally
     gives way. NaN for an internode-less tree.
 
-    Reuses _walk_axis_chains (the is_main_axis continuation walker) to find
-    the leader: the longest chain rooted at the trunk base that starts on the
-    main axis.
+    Topological by construction (it counts internodes, ignoring their
+    orientation): a leaning or arched leader stays the deepest main axis, so it
+    reads ~1.0 here. The geometric companion that catches a non-vertical leader
+    is _leader_deviation_deg (#48).
     """
     longest = _longest_path_internodes(root)
     if longest == 0:
         return float("nan")
-    leader = 0
-    for chain in _walk_axis_chains(root):
-        head = chain[0]
-        if head.parent_node.parent_internode is None and head.is_main_axis:
-            leader = max(leader, len(chain))
-    if leader == 0:
-        # Degenerate sim output: no main-axis-flagged trunk. Fall back to the
-        # longest chain rooted at the base so the metric still returns a value.
-        for chain in _walk_axis_chains(root):
-            if chain[0].parent_node.parent_internode is None:
-                leader = max(leader, len(chain))
-    return leader / longest
+    return len(_leader_chain(root)) / longest
+
+
+def _leader_deviation_deg(root: Node) -> float:
+    """Mean angle (degrees) between each leader internode's tangent and vertical
+    (+Y). The geometric companion to _main_axis_continuation_rate (#40): that
+    metric asks whether the leader stays the deepest axis (topology); this asks
+    whether the leader stands vertical or leans/arches toward horizontal
+    (orientation). An upright excurrent conifer spire runs low (~5-20°); a
+    leaning or arching leader runs high. NaN when the tree has no leader.
+
+    Unweighted across the leader's internodes (NOT length-weighted): an arch
+    lives in the short distal internodes near the apex, so length-weighting
+    would drown it under the few long proximal internodes and miss exactly the
+    defect this metric exists to catch (#48 — #43's preset recalibration arched
+    the conifer leaders).
+    """
+    chain = _leader_chain(root)
+    if not chain:
+        return float("nan")
+    angles = [_angle_deg(_tangent(iod), _UP) for iod in chain]
+    return float(np.mean(angles))
 
 
 def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -485,6 +521,7 @@ def compute_metrics(
     out["trunk_base_diameter"] = _trunk_base_diameter(tree.root)
     out["crown_radius"] = crown_radius
     out["main_axis_continuation_rate"] = _main_axis_continuation_rate(tree.root)
+    out["leader_deviation_deg"] = _leader_deviation_deg(tree.root)
     if cfg is not None:
         out["total_leaf_area"] = _total_leaf_area(tree, cfg)
     else:
@@ -502,6 +539,7 @@ _SCALAR_KEYS = (
     "trunk_base_diameter",
     "crown_radius",
     "main_axis_continuation_rate",
+    "leader_deviation_deg",
     "total_leaf_area",
     "internode_length_proximal_mean",
     "internode_length_distal_mean",
@@ -610,6 +648,10 @@ class MetricRanges:
     # populated per-species from the manifest — excurrent conifers high,
     # decurrent species lower.
     main_axis_continuation_rate: tuple[float, float] | None = None
+    # Leader verticality / excurrent form (#48). Default None (no flag);
+    # populated per-species — excurrent conifers must stand near-vertical
+    # (low deviation), decurrent species tolerate a leaning leader (looser).
+    leader_deviation_deg: tuple[float, float] | None = None
 
     @classmethod
     def from_species(cls, name: str | None) -> MetricRanges:
@@ -714,7 +756,8 @@ def format_report(
 
     lines.append("Architecture")
     for k in ("tree_height", "trunk_base_diameter", "crown_radius",
-              "main_axis_continuation_rate", "total_leaf_area",
+              "main_axis_continuation_rate", "leader_deviation_deg",
+              "total_leaf_area",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))

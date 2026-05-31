@@ -112,3 +112,42 @@ def test_each_species_has_main_axis_continuation_bound():
         assert "main_axis_continuation_rate" in species[name], (
             f"{name} missing main_axis_continuation_rate bound"
         )
+
+
+def test_leader_deviation_deg_is_architectural_field_default_none():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    fields = {f.name for f in __import__("dataclasses").fields(MetricRanges)}
+    assert "leader_deviation_deg" in fields
+    # Default None -> no flag unless a species override supplies a bound.
+    assert MetricRanges().leader_deviation_deg is None
+    assert MetricRanges.from_species(None).leader_deviation_deg is None
+
+
+def test_leader_deviation_deg_per_species_bounds():
+    from palubicki.sim.diagnostics import MetricRanges
+
+    # Excurrent conifers stand near-vertical (tight upper bound); decurrent /
+    # weeping species tolerate a wandering leader (looser). The geometric
+    # companion to main_axis_continuation_rate (#48): #43's sparse proxy arched
+    # the conifer leaders, which this bound now catches.
+    assert MetricRanges.from_species("fir").leader_deviation_deg == (0.0, 20.0)
+    assert MetricRanges.from_species("pine").leader_deviation_deg == (0.0, 20.0)
+    assert MetricRanges.from_species("birch").leader_deviation_deg == (0.0, 30.0)
+    assert MetricRanges.from_species("oak").leader_deviation_deg == (0.0, 35.0)
+    assert MetricRanges.from_species("maple").leader_deviation_deg == (0.0, 45.0)
+
+
+def test_each_species_has_leader_deviation_bound():
+    from importlib import resources
+
+    import yaml
+
+    data = yaml.safe_load(
+        resources.files("palubicki.configs").joinpath("literature.yaml").read_text()
+    )
+    species = data["ranges"]["species"]
+    for name in ("birch", "fir", "maple", "oak", "pine"):
+        assert "leader_deviation_deg" in species[name], (
+            f"{name} missing leader_deviation_deg bound"
+        )

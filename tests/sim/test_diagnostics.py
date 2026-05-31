@@ -746,6 +746,81 @@ def test_main_axis_continuation_rate_decapitated_leader_is_low():
     assert m["main_axis_continuation_rate"] == pytest.approx(0.2)
 
 
+# ── leader_deviation_deg (#48) ─────────────────────────────────────────────
+
+def test_leader_deviation_straight_vertical_is_zero():
+    """A perfectly vertical monopodial leader (the pectinate main axis runs
+    straight up +Y) → 0° mean deviation from vertical."""
+    tree = _make_pectinate_3level()
+    m = compute_metrics(tree)
+    assert m["leader_deviation_deg"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_leader_deviation_leaning_leader_equals_tilt():
+    """Every leader internode tilts 30° from vertical → mean deviation 30°."""
+    a30 = math.radians(30.0)
+    step = np.array([math.sin(a30), math.cos(a30), 0.0])
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    prev = root
+    pos = np.array([0.0, 0.0, 0.0])
+    iods = []
+    for _ in range(4):
+        pos = pos + step
+        nxt = Node(position=pos.copy())
+        iods.append(_link(prev, nxt, is_main_axis=True))
+        prev = nxt
+    tree.all_internodes.extend(iods)
+    m = compute_metrics(tree)
+    assert m["leader_deviation_deg"] == pytest.approx(30.0, abs=1e-6)
+
+
+def test_leader_deviation_arch_registers_distal_bend():
+    """Leader goes vertical for two long internodes, then arches over with two
+    short near-horizontal internodes. Unweighted mean must register the arch
+    (~45°), NOT be drowned out by the long vertical proximal internodes —
+    that's the whole point of not length-weighting."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    n1 = Node(position=np.array([0.0, 5.0, 0.0]))       # long vertical
+    n2 = Node(position=np.array([0.0, 10.0, 0.0]))      # long vertical
+    n3 = Node(position=np.array([0.2, 10.2, 0.0]))      # short, ~45°
+    n4 = Node(position=np.array([0.4, 10.4, 0.0]))      # short, ~45°
+    tree = Tree(root=root)
+    tree.all_internodes.extend([
+        _link(root, n1, is_main_axis=True),
+        _link(n1, n2, is_main_axis=True),
+        _link(n2, n3, is_main_axis=True),
+        _link(n3, n4, is_main_axis=True),
+    ])
+    m = compute_metrics(tree)
+    # angles: 0, 0, 45, 45 -> mean 22.5. A length-weighted mean would be ~1.3°.
+    assert m["leader_deviation_deg"] == pytest.approx(22.5, abs=1e-6)
+
+
+def test_leader_deviation_ignores_laterals():
+    """A vertical leader with a horizontal lateral → deviation reflects the
+    leader only (0°), not the 90° lateral."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    mid = Node(position=np.array([0.0, 1.0, 0.0]))
+    top = Node(position=np.array([0.0, 2.0, 0.0]))
+    lat = Node(position=np.array([1.0, 1.0, 0.0]))  # horizontal lateral
+    tree = Tree(root=root)
+    tree.all_internodes.extend([
+        _link(root, mid, is_main_axis=True),
+        _link(mid, top, is_main_axis=True),
+        _link(mid, lat, is_main_axis=False),
+    ])
+    m = compute_metrics(tree)
+    assert m["leader_deviation_deg"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_leader_deviation_empty_tree_is_nan():
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    m = compute_metrics(tree)
+    assert math.isnan(m["leader_deviation_deg"])
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir"])
 def test_main_axis_continuation_rate_sane_per_species(species):
@@ -766,3 +841,28 @@ def test_main_axis_continuation_rate_sane_per_species(species):
     rate = m["main_axis_continuation_rate"]
     assert not math.isnan(rate), f"{species}: main_axis_continuation_rate is NaN"
     assert rate >= 0.3, f"{species}: main_axis_continuation_rate={rate:.3f} < 0.3"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir"])
+def test_leader_deviation_within_species_bound(species):
+    """Acceptance: every preset's leader stands within its literature
+    leader_deviation_deg band at design density (seed 0). The geometric guard
+    #48 adds — #43's sparse 1000-marker proxy arched the conifer leaders well
+    past these bounds; at the calibrated density they stand upright."""
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.diagnostics import MetricRanges
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species=species)
+    tree = simulate(cfg)
+    m = compute_metrics(tree, cfg=cfg)
+    dev = m["leader_deviation_deg"]
+    bound = MetricRanges.from_species(species).leader_deviation_deg
+    assert bound is not None, f"{species}: no leader_deviation_deg bound"
+    assert not math.isnan(dev), f"{species}: leader_deviation_deg is NaN"
+    lo, hi = bound
+    assert lo <= dev <= hi, f"{species}: leader_deviation_deg={dev:.1f} outside {bound}"

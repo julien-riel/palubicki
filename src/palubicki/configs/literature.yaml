@@ -143,6 +143,10 @@ ranges:
         value: [0.4, 1.0]
         source: flora_dims
         page: "B. papyrifera excurrent when young (single leader); sim ~0.63-0.67"
+      leader_deviation_deg:  # weeping pioneer — leader fairly upright but drooping
+        value: [0.0, 30.0]
+        source: flora_dims
+        page: "B. papyrifera monopodial-pleureur; leader near-vertical when young, sim ~12-16deg"
       reference:
         wood_density_g_cm3:
           value: [0.48, 0.55]
@@ -169,6 +173,10 @@ ranges:
         value: [0.6, 1.0]
         source: flora_dims
         page: "A. balsamea classic excurrent conifer (narrow conical spire); sim ~1.0"
+      leader_deviation_deg:  # strongly excurrent spire — leader stands near-vertical
+        value: [0.0, 20.0]
+        source: flora_dims
+        page: "A. balsamea narrow conical spire; vertical leader, sim ~6-7deg. #43 proxy arched it"
       reference:
         wood_density_g_cm3:
           value: [0.33, 0.40]
@@ -195,6 +203,10 @@ ranges:
         value: [0.2, 1.0]
         source: flora_dims
         page: "A. saccharum decurrent (rounded crown, no single leader); sim ~0.33-0.93, low+noisy"
+      leader_deviation_deg:  # decurrent — leader naturally wanders/gives way, loosest bound
+        value: [0.0, 45.0]
+        source: flora_dims
+        page: "A. saccharum decurrent rounded crown; leader not strongly vertical, sim ~8-9deg"
       reference:
         wood_density_g_cm3:
           value: [0.61, 0.66]
@@ -221,6 +233,10 @@ ranges:
         value: [0.45, 1.0]
         source: flora_dims
         page: "Q. rubra excurrent when young (central leader to ~mid-life); sim ~1.0. Bug drove it to ~0.25"
+      leader_deviation_deg:  # young excurrent, becomes decurrent — moderate tolerance
+        value: [0.0, 35.0]
+        source: flora_dims
+        page: "Q. rubra central leader when young, decurrent with age; sim ~10deg"
       reference:
         wood_density_g_cm3:
           value: [0.63, 0.70]
@@ -247,6 +263,10 @@ ranges:
         value: [0.5, 1.0]
         source: flora_dims
         page: "P. strobus excurrent (whorls off a dominant leader); sim ~0.67-0.97. Co-located-bud bug drove it far lower"
+      leader_deviation_deg:  # excurrent spire — strict monopodial leader stands vertical
+        value: [0.0, 20.0]
+        source: flora_dims
+        page: "P. strobus straight monopodial spire; sim ~6-9deg. #43 sparse proxy starved+arched it"
       reference:
         wood_density_g_cm3:
           value: [0.34, 0.38]
