@@ -16,7 +16,8 @@ from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_fo
 from palubicki.edit.schema import build_schema
 from palubicki.export.gltf import ExportError, write_glb_to_bytes
 from palubicki.geom.builder import build_mesh
-from palubicki.sim.simulator import simulate
+from palubicki.sim.simulator import simulate, simulate_forest
+from palubicki.sim.debug_capture import DebugCollector
 
 logger = logging.getLogger("palubicki.edit")
 
@@ -24,6 +25,7 @@ logger = logging.getLogger("palubicki.edit")
 def create_app(initial_config: Config) -> FastAPI:
     app = FastAPI(title="palubicki edit", version="0.1.0")
     app.state.initial_config = initial_config
+    app.state.last_debug = None
 
     @app.get("/api/schema")
     def get_schema() -> dict:
@@ -49,6 +51,7 @@ def create_app(initial_config: Config) -> FastAPI:
     @app.post("/api/generate")
     async def post_generate(request: Request):
         payload = await request.json()
+        debug = bool(payload.pop("debug", False))
         try:
             cfg = load_config(
                 yaml_path=None,
@@ -59,8 +62,13 @@ def create_app(initial_config: Config) -> FastAPI:
             logger.warning("generate: config error: %s", e)
             return JSONResponse(status_code=400, content={"error": str(e)})
         t0 = time.perf_counter()
+        collector = DebugCollector() if debug else None
         try:
-            tree = await asyncio.to_thread(simulate, cfg)
+            if collector is not None:
+                forest = await asyncio.to_thread(simulate_forest, cfg, collector)
+                tree = forest.trees[0]
+            else:
+                tree = await asyncio.to_thread(simulate, cfg)
             mesh = build_mesh(tree, cfg)
             data = write_glb_to_bytes(mesh, asset_meta={"seed": cfg.seed})
         except ExportError as e:
@@ -72,10 +80,21 @@ def create_app(initial_config: Config) -> FastAPI:
                 status_code=500,
                 content={"error": f"{type(e).__name__}: {e}"},
             )
+        app.state.last_debug = collector.timeline() if collector is not None else None
         n_tris = sum(p.indices.shape[0] // 3 for p in mesh.primitives)
-        logger.info("generate: %.2fs, %d triangles, %d bytes",
-                    time.perf_counter() - t0, n_tris, len(data))
+        logger.info("generate: %.2fs, %d triangles, %d bytes, debug=%s",
+                    time.perf_counter() - t0, n_tris, len(data), debug)
         return Response(content=data, media_type="model/gltf-binary")
+
+    @app.get("/api/debug")
+    def get_debug():
+        timeline = app.state.last_debug
+        if timeline is None:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "no debug capture available — generate with debug enabled first"},
+            )
+        return JSONResponse(content=timeline)
 
     @app.post("/api/save-yaml")
     async def post_save_yaml(request: Request):
