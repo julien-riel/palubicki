@@ -114,3 +114,12 @@ def _bipinnate(pair_count, leaflets_per, rachis_length, petiole_length, radius):
                 leaflets.append(((ou, ov), sub, lscale))
             side_count += 1
     return CompoundLayout(leaflets=leaflets, rachis_segments=segs)
+
+
+def resolve_leaflet_blade(geom) -> tuple[str, str, float]:
+    """(shape, margin, aspect) for a leaflet: leaflet_* overrides, else inherit
+    the simple-leaf values."""
+    shape = geom.leaflet_shape if geom.leaflet_shape is not None else geom.leaf_shape
+    margin = geom.leaflet_margin if geom.leaflet_margin is not None else geom.leaf_margin
+    aspect = geom.leaflet_aspect if geom.leaflet_aspect is not None else geom.leaf_aspect
+    return shape, margin, aspect

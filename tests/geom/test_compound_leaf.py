@@ -4,10 +4,10 @@ from palubicki.geom.compound_leaf import CompoundLayout, compound_layout
 
 
 def _layout(kind, **kw):
-    base = dict(
-        leaflet_count=5, leaflet_pair_count=3, terminal_leaflet=True,
-        rachis_length=1.5, petiole_length=0.4, rachis_radius=0.045,
-    )
+    base = {
+        "leaflet_count": 5, "leaflet_pair_count": 3, "terminal_leaflet": True,
+        "rachis_length": 1.5, "petiole_length": 0.4, "rachis_radius": 0.045,
+    }
     base.update(kw)
     return compound_layout(kind, **base)
 
@@ -57,3 +57,21 @@ def test_growth_is_linear_in_leaflet_count():
     a = len(_layout("pinnate", leaflet_count=4, terminal_leaflet=False).leaflets)
     b = len(_layout("pinnate", leaflet_count=8, terminal_leaflet=False).leaflets)
     assert b == 2 * a
+
+
+def test_resolve_leaflet_blade_inherits_when_none():
+    from palubicki.config import GeomConfig
+    from palubicki.geom.compound_leaf import resolve_leaflet_blade
+    g = GeomConfig(leaf_shape="ovate", leaf_margin="serrate", leaf_aspect=0.7)
+    shape, margin, aspect = resolve_leaflet_blade(g)
+    assert (shape, margin, aspect) == ("ovate", "serrate", 0.7)
+
+
+def test_resolve_leaflet_blade_overrides():
+    from palubicki.config import GeomConfig
+    from palubicki.geom.compound_leaf import resolve_leaflet_blade
+    g = GeomConfig(
+        leaf_shape="ovate", leaf_margin="serrate", leaf_aspect=0.7,
+        leaflet_shape="lanceolate", leaflet_margin="entire", leaflet_aspect=0.3,
+    )
+    assert resolve_leaflet_blade(g) == ("lanceolate", "entire", 0.3)
