@@ -190,6 +190,9 @@ def _collect_foliage_sites(
         if seg_len < 1e-12:
             sites.append((node_pos, direction, source_iod))
             continue
+        # Clusters clothing the shoot follow the segment they sit on, so this
+        # path deliberately uses the segment tangent rather than the node's
+        # incoming ``direction`` (which can differ on an apex internode).
         seg_dir = seg / seg_len
         n = int(seg_len / needle_cluster_spacing) + 1
         n = max(1, min(_MAX_CLUSTERS_PER_INTERNODE, n))
