@@ -710,3 +710,18 @@ def test_tropism_epinasty_disabled_with_zero_tau_is_valid(tmp_path):
         output=tmp_path / "out.glb",
     )
     assert cfg.tropism.epinasty_tau_years == 0.0
+
+
+def test_needle_cluster_spacing_default_zero():
+    cfg = load_config(yaml_path=None, cli_overrides={}, output=Path("/tmp/x.glb"), species="oak")
+    assert cfg.geom.needle_cluster_spacing == 0.0
+
+
+def test_needle_cluster_spacing_negative_rejected():
+    with pytest.raises(ConfigError, match="needle_cluster_spacing"):
+        load_config(
+            yaml_path=None,
+            cli_overrides={"geom.needle_cluster_spacing": -0.1},
+            output=Path("/tmp/x.glb"),
+            species="oak",
+        )
