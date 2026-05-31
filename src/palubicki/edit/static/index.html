@@ -27,7 +27,7 @@
       </div>
     </aside>
 
-    <section id="viewer">
+    <section id="viewer" aria-label="3D viewer">
       <canvas id="viewer-canvas"></canvas>
       <div class="viewer-overlay">
         <button id="toggle-leaves-btn" type="button">Toggle leaves</button>
@@ -45,7 +45,7 @@
           <label><input id="layer-shed-toggle" type="checkbox" checked /> Shed</label>
         </div>
         <div class="debug-timeline">
-          <button id="timeline-play-btn" type="button">▶</button>
+          <button id="timeline-play-btn" type="button" aria-label="Play">▶</button>
           <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0" />
           <span id="timeline-readout">—</span>
         </div>

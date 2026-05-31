@@ -174,9 +174,28 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   max-width: 60vw;
 }
 
-.debug-toggle { font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 4px; }
-.debug-panel { position: absolute; left: 8px; bottom: 8px; right: 8px; background: rgba(255,255,255,0.9);
-  border: 1px solid #ccc; border-radius: 6px; padding: 8px; font-size: 12px; }
+.debug-toggle {
+  font-size: 12px;
+  color: white;
+  background: rgba(35, 35, 38, 0.9);
+  border-radius: 4px;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.debug-panel {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
 .debug-panel.hidden { display: none; }
 .debug-layers { display: flex; gap: 12px; margin-bottom: 6px; }
 .debug-layers label { display: inline-flex; align-items: center; gap: 4px; }
