@@ -433,28 +433,24 @@ def _trunk_base_diameter(root: Node) -> float:
 # ── Leaf area ─────────────────────────────────────────────────────────────
 
 def _total_leaf_area(tree: Tree, cfg: Config) -> float:
-    """Sum of rendered leaf surface areas across foliage sites.
+    """Sum of rendered leaf surface areas across the selected leaves.
 
-    Each foliage site emits ``cluster_count`` pairs of perpendicular blades.
-    For each pair:
-      * Plane A: basis_u = rot_axis_u, basis_v = leaf_up.  Because
-        ``leaf_up = cos(splay)·d + sin(splay)·rot_axis_u``, the area of the
-        lifted blade is ``unit_blade_area * cos(splay_rad)``.
-      * Plane B: basis_u = rot_axis_w, basis_v = leaf_up.  rot_axis_w is
-        perpendicular to leaf_up, so the area equals ``unit_blade_area * 1.0``.
-
-    The unit blade area is computed once from ``build_blade(length=1, width=aspect, …)``
-    and then scaled by eff_size² per site.
+    Each selected leaf renders one blade-group: ``pair_area`` = unit_blade_area *
+    (cos(splay) [plane A] + 1 if cross-blade [plane B]). The fan that used to
+    multiply by cluster_count is now expressed as cluster_count separate Leaf
+    objects per node, so the per-leaf sum reproduces the pre-refactor total.
     """
     from palubicki.geom.leaf_blade import build_blade
-    from palubicki.geom.leaves import _collect_foliage_sites, compute_effective_leaf_size
+    from palubicki.geom.leaves import compute_effective_leaf_size, selected_leaves
 
     g = cfg.geom
-    sites = _collect_foliage_sites(tree, g.foliage_depth, g.needle_cluster_spacing)
-    if not sites:
+    records = selected_leaves(
+        tree, foliage_depth=g.foliage_depth,
+        needle_cluster_spacing=g.needle_cluster_spacing,
+    )
+    if not records:
         return 0.0
 
-    # Build unit-blade template once to get its 2D area.
     blade_pos, _, _, blade_idx = build_blade(
         length=1.0, width=g.leaf_aspect, shape=g.leaf_shape,
         margin=g.leaf_margin, margin_depth=g.leaf_margin_depth,
@@ -467,20 +463,14 @@ def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     unit_blade_area = float(0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum())
 
     splay_rad = math.radians(g.leaf_splay_deg)
-    # n_planes mirrors the logic in build_leaves_primitive: cross-blade only
-    # for linear (needle) shapes; single plane for all parametric shapes.
     n_planes = 2 if g.leaf_shape == "linear" else 1
-    # Plane A area is reduced by cos(splay_rad) due to the shear from splay.
-    # Plane B area is unchanged (basis_u⊥leaf_up always), but only present
-    # when n_planes == 2.
-    plane_a_factor = math.cos(splay_rad)
     plane_b_factor = 1.0 if n_planes == 2 else 0.0
-    pair_area = unit_blade_area * (plane_a_factor + plane_b_factor)
+    pair_area = unit_blade_area * (math.cos(splay_rad) + plane_b_factor)
 
     total = 0.0
-    for _center, _direction, source_iod in sites:
+    for _leaf, _stem_dir, source_iod, _pos in records:
         eff = compute_effective_leaf_size(source_iod, g.leaf_size, g.leaf_sun_shade_k)
-        total += g.leaf_cluster_count * pair_area * (eff * eff)
+        total += pair_area * (eff * eff)
     return total
 
 
