@@ -228,3 +228,9 @@ def test_app_js_has_debug_overlay_logic(client):
         "THREE.Points", "BufferGeometry",
     ):
         assert sym in body, f"missing app.js debug symbol: {sym}"
+
+
+def test_app_js_regenerate_sends_debug_flag(client):
+    body = client.get("/static/app.js").text
+    # regenerate() must transmit the capture flag, else the server never captures.
+    assert "debug: state.debug.enabled" in body

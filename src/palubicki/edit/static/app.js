@@ -298,7 +298,7 @@ async function regenerate() {
     const r = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state.values),
+      body: JSON.stringify({ ...state.values, debug: state.debug.enabled }),
     });
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
@@ -470,8 +470,12 @@ function buildEnvelopeMesh(env) {
     geo = new THREE.ConeGeometry(1, 1, 24, 1, true);
     geo.translate(0, 0.5, 0);                 // apex at y=1, base at y=0
     geo.scale(rx, ry, rz);
+  } else if (env.shape === "half_ellipsoid") {
+    // Upper hemisphere only (flat bottom at center.y), matching envelope.py.
+    geo = new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    geo.scale(rx, ry, rz);
   } else {
-    geo = new THREE.SphereGeometry(1, 24, 16); // sphere/ellipsoid/half_ellipsoid
+    geo = new THREE.SphereGeometry(1, 24, 16); // sphere / ellipsoid
     geo.scale(rx, ry, rz);
   }
   const mesh = new THREE.Mesh(geo,
