@@ -277,6 +277,19 @@ class GeomConfig:
     petiole_length_ratio: float = field(
         default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.1}}
     )
+    petiole_radius_ratio: float = field(
+        default=0.02, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}}
+    )  # simple-leaf petiole base radius / leaf_size
+    petiole_taper: float = field(
+        default=0.6, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}}
+    )  # petiole tip radius / base radius
+    petiole_sides: int = field(
+        default=4, metadata={"ui": {"min": 3, "max": 12, "step": 1}}
+    )  # petiole tube cross-section polygon sides
+    petiole_droop_deg: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}}
+    )  # rigid downward (-Y) bend of petiole + blade
+    petiole_color: tuple[float, float, float] = (0.32, 0.42, 0.18)
     leaflet_shape: Literal[
         "linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"
     ] | None = None

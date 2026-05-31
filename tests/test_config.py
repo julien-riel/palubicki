@@ -756,3 +756,19 @@ def test_needle_cluster_spacing_negative_rejected():
             output=Path("/tmp/x.glb"),
             species="oak",
         )
+
+
+def test_geom_config_has_petiole_defaults():
+    g = GeomConfig()
+    assert g.petiole_radius_ratio == 0.02
+    assert g.petiole_taper == 0.6
+    assert g.petiole_sides == 4
+    assert g.petiole_droop_deg == 0.0
+    assert g.petiole_color == (0.32, 0.42, 0.18)
+
+
+def test_geom_config_petiole_overrides_construct():
+    # GeomConfig is frozen; override at construction time.
+    g = GeomConfig(petiole_length_ratio=0.25, petiole_droop_deg=15.0)
+    assert g.petiole_length_ratio == 0.25
+    assert g.petiole_droop_deg == 15.0
