@@ -48,3 +48,34 @@ def test_tree_all_leaves_walks_graph():
     child.leaves.append(lc)
     tree = Tree(root=root)
     assert set(map(id, tree.all_leaves())) == {id(lr), id(lc)}
+
+
+import math
+
+from palubicki.config import PhyllotaxyConfig
+from palubicki.sim.phyllotaxy import leaf_azimuths
+
+
+def test_leaf_azimuths_returns_count_floats():
+    cfg = PhyllotaxyConfig(mode="alternate", divergence_angle_deg=137.5)
+    az = leaf_azimuths(cfg, node_index=0, axis_order=0, count=3)
+    assert len(az) == 3
+    assert all(isinstance(a, float) for a in az)
+    # count members fanned evenly 2*pi/count apart from the base.
+    assert math.isclose(az[1] - az[0], 2 * math.pi / 3, rel_tol=1e-9)
+    assert math.isclose(az[2] - az[1], 2 * math.pi / 3, rel_tol=1e-9)
+
+
+def test_leaf_azimuths_advance_with_ordinal():
+    cfg = PhyllotaxyConfig(mode="alternate", divergence_angle_deg=137.5)
+    a0 = leaf_azimuths(cfg, node_index=0, axis_order=0, count=1)[0]
+    a1 = leaf_azimuths(cfg, node_index=1, axis_order=0, count=1)[0]
+    assert math.isclose(a1 - a0, math.radians(137.5), rel_tol=1e-9)
+
+
+def test_leaf_azimuths_distichous_on_plagiotropic_lateral():
+    cfg = PhyllotaxyConfig(mode="alternate", distichous_on_plagiotropic=True)
+    # axis_order>0 with the flag -> distichous: 180 deg per node.
+    a0 = leaf_azimuths(cfg, node_index=0, axis_order=1, count=1)[0]
+    a1 = leaf_azimuths(cfg, node_index=1, axis_order=1, count=1)[0]
+    assert math.isclose(a1 - a0, math.pi, rel_tol=1e-9)
