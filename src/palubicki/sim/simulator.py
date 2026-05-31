@@ -47,8 +47,10 @@ def simulate(cfg: Config) -> Tree:
     return forest.trees[0]
 
 
-def simulate_forest(cfg: Config) -> Forest:
+def simulate_forest(cfg: Config, collector=None) -> Forest:
     forest = build_forest(cfg)
+    if collector is not None:
+        collector.capture_static(forest, cfg)
     if cfg.light.enabled:
         _init_light_grid(forest, cfg)
     no_new_streak = 0
@@ -63,8 +65,12 @@ def simulate_forest(cfg: Config) -> Forest:
             # Dormant season: age existing structure, emit nothing. Does NOT
             # count toward the no-growth early-stop (that is for saturation).
             _apply_temporal_dynamics(forest, cfg, clock.t)
+            if collector is not None:
+                collector.capture_frame(forest, clock.t)
             continue
         nodes_created = _iteration_step(forest, cfg, iteration, clock.t, state, t0)
+        if collector is not None:
+            collector.capture_frame(forest, clock.t)
         if nodes_created == 0:
             no_new_streak += 1
         else:
