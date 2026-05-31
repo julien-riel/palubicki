@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from palubicki.geom.compound_leaf import compound_layout
 from palubicki.geom.leaf_blade import build_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.tree import BudState, Internode, Leaf, LeafState, Node, Tree
@@ -43,6 +44,8 @@ def build_leaves_primitive(
     leaf_margin: str = "entire",
     leaf_margin_depth: float = 0.0,
     leaf_margin_count: int = 0,
+    leaf_kind: str = "simple",
+    leaflet_specs: dict | None = None,
 ) -> Primitive:
     """Triangulate every selected (apex-proximal, ACTIVE) leaf on the tree.
 
@@ -50,6 +53,14 @@ def build_leaves_primitive(
     moved to emission time, #14), so there is no render-time cluster_count fan.
     ``n_planes`` is 2 (cross-blade) for linear needles, 1 otherwise. Blade size
     scales by compute_effective_leaf_size(source_internode, ...).
+
+    ``leaf_kind`` + ``leaflet_specs`` choose the per-leaf layout via
+    :func:`palubicki.geom.compound_leaf.compound_layout`. The default
+    ``leaf_kind="simple"`` (or ``leaflet_specs=None``) is a single identity
+    leaflet ``((0,0), 0.0, 1.0)`` and is byte-identical to the legacy single-blade
+    output. For compound kinds, ``leaflet_specs`` carries the layout knobs
+    (``leaflet_count``, ``leaflet_pair_count``, ``terminal_leaflet``,
+    ``rachis_length``, ``petiole_length``, ``rachis_radius``).
     """
     records = selected_leaves(
         tree, foliage_depth=foliage_depth,
@@ -64,6 +75,25 @@ def build_leaves_primitive(
             material=material,
         )
 
+    if leaf_kind == "simple" or leaflet_specs is None:
+        layout = compound_layout(
+            "simple", leaflet_count=1, leaflet_pair_count=0,
+            terminal_leaflet=False, rachis_length=1.0,
+            petiole_length=0.0, rachis_radius=0.0,
+        )
+    else:
+        layout = compound_layout(
+            leaf_kind,
+            leaflet_count=leaflet_specs["leaflet_count"],
+            leaflet_pair_count=leaflet_specs["leaflet_pair_count"],
+            terminal_leaflet=leaflet_specs["terminal_leaflet"],
+            rachis_length=leaflet_specs["rachis_length"],
+            petiole_length=leaflet_specs["petiole_length"],
+            rachis_radius=leaflet_specs["rachis_radius"],
+        )
+    leaflets = layout.leaflets
+    leaflets_per_leaf = len(leaflets)
+
     blade_pos_unit, _, blade_uv, blade_idx = build_blade(
         length=1.0, width=aspect, shape=leaf_shape, margin=leaf_margin,
         margin_depth=leaf_margin_depth, margin_count=leaf_margin_count,
@@ -72,8 +102,8 @@ def build_leaves_primitive(
     blade_i_count = blade_idx.shape[0]
     n_planes = 2 if leaf_shape == "linear" else 1
 
-    verts_per_leaf = n_planes * blade_v_count
-    idx_per_leaf = n_planes * blade_i_count
+    verts_per_leaf = n_planes * blade_v_count * leaflets_per_leaf
+    idx_per_leaf = n_planes * blade_i_count * leaflets_per_leaf
     n = len(records)
     positions = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
     normals = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
@@ -85,9 +115,9 @@ def build_leaves_primitive(
         eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
         v_start = i * verts_per_leaf
         i_start = i * idx_per_leaf
-        _lift_leaf(
+        _lift_compound_leaf(
             render_pos, stem_dir, leaf.azimuth, eff_size, splay_rad, n_planes,
-            blade_pos_unit, blade_uv, blade_idx,
+            leaflets, blade_pos_unit, blade_uv, blade_idx,
             positions[v_start : v_start + verts_per_leaf],
             normals[v_start : v_start + verts_per_leaf],
             uvs[v_start : v_start + verts_per_leaf],
@@ -190,15 +220,20 @@ def selected_leaves(
     return out
 
 
-def _lift_leaf(center, direction, azimuth, size, splay_rad, n_planes,
-               blade_pos_unit, blade_uv, blade_idx,
-               out_pos, out_norm, out_uv, out_idx, base):
-    """Lift one phyllotactically-seated leaf (n_planes blades) at ``center``.
+def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
+                        leaflets, blade_pos_unit, blade_uv, blade_idx,
+                        out_pos, out_norm, out_uv, out_idx, base):
+    """Lift one (possibly compound) leaf into its leaflet blades at ``center``.
 
-    Reconstructs the blade basis from the render-time stem ``direction`` + the
+    Reconstructs the leaf basis from the render-time stem ``direction`` + the
     leaf ``azimuth`` + ``splay_rad`` — identical math to the legacy per-cluster-
-    member lift, so blade area (cos(splay) plane-A shear) is preserved exactly;
-    only the azimuth now carries the phyllotactic seating.
+    member lift, so blade area (cos(splay) plane-A shear) is preserved exactly.
+
+    Each leaflet in ``leaflets`` is a ``((u0, v0), axis_angle, scale)`` spec in
+    the leaf's local blade frame (``u`` ↔ ``rot_axis_u``, ``v`` ↔ ``leaf_up``,
+    plane normal ↔ ``rot_axis_w``); offsets/scales are in whole-leaf-size units.
+    The simple identity leaflet ``((0,0), 0.0, 1.0)`` reproduces the legacy
+    single-blade (or cross, for ``n_planes==2``) geometry byte-for-byte.
     """
     d = np.asarray(direction, dtype=np.float64)
     d = d / np.linalg.norm(d)
@@ -212,24 +247,44 @@ def _lift_leaf(center, direction, azimuth, size, splay_rad, n_planes,
     rot_axis_w = -math.sin(azimuth) * right + math.cos(azimuth) * forward
     leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
 
-    _lift_blade(
-        blade_pos_unit, blade_uv, blade_idx,
-        leaf_center, rot_axis_u, leaf_up, rot_axis_w, size,
-        out_pos[0:blade_v_count], out_norm[0:blade_v_count],
-        out_uv[0:blade_v_count], out_idx[0:blade_i_count], base,
-    )
-    if n_planes == 2:
-        slot_b = blade_v_count
-        idx_b = blade_i_count
+    per_leaflet_v = n_planes * blade_v_count
+    per_leaflet_i = n_planes * blade_i_count
+    for k, ((u0, v0), axis_angle, scale) in enumerate(leaflets):
+        if axis_angle == 0.0:
+            lflt_u = rot_axis_u
+            lflt_v = leaf_up
+        else:
+            c = math.cos(axis_angle)
+            s = math.sin(axis_angle)
+            # Rotate (rot_axis_u, leaf_up) by axis_angle about rot_axis_w
+            # (rotation from +v toward +u).
+            lflt_v = c * leaf_up + s * rot_axis_u
+            lflt_u = c * rot_axis_u - s * leaf_up
+        origin = leaf_center + size * (u0 * rot_axis_u + v0 * leaf_up)
+        s_size = size * scale
+        vk = k * per_leaflet_v
+        ik = k * per_leaflet_i
         _lift_blade(
             blade_pos_unit, blade_uv, blade_idx,
-            leaf_center, rot_axis_w, leaf_up, rot_axis_u, size,
-            out_pos[slot_b : slot_b + blade_v_count],
-            out_norm[slot_b : slot_b + blade_v_count],
-            out_uv[slot_b : slot_b + blade_v_count],
-            out_idx[idx_b : idx_b + blade_i_count],
-            base + slot_b,
+            origin, lflt_u, lflt_v, rot_axis_w, s_size,
+            out_pos[vk : vk + blade_v_count],
+            out_norm[vk : vk + blade_v_count],
+            out_uv[vk : vk + blade_v_count],
+            out_idx[ik : ik + blade_i_count],
+            base + vk,
         )
+        if n_planes == 2:
+            vb = vk + blade_v_count
+            ib = ik + blade_i_count
+            _lift_blade(
+                blade_pos_unit, blade_uv, blade_idx,
+                origin, rot_axis_w, lflt_v, lflt_u, s_size,
+                out_pos[vb : vb + blade_v_count],
+                out_norm[vb : vb + blade_v_count],
+                out_uv[vb : vb + blade_v_count],
+                out_idx[ib : ib + blade_i_count],
+                base + vb,
+            )
 
 
 def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
