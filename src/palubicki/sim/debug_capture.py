@@ -66,6 +66,10 @@ class DebugCollector:
         return out
 
     def capture_frame(self, forest, t: float) -> None:
+        """Diff forest state against the previous frame and append one entry to
+        ``_frames``. Must be called after ``capture_static``. ``t`` is the
+        simulation year, stored verbatim as the frame timestamp."""
+        assert self._prev_alive is not None, "capture_static must be called before capture_frame"
         # Markers: report only those that flipped alive->dead since the last frame.
         alive = forest.markers.alive_mask()
         newly_killed = np.flatnonzero(self._prev_alive & ~alive)
