@@ -2,7 +2,7 @@ import numpy as np
 
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material
-from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.tree import Bud, BudState, Internode, Leaf, LeafState, Node, Tree
 
 
 def _mat():
@@ -11,7 +11,20 @@ def _mat():
                     alpha_mode="MASK", alpha_cutoff=0.5, double_sided=True)
 
 
-def _tree_with_n_terminal_buds(n):
+def _attach_leaves(node, count=1):
+    """Attach `count` ACTIVE leaves to a node with distinct azimuths.
+
+    Models the leaves-on-nodes (#14) emission: the old render-time cluster_count
+    fan is now `count` separate Leaf objects. Vertex count is azimuth-independent.
+    """
+    for i in range(count):
+        node.leaves.append(
+            Leaf(parent_node=node, azimuth=float(i), birth_time=0.0,
+                 state=LeafState.ACTIVE)
+        )
+
+
+def _tree_with_n_terminal_buds(n, leaves_per_node=1):
     root = Node(position=np.zeros(3))
     tree = Tree(root=root)
     for i in range(n):
@@ -19,6 +32,7 @@ def _tree_with_n_terminal_buds(n):
         bud = Bud(position=node.position.copy(), direction=np.array([0.0, 1.0, 0.0]),
                   axis_order=0, parent_node=node, state=BudState.ACTIVE)
         node.terminal_bud = bud
+        _attach_leaves(node, leaves_per_node)
         tree.active_buds.append(bud)
     return tree
 
@@ -36,6 +50,9 @@ def _linear_chain(n_internodes, length=1.0):
         prev.children_internodes.append(iod)
         node.parent_internode = iod
         tree.all_internodes.append(iod)
+        # One leaf per non-root node so every leaf-bearing node (apex + walked-back
+        # nodes within foliage_depth) carries exactly one Leaf.
+        _attach_leaves(node, 1)
         prev = node
     bud = Bud(position=prev.position.copy(), direction=np.array([0.0, 1.0, 0.0]),
               axis_order=0, parent_node=prev, state=BudState.ACTIVE)
@@ -91,9 +108,14 @@ def test_one_bud_default_shape_vert_count():
     assert prim.indices.shape == (48,)
 
 
-def test_dead_buds_excluded():
+def test_non_active_leaves_excluded():
+    """Migrated from test_dead_buds_excluded: the renderer now draws node.leaves,
+    so a non-ACTIVE leaf must produce no geometry (the leaves-on-nodes analogue of
+    a dead bud bearing no foliage)."""
     tree = _tree_with_n_terminal_buds(1)
-    tree.active_buds[0].state = BudState.DEAD
+    apex_node = tree.active_buds[0].parent_node
+    for leaf in apex_node.leaves:
+        leaf.state = LeafState.ABSCISSED
     prim = build_leaves_primitive(tree, leaf_size=0.1, material=_mat())
     assert prim.positions.shape == (0, 3)
 
@@ -129,6 +151,7 @@ def _tree_one_apex_with_internode(light_factor: float):
         axis_order=0, parent_node=child, state=BudState.ACTIVE,
     )
     child.terminal_bud = bud
+    _attach_leaves(child, 1)
     tree = Tree(root=root)
     tree.active_buds.append(bud)
     tree.all_internodes.append(iod)
@@ -219,7 +242,7 @@ def test_leaves_follow_sag_offset_at_apex():
 
     from palubicki.geom.leaves import build_leaves_primitive
     from palubicki.geom.mesh import Material
-    from palubicki.sim.tree import Bud, Internode, Node, Tree
+    from palubicki.sim.tree import Bud, Internode, Leaf, LeafState, Node, Tree
 
     root = Node(position=np.zeros(3))
     tip = Node(position=np.array([0.0, 1.0, 0.0]))
@@ -231,6 +254,9 @@ def test_leaves_follow_sag_offset_at_apex():
     bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]),
               axis_order=0, parent_node=tip)
     tip.terminal_bud = bud
+    tip.leaves.append(
+        Leaf(parent_node=tip, azimuth=0.0, birth_time=0.0, state=LeafState.ACTIVE)
+    )
     tree.active_buds = [bud]
 
     mat = Material(name="leaf", base_color=(0.4, 0.6, 0.2, 1.0),
