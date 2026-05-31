@@ -65,6 +65,41 @@ class DebugCollector:
                 )
         return out
 
+    def capture_frame(self, forest, t: float) -> None:
+        # Markers: report only those that flipped alive->dead since the last frame.
+        alive = forest.markers.alive_mask()
+        newly_killed = np.flatnonzero(self._prev_alive & ~alive)
+        self._prev_alive = alive
+
+        # Shed: internodes present last frame but gone now (shed_low_quality
+        # removes them from tree.all_internodes). Use the previously remembered
+        # rounded endpoints so the segment is the branch as it was when culled.
+        cur_iods = self._current_iods(forest)
+        shed = [
+            [p0, p1]
+            for iid, (p0, p1) in self._prev_iods.items()
+            if iid not in cur_iods
+        ]
+        self._prev_iods = cur_iods
+
+        # Buds: the live set (ACTIVE / DORMANT), flattened across trees.
+        buds = [
+            {
+                "p": _round_vec(b.position),
+                "dir": _round_vec(b.direction),
+                "state": b.state.name,
+            }
+            for tree in forest.trees
+            for b in tree.active_buds
+        ]
+
+        self._frames.append({
+            "t": round(float(t), _NDIGITS),
+            "markers_killed": [int(i) for i in newly_killed],
+            "buds": buds,
+            "shed": shed,
+        })
+
     def timeline(self) -> dict:
         """Return the JSON-ready debug payload (envelope, static markers, frames)."""
         positions = (
