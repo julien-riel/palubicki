@@ -255,6 +255,38 @@ def test_rebuild_recomputes_radii():
     assert iod.diameter == pytest.approx(0.01)
 
 
+def test_rebuild_threads_vigor_diameter_gain():
+    """rebuild_from_tree forwards vigor_ref/vigor_diameter_gain so the light grid's
+    radii match the rendered geometry (vigor-seeded thickening, #37)."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(1.0, 1.0, 1.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.0,
+        internode_area_scale=1.0,
+    )
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    root = Node(position=np.array([0.5, 0.0, 0.5]))
+    tip = Node(position=np.array([0.5, 1.0, 0.5]))
+    iod = Internode(parent_node=root, child_node=tip, length=1.0, is_main_axis=True)
+    iod.vigor = 1.0  # vigorous tip → seeds a thicker pipe when gain > 0
+    root.children_internodes.append(iod)
+    bud = Bud(position=tip.position.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=tip)
+    tip.terminal_bud = bud
+    tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
+
+    grid.rebuild_from_tree(
+        tree, cfg, r_tip=0.005, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=0.25,
+    )
+
+    # sat = 1 - exp(-vigor/vigor_ref) = 1 - exp(-1); r = r_tip*(1 + 0.25*sat).
+    sat = 1.0 - np.exp(-1.0)
+    expected_diameter = 2.0 * 0.005 * (1.0 + 0.25 * sat)
+    assert iod.diameter == pytest.approx(expected_diameter)
+    # Strictly thicker than the pure-pipe diameter (0.01).
+    assert iod.diameter > 0.01
+
+
 def test_sample_transmission_empty_grid_returns_one():
     cfg = LightConfig(
         grid_origin=(0.0, 0.0, 0.0),
