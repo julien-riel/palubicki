@@ -17,6 +17,14 @@ def _round_vec(v) -> list[float]:
 
 
 class DebugCollector:
+    """Per-run, read-only collector for the sim-internals debug overlay (#29).
+
+    Lifecycle: call ``capture_static`` once after ``build_forest``, then
+    ``capture_frame`` once per simulation step (added in a later task), then read
+    the assembled payload via ``timeline``. It only reads forest state, so wiring
+    it into ``simulate_forest`` cannot perturb the deterministic evolution.
+    """
+
     def __init__(self) -> None:
         self._envelope: dict | None = None
         self._marker_positions: np.ndarray | None = None
@@ -25,6 +33,14 @@ class DebugCollector:
         self._frames: list[dict] = []
 
     def capture_static(self, forest, cfg) -> None:
+        """Record the static (sent-once) data: the displayed tree's envelope and
+        the full marker cloud, plus baseline snapshots for later per-frame diffs.
+
+        ``cfg`` is accepted for a stable capture API and future static sim-param
+        extraction; only ``forest`` is read today. The envelope is taken from
+        ``per_tree_cfgs[0]`` — the visualizer currently assumes a single displayed
+        tree (forest mode shows all trees' buds over one envelope; see #29 spec).
+        """
         env = forest.per_tree_cfgs[0].envelope
         self._envelope = {
             "shape": env.shape,
@@ -32,7 +48,7 @@ class DebugCollector:
             "radii": [float(env.rx), float(env.ry), float(env.rz)],
         }
         self._marker_positions = np.asarray(forest.markers.positions, dtype=float)
-        self._prev_alive = forest.markers.alive_mask()
+        self._prev_alive = forest.markers.alive_mask()  # baseline for per-frame killed-marker diffs (later task)
         self._prev_iods = self._current_iods(forest)
 
     @staticmethod
@@ -50,6 +66,7 @@ class DebugCollector:
         return out
 
     def timeline(self) -> dict:
+        """Return the JSON-ready debug payload (envelope, static markers, frames)."""
         positions = (
             [_round_vec(p) for p in self._marker_positions]
             if self._marker_positions is not None else []
