@@ -8,12 +8,15 @@ Ce fichier fait foi pour la priorisation (pas l'ordre des issues GitHub).
 
 ## À faire (dans l'ordre)
 
-Priorisé le 2026-05-30. Principe : **correctness → filet de mesure de la boucle →
-réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
-1. **#29 — visualiseur des internes de sim** · observabilité de la boucle (marqueurs/envelope/bourgeons/light, timeline). Capture opt-in. Aurait aidé #24 ; accélère #41.
-2. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7). Note : #7 (fascicules) raffinera les aiguilles de conifères posées par #36.
-3. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
-4. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
+Priorisé le 2026-05-30, mis à jour le 2026-05-31. Principe : **correctness →
+filet de mesure de la boucle → réalisme qu'il révèle → outillage → nouveaux gros
+systèmes.**
+1. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7). Note : #7 (fascicules) raffinera les aiguilles de conifères posées par #36.
+2. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et** le repère radial d'insertion au plan de la branche-mère (au lieu du plan XY mondial calculé indépendamment) → éventail plat des conifères. Correctif de *forme* ciblé, complément de #34 (qui ne fait que monter le poids dans le temps, toujours projeté sur XY). Distinct du rendu (#53).
+3. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps → translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing → LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md). **Apparence**, orthogonale à la *forme* (#55/#56). Sous-tickets indépendants à découper au fil de l'eau.
+4. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
+5. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · gros changement de moteur. Exposition des bourgeons par **grille d'ombrage** (2ᵉ backend, BHse reste le défaut) → la silhouette (cône conifère, fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être prescrite par l'enveloppe BHse (`shape: cone`). S'appuie sur #37 ; touche l'allocation BH (#36/#51). Symptôme motivant déjà documenté : pas de fût clair (couronne jusqu'au sol, « petits troncs ») parce que le cône touche le sol et que l'élagage est piloté par la capture de marqueurs, pas par la lumière. Le plus profond du backlog ; tranche d'abord le compromis dirigeable-vs-émergent.
+6. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
 
 ## Fait
 
@@ -38,6 +41,7 @@ réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
 | #48 | Métrique *géométrique* de verticalité du leader (`leader_deviation_deg`) + bornes par espèce ; golden d'espèce repassé à la **densité de marqueurs représentative** (cause racine de la « régression » #43 : le proxy à 1000 marqueurs sous-échantillonnait ~18× les enveloppes conifères agrandies → leaders affamés/arqués ; à la densité de design ils sont droits) | #50 |
 | #36 | Couronne conifère pleine : aiguilles réparties **le long du rameau** (`needle_cluster_spacing`) + footprint d'aiguille agrandi (pin & sapin). Diagnostic stale (« BH affame les latéraux » : #43/#48 avaient déjà réglé le nb de branches ; le résiduel était un défaut de *modélisation du feuillage*, pas d'allocation). `total_leaf_area` pin 30→361 ; sapin quasi-chauve→plein | #51 |
 | #37 | Cohérence light↔geom : la grille de lumière occlut désormais avec les diamètres **graine-de-vigueur** (passe `vigor_ref`/`vigor_diameter_gain` de `cfg.sim` à travers `rebuild_from_*` → `compute_radii`), au lieu des diamètres pure-pipe. Effet second-ordre borné (multiplicateur ≤ 1+gain). Révélateur de boucle empirique : le test différentiel d'épinastie (#45) passait par 0,24° de marge ; les diamètres plus épais → un peu plus d'auto-ombrage → la mortalité d'ombre élague quelques latéraux apicaux raides → la *moyenne* ON−OFF s'effondre à ~0,5° **mais la médiane tient ~2,5°** (mécanisme intact : le test young-vs-old reste vert). Test repassé sur la **médiane** (stat robuste aux queues). Goldens d'espèce + hash diagnostic oak re-pinnés | #52 |
+| #29 | Visualiseur des internes de sim : overlay debug (marqueurs vivants/morts, envelope wireframe, bourgeons par état, branches élaguées) + timeline scrub/play dans l'éditeur. Capture **opt-in** (collecteur observationnel branché dans `simulate_forest`, zéro coût par défaut, n'altère pas l'évolution déterministe — gardé par un test de signature de positions), servie via `/api/debug` (positions des marqueurs une fois, deltas par frame) ; le `.glb` exporté est inchangé | #54 |
 | — | Outillage : ruff + CI + refactor simulateur | #19 |
 1. **#34 — épinastie** · *en cours (branche `issue-34-…`)*. Le poids plagiotrope monte avec l'âge de la branche (`t - birth_time`) au lieu d'être plein dès le 1ᵉʳ nœud → ramure mature arquée. À finir et fusionner.
 

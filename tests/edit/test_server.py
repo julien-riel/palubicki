@@ -175,3 +175,62 @@ def test_app_js_has_export_and_toggle_handlers(client):
     # Action handlers must be wired to the DOM ids:
     for el_id in ("export-glb-btn", "export-yaml-btn", "toggle-leaves-btn", "toggle-wireframe-btn"):
         assert el_id in body
+
+
+def test_debug_endpoint_404_before_any_capture(client):
+    r = client.get("/api/debug")
+    assert r.status_code == 404
+    assert "error" in r.json()
+
+
+def test_generate_without_debug_flag_leaves_no_capture(client):
+    r = client.post("/api/generate", json=_tiny_config_dict())
+    assert r.status_code == 200
+    # No debug flag -> cost-free path, nothing cached.
+    r2 = client.get("/api/debug")
+    assert r2.status_code == 404
+
+
+def test_generate_with_debug_flag_populates_timeline(client):
+    payload = _tiny_config_dict()
+    payload["debug"] = True
+    r = client.post("/api/generate", json=payload)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "model/gltf-binary"
+    assert r.content[:4] == b"glTF"
+    # The debug flag must NOT leak into config parsing (still a valid GLB above).
+    r2 = client.get("/api/debug")
+    assert r2.status_code == 200
+    tl = r2.json()
+    assert set(tl.keys()) == {"envelope", "markers", "frames"}
+    assert "positions" in tl["markers"]
+    assert isinstance(tl["frames"], list) and len(tl["frames"]) >= 1
+    frame = tl["frames"][0]
+    assert set(frame.keys()) == {"t", "markers_killed", "buds", "shed"}
+
+
+def test_index_html_has_debug_controls(client):
+    text = client.get("/").text
+    for el_id in (
+        "debug-capture-toggle", "debug-panel", "timeline-slider",
+        "timeline-play-btn", "timeline-readout",
+        "layer-markers-toggle", "layer-envelope-toggle",
+        "layer-buds-toggle", "layer-shed-toggle",
+    ):
+        assert f'id="{el_id}"' in text, f"missing debug control id: {el_id}"
+
+
+def test_app_js_has_debug_overlay_logic(client):
+    body = client.get("/static/app.js").text
+    for sym in (
+        "fetchDebugTimeline", "buildDebugLayers", "setFrame",
+        "togglePlay", "debug-capture-toggle", "timeline-slider",
+        "THREE.Points", "BufferGeometry",
+    ):
+        assert sym in body, f"missing app.js debug symbol: {sym}"
+
+
+def test_app_js_regenerate_sends_debug_flag(client):
+    body = client.get("/static/app.js").text
+    # regenerate() must transmit the capture flag, else the server never captures.
+    assert "debug: state.debug.enabled" in body

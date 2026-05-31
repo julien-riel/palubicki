@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -24,6 +25,9 @@ from palubicki.sim.space_competition import perceive
 from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
 from palubicki.sim.tropisms import growth_direction
+
+if TYPE_CHECKING:
+    from palubicki.sim.debug_capture import DebugCollector
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +51,15 @@ def simulate(cfg: Config) -> Tree:
     return forest.trees[0]
 
 
-def simulate_forest(cfg: Config) -> Forest:
+def simulate_forest(cfg: Config, collector: DebugCollector | None = None) -> Forest:
+    """Run the full multi-tree simulation. If *collector* is given it receives a
+    ``capture_static`` call once and one ``capture_frame`` call per executed
+    iteration (dormant-season aging or growth step) for the editor's debug
+    overlay (#29). The collector only reads forest state, so passing one does not
+    perturb the deterministic evolution."""
     forest = build_forest(cfg)
+    if collector is not None:
+        collector.capture_static(forest, cfg)
     if cfg.light.enabled:
         _init_light_grid(forest, cfg)
     no_new_streak = 0
@@ -63,8 +74,12 @@ def simulate_forest(cfg: Config) -> Forest:
             # Dormant season: age existing structure, emit nothing. Does NOT
             # count toward the no-growth early-stop (that is for saturation).
             _apply_temporal_dynamics(forest, cfg, clock.t)
+            if collector is not None:
+                collector.capture_frame(forest, clock.t)
             continue
         nodes_created = _iteration_step(forest, cfg, iteration, clock.t, state, t0)
+        if collector is not None:
+            collector.capture_frame(forest, clock.t)
         if nodes_created == 0:
             no_new_streak += 1
         else:

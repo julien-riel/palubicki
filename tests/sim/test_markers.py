@@ -32,3 +32,22 @@ def test_alive_positions_returns_only_alive():
     cloud.kill_near(np.array([[0.0, 0.0, 0.0]]), kill_radius=0.5)
     alive = cloud.alive_positions()
     np.testing.assert_array_equal(alive, np.array([[1, 0, 0]], dtype=float))
+
+
+def test_positions_property_returns_all_positions():
+    pts = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
+    cloud = MarkerCloud(pts)
+    assert np.array_equal(cloud.positions, pts)
+
+
+def test_alive_mask_reflects_kills_and_is_a_copy():
+    pts = np.array([[0.0, 0.0, 0.0], [10.0, 10.0, 10.0]])
+    cloud = MarkerCloud(pts)
+    mask = cloud.alive_mask()
+    assert mask.tolist() == [True, True]
+    # Mutating the returned mask must not affect the cloud (it is a copy).
+    mask[0] = False
+    assert cloud.alive_mask().tolist() == [True, True]
+    # Killing near the first point flips only that entry.
+    cloud.kill_near(np.array([[0.0, 0.0, 0.0]]), kill_radius=1.0)
+    assert cloud.alive_mask().tolist() == [False, True]

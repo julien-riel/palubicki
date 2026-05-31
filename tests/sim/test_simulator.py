@@ -777,3 +777,51 @@ def test_length_scales_with_vigor(tmp_path):
     distal = [iod.length_target for iod in iods if orders[id(iod)] == high]
     assert order0 and distal
     assert (sum(order0) / len(order0)) > (sum(distal) / len(distal))
+
+
+def _position_signature(forest):
+    """Order-independent structural signature of a forest's node positions."""
+    import numpy as np
+    sig = []
+    for ti, tree in enumerate(forest.trees):
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            sig.append((ti, tuple(np.round(node.position, 6).tolist())))
+            for iod in node.children_internodes:
+                stack.append(iod.child_node)
+    return sorted(sig)
+
+
+def test_collector_does_not_perturb_evolution(tmp_path):
+    from palubicki.config import load_config
+    from palubicki.sim.debug_capture import DebugCollector
+    from palubicki.sim.simulator import simulate_forest
+    overrides = {
+        "envelope.shape": "ellipsoid", "envelope.rx": 1.0, "envelope.ry": 2.0,
+        "envelope.rz": 1.0, "envelope.marker_count": 200,
+        "sim.max_simulation_years": 5, "seed": 3,
+    }
+    cfg = load_config(yaml_path=None, cli_overrides=overrides, output=tmp_path / "a.glb")
+    plain = simulate_forest(cfg)
+    cfg2 = load_config(yaml_path=None, cli_overrides=overrides, output=tmp_path / "b.glb")
+    captured = simulate_forest(cfg2, collector=DebugCollector())
+    assert _position_signature(plain) == _position_signature(captured)
+
+
+def test_collector_captures_one_frame_per_executed_iteration(tmp_path):
+    from palubicki.config import load_config
+    from palubicki.sim.debug_capture import DebugCollector
+    from palubicki.sim.simulator import simulate_forest
+    cfg = load_config(
+        yaml_path=None,
+        cli_overrides={"envelope.marker_count": 200, "sim.max_simulation_years": 5, "seed": 3},
+        output=tmp_path / "c.glb",
+    )
+    c = DebugCollector()
+    simulate_forest(cfg, collector=c)
+    tl = c.timeline()
+    assert len(tl["frames"]) >= 1
+    # Frame times are non-decreasing.
+    times = [f["t"] for f in tl["frames"]]
+    assert times == sorted(times)

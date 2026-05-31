@@ -5,6 +5,14 @@ const state = {
   schema: null,        // { sections: [...], top_level: [...], species: [...] }
   values: {},          // { envelope: { rx: 3.0, ... }, sim: {...}, ..., seed: 7 }
   lastGlbBytes: null,  // ArrayBuffer of the most recent generation
+  debug: {
+    enabled: false,    // capture toggle state
+    timeline: null,    // { envelope, markers, frames } from /api/debug
+    frame: 0,          // current timeline index
+    killedPrefix: [],  // killedPrefix[i] = Set of marker indices dead by frame i
+    playing: false,
+    timer: null,
+  },
 };
 
 let viewer = null; // { scene, camera, renderer, controls, treeRoot }
@@ -152,6 +160,27 @@ function attachActions() {
   document.getElementById("export-yaml-btn").addEventListener("click", exportYaml);
   document.getElementById("toggle-leaves-btn").addEventListener("click", toggleLeaves);
   document.getElementById("toggle-wireframe-btn").addEventListener("click", toggleWireframe);
+
+  const debugToggle = document.getElementById("debug-capture-toggle");
+  debugToggle.addEventListener("change", () => {
+    state.debug.enabled = debugToggle.checked;
+    document.getElementById("debug-panel").classList.toggle("hidden", !debugToggle.checked);
+    if (debugToggle.checked) regenerate();
+    else clearDebugLayers();
+  });
+  document.getElementById("timeline-slider").addEventListener("input", (e) => {
+    stopPlay();
+    setFrame(parseInt(e.target.value, 10));
+  });
+  document.getElementById("timeline-play-btn").addEventListener("click", togglePlay);
+  for (const [id, name] of [
+    ["layer-markers-toggle", "markers"], ["layer-envelope-toggle", "envelope"],
+    ["layer-buds-toggle", "buds"], ["layer-shed-toggle", "shed"],
+  ]) {
+    document.getElementById(id).addEventListener("change", (e) => {
+      if (viewer.debugLayers[name]) viewer.debugLayers[name].visible = e.target.checked;
+    });
+  }
 }
 
 function exportGlb() {
@@ -233,7 +262,10 @@ function initViewer() {
   const treeRoot = new THREE.Group();
   scene.add(treeRoot);
 
-  viewer = { scene, camera, renderer, controls, treeRoot };
+  const debugRoot = new THREE.Group();
+  scene.add(debugRoot);
+
+  viewer = { scene, camera, renderer, controls, treeRoot, debugRoot, debugLayers: {} };
 
   window.addEventListener("resize", () => {
     resizeRenderer(renderer);
@@ -266,7 +298,7 @@ async function regenerate() {
     const r = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(state.values),
+      body: JSON.stringify({ ...state.values, debug: state.debug.enabled }),
     });
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
@@ -277,6 +309,9 @@ async function regenerate() {
     state.lastGlbBytes = buf;
     document.getElementById("export-glb-btn").disabled = false;
     await replaceTree(buf);
+    if (state.debug.enabled) {
+      await fetchDebugTimeline();
+    }
   } catch (err) {
     showToast("Generation failed: " + err.message);
   } finally {
@@ -342,6 +377,181 @@ function showToast(msg) {
 
 function showFatal(msg) {
   document.body.innerHTML = `<div style="padding:32px;color:#ff5b5b;font-family:sans-serif">${msg}</div>`;
+}
+
+// ---- Debug overlay (#29) ----
+
+async function fetchDebugTimeline() {
+  try {
+    const tl = await fetchJSON("/api/debug");
+    state.debug.timeline = tl;
+    state.debug.killedPrefix = buildKilledPrefix(tl.frames);
+    buildDebugLayers(tl);
+    const slider = document.getElementById("timeline-slider");
+    slider.max = Math.max(0, tl.frames.length - 1);
+    slider.value = slider.max;
+    setFrame(tl.frames.length - 1);
+  } catch (err) {
+    showToast("Debug fetch failed: " + err.message);
+  }
+}
+
+// killedPrefix[i] = Set of all marker indices dead by frame i (cumulative union).
+function buildKilledPrefix(frames) {
+  const prefix = [];
+  const acc = new Set();
+  for (const f of frames) {
+    for (const idx of f.markers_killed) acc.add(idx);
+    prefix.push(new Set(acc));
+  }
+  return prefix;
+}
+
+function clearDebugLayers() {
+  stopPlay();
+  disposeChildren(viewer.debugRoot);
+  viewer.debugLayers = {};
+}
+
+function buildDebugLayers(tl) {
+  clearDebugLayers();
+
+  // Markers — one Points cloud, positions uploaded once, recolored per frame.
+  const mPos = new Float32Array(tl.markers.positions.length * 3);
+  tl.markers.positions.forEach((p, i) => { mPos[i*3]=p[0]; mPos[i*3+1]=p[1]; mPos[i*3+2]=p[2]; });
+  const mGeo = new THREE.BufferGeometry();
+  mGeo.setAttribute("position", new THREE.BufferAttribute(mPos, 3));
+  mGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(mPos.length), 3));
+  const markers = new THREE.Points(mGeo,
+    new THREE.PointsMaterial({ size: 0.04, vertexColors: true }));
+  viewer.debugLayers.markers = markers;
+  viewer.debugRoot.add(markers);
+
+  // Envelope — wireframe sized from shape/radii/center.
+  const envelope = buildEnvelopeMesh(tl.envelope);
+  viewer.debugLayers.envelope = envelope;
+  viewer.debugRoot.add(envelope);
+
+  // Buds — pre-sized Points cloud, written in place per frame (retain-and-mutate
+  // so we never orphan GPU buffers during scrub/play). setDrawRange caps the
+  // rendered count to the current frame's bud count.
+  const maxBuds = tl.frames.reduce((m, f) => Math.max(m, f.buds.length), 0);
+  const budGeo = new THREE.BufferGeometry();
+  budGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(maxBuds * 3), 3));
+  budGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(maxBuds * 3), 3));
+  const buds = new THREE.Points(budGeo,
+    new THREE.PointsMaterial({ size: 0.08, vertexColors: true }));
+  viewer.debugLayers.buds = buds;
+  viewer.debugRoot.add(buds);
+
+  // Shed — pre-sized to the total segment count across all frames; cumulative
+  // segments are written in place each frame and capped via setDrawRange.
+  const totalShedSegs = tl.frames.reduce((m, f) => m + f.shed.length, 0);
+  const shedGeo = new THREE.BufferGeometry();
+  shedGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(totalShedSegs * 6), 3));
+  const shed = new THREE.LineSegments(shedGeo,
+    new THREE.LineBasicMaterial({ color: 0xff4040 }));
+  viewer.debugLayers.shed = shed;
+  viewer.debugRoot.add(shed);
+
+  // Honor current checkbox states.
+  for (const [id, name] of [
+    ["layer-markers-toggle", "markers"], ["layer-envelope-toggle", "envelope"],
+    ["layer-buds-toggle", "buds"], ["layer-shed-toggle", "shed"],
+  ]) {
+    viewer.debugLayers[name].visible = document.getElementById(id).checked;
+  }
+}
+
+function buildEnvelopeMesh(env) {
+  const [rx, ry, rz] = env.radii;
+  let geo;
+  if (env.shape === "cone") {
+    geo = new THREE.ConeGeometry(1, 1, 24, 1, true);
+    geo.translate(0, 0.5, 0);                 // apex at y=1, base at y=0
+    geo.scale(rx, ry, rz);
+  } else if (env.shape === "half_ellipsoid") {
+    // Upper hemisphere only (flat bottom at center.y), matching envelope.py.
+    geo = new THREE.SphereGeometry(1, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    geo.scale(rx, ry, rz);
+  } else {
+    geo = new THREE.SphereGeometry(1, 24, 16); // sphere / ellipsoid
+    geo.scale(rx, ry, rz);
+  }
+  const mesh = new THREE.Mesh(geo,
+    new THREE.MeshBasicMaterial({ color: 0x3399ff, wireframe: true, transparent: true, opacity: 0.4 }));
+  mesh.position.set(env.center[0], env.center[1], env.center[2]);
+  return mesh;
+}
+
+function setFrame(i) {
+  const tl = state.debug.timeline;
+  if (!tl || !tl.frames.length) return;
+  i = Math.max(0, Math.min(i, tl.frames.length - 1));
+  state.debug.frame = i;
+  document.getElementById("timeline-slider").value = i;
+  const frame = tl.frames[i];
+  const dead = state.debug.killedPrefix[i] || new Set();
+
+  // Markers: recolor by cumulative killed set (alive = green, dead = dark red).
+  const colors = viewer.debugLayers.markers.geometry.getAttribute("color");
+  for (let k = 0; k < tl.markers.positions.length; k++) {
+    if (dead.has(k)) { colors.setXYZ(k, 0.45, 0.08, 0.08); }
+    else { colors.setXYZ(k, 0.45, 0.85, 0.45); }
+  }
+  colors.needsUpdate = true;
+
+  // Buds: write positions + colors in place, then cap the draw range.
+  const bGeo = viewer.debugLayers.buds.geometry;
+  const bp = bGeo.getAttribute("position");
+  const bc = bGeo.getAttribute("color");
+  frame.buds.forEach((b, j) => {
+    bp.setXYZ(j, b.p[0], b.p[1], b.p[2]);
+    if (b.state === "ACTIVE") bc.setXYZ(j, 1.0, 0.85, 0.1);
+    else bc.setXYZ(j, 0.5, 0.5, 0.55); // dormant = grey
+  });
+  bGeo.setDrawRange(0, frame.buds.length);
+  bp.needsUpdate = true;
+  bc.needsUpdate = true;
+
+  // Shed: write cumulative segments (up to and including frame i) in place,
+  // then cap the draw range to the number of vertices written.
+  const sGeo = viewer.debugLayers.shed.geometry;
+  const sp = sGeo.getAttribute("position");
+  let v = 0;
+  for (let f = 0; f <= i; f++) {
+    for (const s of tl.frames[f].shed) {
+      sp.setXYZ(v++, s[0][0], s[0][1], s[0][2]);
+      sp.setXYZ(v++, s[1][0], s[1][1], s[1][2]);
+    }
+  }
+  sGeo.setDrawRange(0, v);
+  sp.needsUpdate = true;
+
+  // Readout: time, alive/dead counts, bud count.
+  const aliveCount = tl.markers.positions.length - dead.size;
+  document.getElementById("timeline-readout").textContent =
+    `t=${frame.t}yr  ·  markers ${aliveCount}↑/${dead.size}†  ·  buds ${frame.buds.length}`;
+}
+
+function togglePlay() {
+  if (state.debug.playing) { stopPlay(); return; }
+  const tl = state.debug.timeline;
+  if (!tl || !tl.frames.length) return;
+  state.debug.playing = true;
+  document.getElementById("timeline-play-btn").textContent = "⏸";
+  if (state.debug.frame >= tl.frames.length - 1) setFrame(0);
+  state.debug.timer = setInterval(() => {
+    if (state.debug.frame >= tl.frames.length - 1) { stopPlay(); return; }
+    setFrame(state.debug.frame + 1);
+  }, 250);
+}
+
+function stopPlay() {
+  state.debug.playing = false;
+  if (state.debug.timer) { clearInterval(state.debug.timer); state.debug.timer = null; }
+  const btn = document.getElementById("timeline-play-btn");
+  if (btn) btn.textContent = "▶";
 }
 
 init();
