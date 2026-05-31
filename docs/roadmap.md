@@ -8,11 +8,15 @@ Ce fichier fait foi pour la priorisation (pas l'ordre des issues GitHub).
 
 ## À faire (dans l'ordre)
 
-Priorisé le 2026-05-30. Principe : **correctness → filet de mesure de la boucle →
-réalisme qu'il révèle → outillage → nouveaux gros systèmes.**
+Priorisé le 2026-05-30, mis à jour le 2026-05-31. Principe : **correctness →
+filet de mesure de la boucle → réalisme qu'il révèle → outillage → nouveaux gros
+systèmes.**
 1. **#14 → #6, #5, #7 — foliage** · #14 (feuilles en attribut de `Node`, `LeafState` avec `leaf_age`) débloque la suite : composées (#6), pétiole (#5), fascicules d'aiguilles (#7). Note : #7 (fascicules) raffinera les aiguilles de conifères posées par #36.
-2. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
-3. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
+2. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et** le repère radial d'insertion au plan de la branche-mère (au lieu du plan XY mondial calculé indépendamment) → éventail plat des conifères. Correctif de *forme* ciblé, complément de #34 (qui ne fait que monter le poids dans le temps, toujours projeté sur XY). Distinct du rendu (#53).
+3. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps → translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing → LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md). **Apparence**, orthogonale à la *forme* (#55/#56). Sous-tickets indépendants à découper au fil de l'eau.
+4. **#44 — vignes / lianas** · gros nouveau système : obstacle comme **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état cherche/accroché. Seulement si scènes de paysage avec structures.
+5. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · gros changement de moteur. Exposition des bourgeons par **grille d'ombrage** (2ᵉ backend, BHse reste le défaut) → la silhouette (cône conifère, fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être prescrite par l'enveloppe BHse (`shape: cone`). S'appuie sur #37 ; touche l'allocation BH (#36/#51). Symptôme motivant déjà documenté : pas de fût clair (couronne jusqu'au sol, « petits troncs ») parce que le cône touche le sol et que l'élagage est piloté par la capture de marqueurs, pas par la lumière. Le plus profond du backlog ; tranche d'abord le compromis dirigeable-vs-émergent.
+6. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11), tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
 
 ## Fait
 
