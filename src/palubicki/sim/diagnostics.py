@@ -435,10 +435,12 @@ def _trunk_base_diameter(root: Node) -> float:
 def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     """Sum of rendered leaf surface areas across the selected leaves.
 
-    Each selected leaf renders one blade-group: ``pair_area`` = unit_blade_area *
-    (cos(splay) [plane A] + 1 if cross-blade [plane B]). The fan that used to
-    multiply by cluster_count is now expressed as cluster_count separate Leaf
-    objects per node, so the per-leaf sum reproduces the pre-refactor total.
+    Each record in ``selected_leaves`` is one rendered blade-group (one Leaf at
+    one cluster position), with ``pair_area`` = unit_blade_area * (cos(splay)
+    [plane A] + 1 if cross-blade [plane B]). Both former multipliers — the
+    cluster_count fan (now N separate Leaf objects per node) and the conifer
+    along-shoot spacing fan (N positions per leaf) — are baked into the record
+    count, so summing pair_area*eff² over records reproduces the pre-refactor total.
     """
     from palubicki.geom.leaf_blade import build_blade
     from palubicki.geom.leaves import compute_effective_leaf_size, selected_leaves
