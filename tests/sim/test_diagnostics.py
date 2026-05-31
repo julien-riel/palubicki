@@ -407,7 +407,10 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # and leaf-blade positions shift once more. Both PRs are slow-test-invisible
     # (default CI runs `-m "not slow"`), so this golden drifted unnoticed until
     # re-pinned here — value verified deterministic across repeated runs.
-    EXPECTED_HASH = 37084270.22277053  # noqa: N806
+    # Re-pinned for #37: the light grid now occludes with vigor-seeded (thicker)
+    # diameters to match the rendered geometry, shifting shade-mortality and thus
+    # tree topology / leaf-blade positions (bounded second-order effect).
+    EXPECTED_HASH = 36691807.31667186  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )

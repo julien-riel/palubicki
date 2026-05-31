@@ -81,15 +81,23 @@ class LightGrid:
 
     def rebuild_from_tree(
         self, tree: Tree, cfg: LightConfig, *, r_tip: float | None = None, exponent: float | None = None,
+        vigor_ref: float = 1.0, vigor_diameter_gain: float = 0.0,
     ) -> None:
-        """Full rebuild. Zero LAI, optionally recompute radii, then inject leaves + internodes."""
+        """Full rebuild. Zero LAI, optionally recompute radii, then inject leaves + internodes.
+
+        ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
+        light grid's occlusion diameters match the vigor-seeded rendered geometry (#37).
+        """
         self.lai.fill(0.0)
         cell_volume = float(np.prod(self.cell_size))
         if cell_volume <= 0:
             return
 
         if r_tip is not None and exponent is not None:
-            compute_radii(tree, r_tip=r_tip, exponent=exponent)
+            compute_radii(
+                tree, r_tip=r_tip, exponent=exponent,
+                vigor_ref=vigor_ref, vigor_diameter_gain=vigor_diameter_gain,
+            )
 
         leaf_lai = cfg.leaf_area / cell_volume
         sub_step = float(np.min(self.cell_size))
@@ -117,9 +125,14 @@ class LightGrid:
         *,
         r_tip: float | None = None,
         exponent: float | None = None,
+        vigor_ref: float = 1.0,
+        vigor_diameter_gain: float = 0.0,
     ) -> None:
         """Full rebuild for a forest. Zero LAI → inject leaves+internodes per tree →
-        apply obstacle mask (lai[mask] = LAI_OPAQUE)."""
+        apply obstacle mask (lai[mask] = LAI_OPAQUE).
+
+        ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
+        light grid's occlusion diameters match the vigor-seeded rendered geometry (#37)."""
         from palubicki.sim.obstacles import LAI_OPAQUE
 
         self.lai.fill(0.0)
@@ -134,7 +147,10 @@ class LightGrid:
 
         for tree in forest.trees:
             if r_tip is not None and exponent is not None:
-                compute_radii(tree, r_tip=r_tip, exponent=exponent)
+                compute_radii(
+                    tree, r_tip=r_tip, exponent=exponent,
+                    vigor_ref=vigor_ref, vigor_diameter_gain=vigor_diameter_gain,
+                )
             stack = [tree.root]
             while stack:
                 node = stack.pop()
