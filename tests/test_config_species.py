@@ -63,7 +63,7 @@ def test_load_preset_pine(tmp_path):
                       output=tmp_path / "x.glb", species="pine")
     assert cfg.envelope.shape == "cone"
     assert cfg.phyllotaxy.mode == "whorled"
-    assert cfg.geom.leaf_cluster_count == 5
+    assert cfg.geom.leaf_cluster_count == 3
 
 
 def test_load_preset_birch(tmp_path):
@@ -107,7 +107,7 @@ def test_deep_merge_preserves_sibling_sections(tmp_path):
                       output=tmp_path / "x.glb", species="pine")
     assert cfg.envelope.shape == "cone"
     assert cfg.phyllotaxy.mode == "whorled"
-    assert cfg.geom.leaf_cluster_count == 5
+    assert cfg.geom.leaf_cluster_count == 3
     assert cfg.tropism.w_orthotropy_main == pytest.approx(0.3)
 
 
