@@ -120,7 +120,10 @@ def leaf_azimuths(
 
     NOTE: the base-azimuth switch below is deliberately duplicated from
     ``lateral_bud_directions`` rather than shared, so that skeleton-driving function
-    stays byte-for-byte untouched. Keep the two in sync if the progression changes.
+    stays byte-for-byte untouched. Keep the two in sync if the progression changes —
+    but NOT the jitter: leaves intentionally omit the ``divergence_jitter_deg`` /
+    RNG salting that ``lateral_bud_directions`` applies, so leaf seating stays pure
+    and deterministic. Do not "sync" jitter in.
 
     Expects ``count >= 1`` (callers gate on ``leaf_cluster_count > 0``); ``count == 0`` returns ``[]``.
     """
