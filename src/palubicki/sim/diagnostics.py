@@ -435,13 +435,21 @@ def _trunk_base_diameter(root: Node) -> float:
 def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     """Sum of rendered leaf surface areas across the selected leaves.
 
-    Each record in ``selected_leaves`` is one rendered blade-group (one Leaf at
-    one cluster position), with ``pair_area`` = unit_blade_area * (cos(splay)
-    [plane A] + 1 if cross-blade [plane B]). Both former multipliers — the
-    cluster_count fan (now N separate Leaf objects per node) and the conifer
-    along-shoot spacing fan (N positions per leaf) — are baked into the record
-    count, so summing pair_area*eff² over records reproduces the pre-refactor total.
+    Each record in ``selected_leaves`` is one rendered leaf (one Leaf at one
+    cluster position). For a compound leaf, that one record renders multiple
+    leaflet blades — the layout's ``leaflets`` list — each at its own ``scale``,
+    so its area is ``pair_area * eff² * Σ scale²``.
+
+    ``pair_area`` = unit_blade_area * (cos(splay) [plane A] + 1 if cross-blade
+    [plane B]). Both former record multipliers — the cluster_count fan (now N
+    separate Leaf objects per node) and the conifer along-shoot spacing fan (N
+    positions per leaf) — are baked into the record count.
+
+    For ``leaf_kind="simple"`` the layout is a single leaflet (scale=1) and the
+    blade params are the leaf_* values, so ``Σ scale² == 1.0`` and the result is
+    bit-for-bit the pre-compound value — the species diagnostic pins do not move.
     """
+    from palubicki.geom.compound_leaf import compound_layout, resolve_leaflet_blade
     from palubicki.geom.leaf_blade import build_blade
     from palubicki.geom.leaves import compute_effective_leaf_size, selected_leaves
 
@@ -453,9 +461,27 @@ def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     if not records:
         return 0.0
 
+    if g.leaf_kind == "simple":
+        layout = compound_layout(
+            "simple", leaflet_count=1, leaflet_pair_count=0,
+            terminal_leaflet=False, rachis_length=1.0,
+            petiole_length=0.0, rachis_radius=0.0,
+        )
+        b_shape, b_margin, b_aspect = g.leaf_shape, g.leaf_margin, g.leaf_aspect
+    else:
+        layout = compound_layout(
+            g.leaf_kind, leaflet_count=g.leaflet_count,
+            leaflet_pair_count=g.leaflet_pair_count,
+            terminal_leaflet=g.terminal_leaflet,
+            rachis_length=g.rachis_length_ratio,
+            petiole_length=g.petiole_length_ratio,
+            rachis_radius=g.rachis_radius_ratio,
+        )
+        b_shape, b_margin, b_aspect = resolve_leaflet_blade(g)
+
     blade_pos, _, _, blade_idx = build_blade(
-        length=1.0, width=g.leaf_aspect, shape=g.leaf_shape,
-        margin=g.leaf_margin, margin_depth=g.leaf_margin_depth,
+        length=1.0, width=b_aspect, shape=b_shape,
+        margin=b_margin, margin_depth=g.leaf_margin_depth,
         margin_count=g.leaf_margin_count,
     )
     pos2d = blade_pos.astype(np.float64)
@@ -465,14 +491,16 @@ def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     unit_blade_area = float(0.5 * np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum())
 
     splay_rad = math.radians(g.leaf_splay_deg)
-    n_planes = 2 if g.leaf_shape == "linear" else 1
+    n_planes = 2 if b_shape == "linear" else 1
     plane_b_factor = 1.0 if n_planes == 2 else 0.0
     pair_area = unit_blade_area * (math.cos(splay_rad) + plane_b_factor)
+
+    leaflet_scale_sq_sum = sum(scale * scale for (_uv, _a, scale) in layout.leaflets)
 
     total = 0.0
     for _leaf, _stem_dir, source_iod, _pos in records:
         eff = compute_effective_leaf_size(source_iod, g.leaf_size, g.leaf_sun_shade_k)
-        total += pair_area * (eff * eff)
+        total += pair_area * (eff * eff) * leaflet_scale_sq_sum
     return total
 
 
