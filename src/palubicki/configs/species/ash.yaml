@@ -1,0 +1,100 @@
+# Fraxinus americana (white ash) — decussate, opposite branching, tall oval crown.
+# First species to exercise compound leaves (#6): imparipinnate leaves with 7
+# lanceolate, serrate leaflets + a terminal leaflet on a rachis.
+# Diagnose lever map (metric ✗ -> config knob):
+#   tree_height          -> envelope.ry, sim.shoot_extension_max, sim.vigor_ref
+#   crown_radius         -> envelope.rx / envelope.rz
+#   trunk_base_diameter  -> geom.pipe_exponent, sim.vigor_diameter_gain
+#   divergence (order1)  -> phyllotaxy.mode (decussate ~90deg)
+envelope:
+  shape: ellipsoid
+  rx: 2.8
+  ry: 13.0
+  rz: 2.8
+  marker_count: 22000
+sim:
+  shoot_extension_max: 0.32
+  vigor_ref: 3.0
+  vigor_dormancy: 0.5
+  vigor_smoothing: 0.5
+  vigor_diameter_gain: 0.16
+  lambda_apical: 0.78
+  alpha_basipetal: 2.1
+  max_simulation_years: 26
+  elongation:
+    enabled: true
+    tau_years: 3.0
+  theta_perception_deg: 40.0
+  sympodial:
+    enabled: true
+    q_threshold: 1.6
+    n_consecutive_steps: 5
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.18
+    n_consecutive_steps: 3
+tropism:
+  w_perception: 1.0
+  w_orthotropy_main: 0.34
+  w_orthotropy_lateral: 0.05
+  w_plagiotropism_lateral: 0.30
+  w_phototropism: 0.32
+  w_direction_inertia: 0.5
+  axis_decay: 0.85
+phyllotaxy:
+  mode: decussate
+  divergence_angle_deg: 0.0
+  whorl_count: 2
+  branch_angle_by_order: [52.0, 38.0, 28.0, 22.0]
+  divergence_jitter_deg: 4.0
+  branch_angle_jitter_deg: 4.0
+  dormant_reserve_count: 2
+shedding:
+  quality_threshold: 0.13
+  window: 5
+  enabled: true
+  reactivation_count: 1
+sag:
+  enabled: true
+  k: 0.006
+  max_bend_deg: 4.0
+  rigid_axis_order: 1
+light:
+  enabled: true
+  k_absorption: 0.55
+geom:
+  ring_sides: 10
+  pipe_exponent: 3.30
+  r_tip: 0.007
+  bark_color: [0.40, 0.36, 0.30]
+  # --- Compound leaves (#6): imparipinnate, 7 leaflets + terminal ---
+  leaf_kind: pinnate
+  leaflet_count: 5
+  terminal_leaflet: true
+  rachis_length_ratio: 1.8
+  rachis_radius_ratio: 0.03
+  petiole_length_ratio: 0.5
+  leaflet_shape: lanceolate
+  leaflet_margin: serrate
+  leaflet_aspect: 0.55
+  # simple-leaf fallback values (also feed UV/margin of the leaflet template):
+  leaf_shape: lanceolate
+  leaf_margin: serrate
+  leaf_margin_depth: 0.12
+  leaf_margin_count: 9
+  leaf_size: 0.11
+  leaf_aspect: 0.55
+  leaf_splay_deg: 18.0
+  foliage_depth: 2
+  leaf_sun_shade_k: 0.6
+  root_flare_height: 0.3
+  root_flare_factor: 1.6
+  root_flare_falloff: linear
+  root_buttress_count: 3
+  root_buttress_amplitude: 0.10
+  bark_tint_young: [0.55, 0.54, 0.48]
+  bark_tint_mature: [0.40, 0.36, 0.30]
+  bark_tint_senescent: [0.28, 0.26, 0.24]
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07
