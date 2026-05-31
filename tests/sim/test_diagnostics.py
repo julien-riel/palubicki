@@ -409,7 +409,11 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # Re-pinned for #37: the light grid now occludes with vigor-seeded (thicker)
     # diameters to match the rendered geometry, shifting shade-mortality and thus
     # tree topology / leaf-blade positions (bounded second-order effect).
-    EXPECTED_HASH = 36691807.31667186  # noqa: N806
+    # Re-pinned for #14: leaves are now first-class Node attributes seated at the
+    # per-axis phyllotactic azimuth (was a render-time even fan), rotating each
+    # blade about its node — leaf-blade vertex positions shift (leaf AREA is
+    # unchanged, guarded by the leaf-area pin). Verified deterministic.
+    EXPECTED_HASH = 36691807.31810808  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
