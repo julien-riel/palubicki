@@ -12,8 +12,9 @@ from palubicki.geom.mesh import Primitive
 #   axis_angle : radians; leaflet v-axis = cos(a)*leaf_up + sin(a)*rot_axis_u
 #   scale      : leaflet size as a multiple of the whole-leaf size
 Leaflet = tuple[tuple[float, float], float, float]
-# Rachis centerline segment: (start_uv, end_uv, radius) in size-units.
-RachisSeg = tuple[tuple[float, float], tuple[float, float], float]
+# Rachis centerline segment: (start_uv, end_uv, r0, r1) in size-units; r0 is the
+# radius at start_uv, r1 at end_uv (equal r0==r1 = constant-radius tube).
+RachisSeg = tuple[tuple[float, float], tuple[float, float], float, float]
 
 _OUTWARD = math.radians(60.0)   # pinnate leaflet splay from the rachis
 _FAN = math.radians(55.0)       # palmate half-fan half-angle
@@ -66,8 +67,8 @@ def _pinnate(n_lat, terminal, rachis_length, petiole_length, radius):
     if terminal:
         leaflets.append(((0.0, v1), 0.0, lscale))
     segs: list[RachisSeg] = [
-        ((0.0, 0.0), (0.0, v0), radius),
-        ((0.0, v0), (0.0, v1), radius),
+        ((0.0, 0.0), (0.0, v0), radius, radius),
+        ((0.0, v0), (0.0, v1), radius, radius),
     ]
     return CompoundLayout(leaflets=leaflets, rachis_segments=segs)
 
@@ -82,7 +83,8 @@ def _palmate(n, petiole_length, radius):
     for a in angles:
         leaflets.append(((0.0, petiole_length), a, lscale))
     segs: list[RachisSeg] = (
-        [((0.0, 0.0), (0.0, petiole_length), radius)] if petiole_length > 0 else []
+        [((0.0, 0.0), (0.0, petiole_length), radius, radius)]
+        if petiole_length > 0 else []
     )
     return CompoundLayout(leaflets=leaflets, rachis_segments=segs)
 
@@ -90,8 +92,8 @@ def _palmate(n, petiole_length, radius):
 def _bipinnate(pair_count, leaflets_per, rachis_length, petiole_length, radius):
     leaflets: list[Leaflet] = []
     segs: list[RachisSeg] = [
-        ((0.0, 0.0), (0.0, petiole_length), radius),
-        ((0.0, petiole_length), (0.0, petiole_length + rachis_length), radius),
+        ((0.0, 0.0), (0.0, petiole_length), radius, radius),
+        ((0.0, petiole_length), (0.0, petiole_length + rachis_length), radius, radius),
     ]
     v0, v1 = petiole_length, petiole_length + rachis_length
     n_levels = max(1, pair_count)
@@ -109,7 +111,7 @@ def _bipinnate(pair_count, leaflets_per, rachis_length, petiole_length, radius):
             du, dv = math.sin(sec_ang), math.cos(sec_ang)
             base_u, base_v = 0.0, v
             end_u, end_v = base_u + du * sec_len, base_v + dv * sec_len
-            segs.append(((base_u, base_v), (end_u, end_v), radius * 0.6))
+            segs.append(((base_u, base_v), (end_u, end_v), radius * 0.6, radius * 0.6))
             for j in range(leaflets_per):
                 t = (j + 0.5) / leaflets_per
                 ou, ov = base_u + du * sec_len * t, base_v + dv * sec_len * t
@@ -129,8 +131,9 @@ def resolve_leaflet_blade(geom) -> tuple[str, str, float]:
     return shape, margin, aspect
 
 
-def _emit_cylinder(p0, p1, radius, ring_sides, base_index):
-    """A capped-less cylinder between 3D points p0->p1. Returns
+def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
+    """A capped-less cylinder between 3D points p0->p1, radius0 at p0 and
+    radius1 at p1 (radius0==radius1 = constant). Returns
     (positions(2R,3), normals(2R,3), uvs(2R,2), indices(6R,)) with indices
     offset by base_index."""
     # Function-local import to avoid a leaves<->compound_leaf import cycle.
@@ -151,8 +154,8 @@ def _emit_cylinder(p0, p1, radius, ring_sides, base_index):
         + np.sin(ang)[:, None] * forward[None, :]
     )  # (R, 3) unit
     nrm = ring.astype(np.float32)
-    bottom = p0[None, :] + radius * ring
-    top = p1[None, :] + radius * ring
+    bottom = p0[None, :] + radius0 * ring
+    top = p1[None, :] + radius1 * ring
     positions = np.concatenate([bottom, top]).astype(np.float32)
     normals = np.concatenate([nrm, nrm])
     uvs = np.zeros((2 * ring_sides, 2), np.float32)
@@ -221,9 +224,9 @@ def build_rachis_primitive(
             u, v = uv
             return _center + _eff * (u * _u + v * _up)
 
-        for s_uv, e_uv, r in layout.rachis_segments:
+        for s_uv, e_uv, r0, r1 in layout.rachis_segments:
             p, nn, uv, ix = _emit_cylinder(
-                lift(s_uv), lift(e_uv), r * eff, ring_sides, cursor
+                lift(s_uv), lift(e_uv), r0 * eff, r1 * eff, ring_sides, cursor
             )
             if p.shape[0] == 0:
                 continue
