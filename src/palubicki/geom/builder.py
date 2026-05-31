@@ -57,7 +57,6 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             tree,
             leaf_size=cfg.geom.leaf_size,
             material=leaf_mat,
-            cluster_count=cfg.geom.leaf_cluster_count,
             aspect=cfg.geom.leaf_aspect,
             splay_deg=cfg.geom.leaf_splay_deg,
             foliage_depth=cfg.geom.foliage_depth,
