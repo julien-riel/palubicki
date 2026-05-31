@@ -1,5 +1,9 @@
+import math
+
 import numpy as np
 
+from palubicki.config import PhyllotaxyConfig
+from palubicki.sim.phyllotaxy import leaf_azimuths
 from palubicki.sim.tree import Leaf, LeafState, Node, Tree
 
 
@@ -48,12 +52,6 @@ def test_tree_all_leaves_walks_graph():
     child.leaves.append(lc)
     tree = Tree(root=root)
     assert set(map(id, tree.all_leaves())) == {id(lr), id(lc)}
-
-
-import math
-
-from palubicki.config import PhyllotaxyConfig
-from palubicki.sim.phyllotaxy import leaf_azimuths
 
 
 def test_leaf_azimuths_returns_count_floats():

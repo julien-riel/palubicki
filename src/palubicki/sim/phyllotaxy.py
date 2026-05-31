@@ -121,6 +121,8 @@ def leaf_azimuths(
     NOTE: the base-azimuth switch below is deliberately duplicated from
     ``lateral_bud_directions`` rather than shared, so that skeleton-driving function
     stays byte-for-byte untouched. Keep the two in sync if the progression changes.
+
+    Expects ``count >= 1`` (callers gate on ``leaf_cluster_count > 0``); ``count == 0`` returns ``[]``.
     """
     if cfg.distichous_on_plagiotropic and axis_order > 0:
         mode = "distichous"
@@ -128,22 +130,22 @@ def leaf_azimuths(
         mode = cfg.mode
 
     if mode == "decussate":
-        base = (
+        base_azimuth = (
             math.radians(cfg.divergence_angle_deg) * node_index
             + (math.pi / 2.0) * (node_index % 2)
         )
     elif mode == "whorled":
         k = max(1, cfg.whorl_count)
-        base = (
+        base_azimuth = (
             math.radians(cfg.divergence_angle_deg) * node_index
             + (math.pi / k) * (node_index % 2)
         )
     elif mode == "distichous":
-        base = math.pi * node_index
+        base_azimuth = math.pi * node_index
     else:  # alternate / opposite -> simple spiral progression
-        base = math.radians(cfg.divergence_angle_deg) * node_index
+        base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
 
-    return [base + 2.0 * math.pi * i / count for i in range(count)]
+    return [base_azimuth + 2.0 * math.pi * i / count for i in range(count)]
 
 
 def reserve_bud_directions(
