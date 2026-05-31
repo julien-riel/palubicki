@@ -484,6 +484,37 @@ def test_geom_leaf_sun_shade_k_above_two_rejected(tmp_path):
         )
 
 
+def test_geom_compound_defaults():
+    from palubicki.config import GeomConfig
+    g = GeomConfig()
+    assert g.leaf_kind == "simple"
+    assert g.leaflet_count == 5
+    assert g.leaflet_pair_count == 0
+    assert g.terminal_leaflet is True
+    assert g.rachis_length_ratio == 1.5
+    assert g.rachis_radius_ratio == 0.03
+    assert g.petiole_length_ratio == 0.4
+    assert g.leaflet_shape is None
+    assert g.leaflet_margin is None
+    assert g.leaflet_aspect is None
+
+
+def test_validate_rejects_bad_leaf_kind(tmp_path):
+    with pytest.raises(ConfigError, match="leaf_kind"):
+        _make_config(
+            geom=GeomConfig(leaf_kind="frond"),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_validate_rejects_zero_leaflet_count(tmp_path):
+    with pytest.raises(ConfigError, match="leaflet_count"):
+        _make_config(
+            geom=GeomConfig(leaf_kind="pinnate", leaflet_count=0),
+            output=tmp_path / "out.glb",
+        )
+
+
 def test_elongation_defaults_disabled():
     from palubicki.config import ElongationConfig
     cfg = ElongationConfig()
