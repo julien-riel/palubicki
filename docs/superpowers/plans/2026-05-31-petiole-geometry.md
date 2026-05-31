@@ -23,10 +23,23 @@
   **A rigid rotation of the whole basis preserves that angle → preserves area →
   keeps `test_leaf_area_matches_geom_helper` green.** Droop MUST therefore rotate
   `rot_axis_u`, `leaf_up`, AND `rot_axis_w` by the same rotation.
-- **The leaf-area diagnostic counts blade leaflets only** (it reads
-  `layout.leaflets`, never `rachis_segments`) and the parity test filters by
-  `prim.material.name == "leaf"`. So a separate `"petiole"` material primitive is
-  automatically excluded. The diagnostic needs **no changes**.
+- **The leaf-area diagnostic counts blade area only** (`_total_leaf_area` in
+  `sim/diagnostics.py` lines 435–504 builds the 2-D blade and sums triangle area;
+  it reads `layout.leaflets`, never `rachis_segments`). Its simple branch calls
+  `compound_layout("simple", …, petiole_length=0.0)` — area is position- and
+  rotation-invariant, so moving the blade up the petiole and drooping it do not
+  change the metric. The diagnostic needs **no changes**.
+- **Layout values are leaf-size-multiples (ratios), NOT absolute lengths.**
+  `builder.py` puts `g.*_ratio` straight into `leaflet_specs` (e.g.
+  `"petiole_length": g.petiole_length_ratio`); the lift multiplies by `eff`
+  (the per-leaf effective leaf size) inside `build_rachis_primitive`
+  (`lift(uv) = center + eff·(u·rot_axis_u + v·leaf_up)`, radii `r·eff`). Do **not**
+  pre-multiply by `leaf_size` in the builder.
+- **`GeomConfig` is `@dataclass(frozen=True)`.** Tests cannot mutate
+  `cfg.geom.x = …`; construct `GeomConfig(...)` directly or use
+  `dataclasses.replace`. Prefer testing at the `build_leaves_primitive` /
+  `build_rachis_primitive` level (as `tests/geom/test_leaves.py` does) over
+  building a whole `Config`.
 - **Golden incrementality:** Tasks 1–4 are behavior-preserving for the rendered
   `.glb` (compound radii pass `(r, r)`; simple `petiole_length` stays `0.0` until
   the builder is wired in Task 5). Goldens should stay green through Task 4.
@@ -512,21 +525,21 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 ## Task 4: Config fields
 
-Add the five petiole `GeomConfig` fields. The YAML loader reads dataclass fields
-dynamically, so adding them here makes them YAML-settable automatically.
+Add the five petiole `GeomConfig` fields. The YAML loader (`_coerce`) derives the
+allowed field set from `fields(GeomConfig)` at runtime, so adding them here makes
+them YAML-settable automatically — no allowlist to update.
 
 **Files:**
-- Modify: `src/palubicki/config.py` (after `petiole_length_ratio`, line 145)
+- Modify: `src/palubicki/config.py` (after the `petiole_length_ratio` field block,
+  lines 277–279)
 - Test: `tests/test_config.py` (create if absent)
 
 - [ ] **Step 1: Write the failing test.**
 
-Add to `tests/test_config.py` (create the file if it does not exist, with the
-import):
+Add to `tests/test_config.py` (create the file if it does not exist):
 
 ```python
-from palubicki.config import Config, GeomConfig
-from palubicki.config import _from_dict  # loader used for YAML dicts
+from palubicki.config import GeomConfig
 
 
 def test_geom_config_has_petiole_defaults():
@@ -538,20 +551,12 @@ def test_geom_config_has_petiole_defaults():
     assert g.petiole_color == (0.32, 0.42, 0.18)
 
 
-def test_geom_config_petiole_fields_load_from_dict():
-    g = _from_dict(GeomConfig, {
-        "petiole_length_ratio": 0.25,
-        "petiole_droop_deg": 15.0,
-        "petiole_color": [0.3, 0.4, 0.2],
-    })
+def test_geom_config_petiole_overrides_construct():
+    # GeomConfig is frozen; override at construction time.
+    g = GeomConfig(petiole_length_ratio=0.25, petiole_droop_deg=15.0)
     assert g.petiole_length_ratio == 0.25
     assert g.petiole_droop_deg == 15.0
-    assert g.petiole_color == (0.3, 0.4, 0.2)
 ```
-
-(If `_from_dict` is private/named differently, use the public species loader
-instead — verify the exact name in `src/palubicki/config.py`; the agent report
-shows `_from_dict` and `_coerce`.)
 
 - [ ] **Step 2: Run to verify failure.**
 
@@ -560,16 +565,27 @@ Expected: FAIL — `AttributeError: 'GeomConfig' object has no attribute 'petiol
 
 - [ ] **Step 3: Add the fields.**
 
-In `src/palubicki/config.py`, immediately after the `petiole_length_ratio` line
-(line 145), insert:
+In `src/palubicki/config.py`, immediately after the `petiole_length_ratio` field
+block (the `field(default=0.4, …)` that ends at line 279), insert:
 
 ```python
-    petiole_radius_ratio: float = 0.02  # simple-leaf petiole base radius / leaf_size
-    petiole_taper: float = 0.6          # petiole tip radius / base radius
-    petiole_sides: int = 4              # petiole tube cross-section polygon sides
-    petiole_droop_deg: float = 0.0      # rigid downward (-Y) bend of petiole+blade
+    petiole_radius_ratio: float = field(
+        default=0.02, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}}
+    )  # simple-leaf petiole base radius / leaf_size
+    petiole_taper: float = field(
+        default=0.6, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}}
+    )  # petiole tip radius / base radius
+    petiole_sides: int = field(
+        default=4, metadata={"ui": {"min": 3, "max": 12, "step": 1}}
+    )  # petiole tube cross-section polygon sides
+    petiole_droop_deg: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}}
+    )  # rigid downward (-Y) bend of petiole + blade
     petiole_color: tuple[float, float, float] = (0.32, 0.42, 0.18)
 ```
+
+(Verify YAML coercion is automatic: `_coerce` in `config.py` builds its field set
+from `fields(GeomConfig)`, so no loader edit is needed.)
 
 - [ ] **Step 4: Run the config tests.**
 
@@ -600,19 +616,31 @@ Build `leaflet_specs` for simple leaves, thread droop into the blade lift, add t
   the `leaf_kind == "simple"` early-return)
 - Test: `tests/geom/test_leaves.py`, `tests/geom/test_builder_petiole.py` (new)
 
-- [ ] **Step 1: Write the failing integration tests.**
+- [ ] **Step 1: Write the failing integration tests** at the primitive level
+  (avoids the frozen-`Config` problem and matches `tests/geom/test_leaves.py`).
 
-Create `tests/geom/test_builder_petiole.py`:
+Create `tests/geom/test_builder_petiole.py`. **Build the tree with the same
+fixture helper `tests/geom/test_leaves.py` uses** (copy its `Node`/`Internode`/
+`Leaf` construction verbatim — the constructor kwargs below are from an
+exploration report and must be matched to the real `sim/tree.py`):
 
 ```python
 import numpy as np
 
-from palubicki.config import Config
-from palubicki.geom.builder import build_mesh
+from palubicki.geom.compound_leaf import build_rachis_primitive
+from palubicki.geom.mesh import Material
 from palubicki.sim.tree import Internode, Leaf, LeafState, Node, Tree
 
 
-def _small_leafy_tree():
+def _mat(name="petiole"):
+    return Material(name=name, base_color=(1, 1, 1, 1), metallic=0.0, roughness=1.0,
+                    base_color_texture_png=None, alpha_mode="OPAQUE",
+                    alpha_cutoff=0.5, double_sided=False)
+
+
+def _single_leaf_tree():
+    """One internode root->child apex, one ACTIVE leaf. Mirror the working
+    fixture in tests/geom/test_leaves.py; adjust kwargs to match sim/tree.py."""
     root = Node(position=np.array([0.0, 0.0, 0.0]))
     child = Node(position=np.array([0.0, 1.0, 0.0]))
     iod = Internode(parent_node=root, child_node=child, diameter=0.02)
@@ -624,43 +652,37 @@ def _small_leafy_tree():
     return Tree(root=root)
 
 
-def _materials(mesh):
-    return {p.material.name for p in mesh.primitives}
+# ratios (leaf-size multiples), exactly as builder.py builds them for simple leaves
+_SIMPLE_PETIOLE_SPECS = {
+    "leaflet_count": 1, "leaflet_pair_count": 0, "terminal_leaflet": False,
+    "rachis_length": 0.0, "petiole_length": 0.3, "rachis_radius": 0.02,
+    "petiole_taper": 0.6,
+}
 
 
-def test_simple_petiole_emits_petiole_primitive():
-    cfg = Config()
-    cfg.geom.enable_leaves = True
-    cfg.geom.leaf_kind = "simple"
-    cfg.geom.foliage_depth = 1
-    cfg.geom.petiole_length_ratio = 0.3
-    mesh = build_mesh(_small_leafy_tree(), cfg)
-    assert "petiole" in _materials(mesh)
-    pet = next(p for p in mesh.primitives if p.material.name == "petiole")
-    # one tapered tube: 2 * petiole_sides vertices
-    assert pet.positions.shape[0] == 2 * cfg.geom.petiole_sides
+def test_simple_petiole_tube_has_expected_vertices():
+    prim = build_rachis_primitive(
+        _single_leaf_tree(), material=_mat(), leaf_size=0.1, foliage_depth=1,
+        leaf_kind="simple", leaflet_specs=_SIMPLE_PETIOLE_SPECS, ring_sides=4,
+    )
+    # one tapered tube for one leaf: 2 * ring_sides vertices
+    assert prim.positions.shape[0] == 8
 
 
-def test_zero_petiole_emits_no_petiole_primitive():
-    cfg = Config()
-    cfg.geom.enable_leaves = True
-    cfg.geom.leaf_kind = "simple"
-    cfg.geom.foliage_depth = 1
-    cfg.geom.petiole_length_ratio = 0.0
-    mesh = build_mesh(_small_leafy_tree(), cfg)
-    assert "petiole" not in _materials(mesh)
+def test_zero_petiole_tube_is_empty():
+    specs = dict(_SIMPLE_PETIOLE_SPECS, petiole_length=0.0)
+    prim = build_rachis_primitive(
+        _single_leaf_tree(), material=_mat(), leaf_size=0.1, foliage_depth=1,
+        leaf_kind="simple", leaflet_specs=specs, ring_sides=4,
+    )
+    assert prim.positions.shape[0] == 0
 ```
-
-(Verify the `Internode`/`Node`/`Tree` constructor kwargs against
-`src/palubicki/sim/tree.py` — match the existing helper style in
-`tests/geom/test_leaves.py` exactly; adjust required args if the constructors
-need more than shown.)
 
 - [ ] **Step 2: Run to verify failure.**
 
 Run: `.venv/bin/pytest tests/geom/test_builder_petiole.py -v`
-Expected: FAIL — no `"petiole"` material primitive is produced (builder only
-emits the rachis tube for compound leaves today).
+Expected: FAIL — `build_rachis_primitive` early-returns empty for
+`leaf_kind == "simple"`, so the tube has 0 vertices.
 
 - [ ] **Step 3: Add `droop_deg` + real petiole to `build_leaves_primitive`.**
 
@@ -750,30 +772,41 @@ from `leaflet_specs`:
 
 - [ ] **Step 5: Wire `builder.py`.**
 
-In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–117). Build
-`leaflet_specs` for simple leaves too, thread droop, add the petiole material:
+In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–113).
+**Preserve the existing `leaf_mat` exactly** (texture + hardcoded base color);
+build `leaflet_specs` for simple leaves too (values are **ratios**, not multiplied
+by `leaf_size`); thread droop; emit a `"petiole"`-material tube for simple leaves:
 
 ```python
     if cfg.geom.enable_leaves:
         g = cfg.geom
+        leaf_png = _resolve_texture(g.leaf_texture)
+        if leaf_png is None:
+            leaf_png = default_leaf_png()
         leaf_mat = Material(
             name="leaf",
-            base_color=(*g.leaf_color, 1.0),
+            base_color=(0.4, 0.6, 0.2, 1.0),
             metallic=0.0,
-            roughness=0.9,
-            double_sided=True,
+            roughness=0.85,
+            base_color_texture_png=leaf_png,
             alpha_mode="MASK",
-            base_color_texture_png=_resolve_texture(g.leaf_texture),
+            alpha_cutoff=0.5,
+            double_sided=True,
         )
-        if g.leaf_kind != "simple":
+        is_compound = g.leaf_kind != "simple"
+        if is_compound:
+            lshape, lmargin, laspect = resolve_leaflet_blade(g)
             leaflet_specs = {
                 "leaflet_count": g.leaflet_count,
                 "leaflet_pair_count": g.leaflet_pair_count,
                 "terminal_leaflet": g.terminal_leaflet,
-                "rachis_length": g.rachis_length_ratio * g.leaf_size,
-                "petiole_length": g.petiole_length_ratio * g.leaf_size,
-                "rachis_radius": g.rachis_radius_ratio * g.leaf_size,
+                "rachis_length": g.rachis_length_ratio,
+                "petiole_length": g.petiole_length_ratio,
+                "rachis_radius": g.rachis_radius_ratio,
                 "petiole_taper": 1.0,
+                "leaflet_shape": lshape,
+                "leaflet_margin": lmargin,
+                "leaflet_aspect": laspect,
             }
         else:
             leaflet_specs = {
@@ -781,8 +814,8 @@ In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–117). Bui
                 "leaflet_pair_count": 0,
                 "terminal_leaflet": False,
                 "rachis_length": 0.0,
-                "petiole_length": g.petiole_length_ratio * g.leaf_size,
-                "rachis_radius": g.petiole_radius_ratio * g.leaf_size,
+                "petiole_length": g.petiole_length_ratio,
+                "rachis_radius": g.petiole_radius_ratio,
                 "petiole_taper": g.petiole_taper,
             }
         leaf_prim = build_leaves_primitive(
@@ -794,24 +827,25 @@ In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–117). Bui
             droop_deg=g.petiole_droop_deg,
             foliage_depth=g.foliage_depth,
             needle_cluster_spacing=g.needle_cluster_spacing,
-            sun_shade_k=g.sun_shade_k,
+            sun_shade_k=g.leaf_sun_shade_k,
             leaf_shape=g.leaf_shape,
             leaf_margin=g.leaf_margin,
             leaf_margin_depth=g.leaf_margin_depth,
             leaf_margin_count=g.leaf_margin_count,
             leaf_kind=g.leaf_kind,
-            leaflet_specs=(leaflet_specs if g.leaf_kind != "simple" else leaflet_specs),
+            leaflet_specs=leaflet_specs,
         )
         primitives.append(leaf_prim)
 
-        is_compound = g.leaf_kind != "simple"
         stem_mat = Material(
             name=("rachis" if is_compound else "petiole"),
             base_color=((*g.bark_color, 1.0) if is_compound else (*g.petiole_color, 1.0)),
             metallic=0.0,
             roughness=0.9,
-            double_sided=False,
+            base_color_texture_png=None,
             alpha_mode="OPAQUE",
+            alpha_cutoff=0.5,
+            double_sided=False,
         )
         stem_prim = build_rachis_primitive(
             tree,
@@ -822,7 +856,7 @@ In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–117). Bui
             leaflet_specs=leaflet_specs,
             ring_sides=(max(3, g.ring_sides // 2) if is_compound else max(3, g.petiole_sides)),
             needle_cluster_spacing=g.needle_cluster_spacing,
-            sun_shade_k=g.sun_shade_k,
+            sun_shade_k=g.leaf_sun_shade_k,
             splay_deg=g.leaf_splay_deg,
             droop_deg=g.petiole_droop_deg,
         )
@@ -832,16 +866,20 @@ In `src/palubicki/geom/builder.py`, replace the leaf block (lines 43–117). Bui
     return Mesh(primitives=primitives)
 ```
 
-(Note: `build_leaves_primitive` ignores `leaflet_specs` for `simple` except for
-the petiole fields it now reads, so passing the same dict is fine. Confirm
-`resolve_leaflet_blade(g)` is still imported/used elsewhere; the prior block's
-unused locals can be dropped.)
+Notes:
+- `build_leaves_primitive`'s simple branch now reads `petiole_length` /
+  `rachis_radius` / `petiole_taper` from `leaflet_specs` (Step 3); a `None`
+  `leaflet_specs` still means zero-petiole (existing `tests/geom/test_leaves.py`
+  calls pass `leaflet_specs=None`, so their blades stay at the node — unchanged).
+- Keep the `default_leaf_png` / `resolve_leaflet_blade` imports that the original
+  block used.
 
 - [ ] **Step 6: Run the new tests + the leaf-area parity test.**
 
-Run: `.venv/bin/pytest tests/geom/test_builder_petiole.py tests/sim/test_diagnostics_leaf_area.py -v`
-Expected: PASS — petiole primitive present/absent as asserted, and leaf-area
-parity holds (petiole excluded by material name; droop is area-preserving).
+Run: `.venv/bin/pytest tests/geom/test_builder_petiole.py "tests/sim/test_diagnostics.py::test_leaf_area_matches_geom_helper" -v`
+Expected: PASS — petiole tube present/empty as asserted, and leaf-area parity
+holds (the petiole is a separate tube primitive; blade area is translation- and
+rotation-invariant).
 
 - [ ] **Step 7: Run the full suite (goldens will fail — expected).**
 
@@ -910,20 +948,22 @@ Expected: PASS (oak/birch/maple updated; pine/fir/ash unchanged).
 
 - [ ] **Step 5: Acceptance check — oak is stalked, pine is not.**
 
-Run:
+Generate the GLBs via the CLI (entry point `palubicki.cli:main`, flag `-o`):
 ```bash
-.venv/bin/palubicki generate --species oak --seed 0 --output /tmp/oak.glb
-.venv/bin/palubicki generate --species pine --seed 0 --output /tmp/pine.glb
+.venv/bin/palubicki generate --species oak --seed 0 -o /tmp/oak.glb
+.venv/bin/palubicki generate --species pine --seed 0 -o /tmp/pine.glb
 ```
-Then confirm the petiole primitive presence with a one-off check:
+Then confirm the petiole primitive presence (use the real loader/simulator API —
+`load_config(...)` + `simulate(cfg)`, as in `tests/sim/test_diagnostics.py`):
 ```bash
 .venv/bin/python -c "
-from palubicki.config import load_species_config
+from pathlib import Path
+from palubicki.config import load_config
+from palubicki.sim.simulator import simulate
 from palubicki.geom.builder import build_mesh
-from palubicki.sim.runner import simulate_tree
 for sp, want in [('oak', True), ('pine', False)]:
-    cfg = load_species_config(sp)
-    mesh = build_mesh(simulate_tree(cfg, seed=0), cfg)
+    cfg = load_config(yaml_path=None, cli_overrides={'seed': 0}, output=Path('t.glb'), species=sp)
+    mesh = build_mesh(simulate(cfg), cfg)
     names = {p.material.name for p in mesh.primitives}
     has = 'petiole' in names
     print(sp, 'petiole=' + str(has))
@@ -932,8 +972,8 @@ print('acceptance OK')
 "
 ```
 Expected: `oak petiole=True`, `pine petiole=False`, `acceptance OK`.
-(Verify the CLI flags/entry point against `src/palubicki/cli.py`; adjust
-`--output`/subcommand names if they differ.)
+(Verify `load_config`'s exact kwargs and the CLI flags against
+`src/palubicki/config.py` / `src/palubicki/cli.py`; adjust if they differ.)
 
 - [ ] **Step 6: Commit.**
 
@@ -966,11 +1006,12 @@ Expected: PASS (all green, including goldens and leaf-area parity).
 Run:
 ```bash
 .venv/bin/python -c "
-from palubicki.config import load_species_config
+from pathlib import Path
+from palubicki.config import load_config
+from palubicki.sim.simulator import simulate
 from palubicki.geom.builder import build_mesh
-from palubicki.sim.runner import simulate_tree
-cfg = load_species_config('oak')
-mesh = build_mesh(simulate_tree(cfg, seed=0), cfg)
+cfg = load_config(yaml_path=None, cli_overrides={'seed': 0}, output=Path('t.glb'), species='oak')
+mesh = build_mesh(simulate(cfg), cfg)
 for p in mesh.primitives:
     print(p.material.name, p.positions.shape[0])
 "
