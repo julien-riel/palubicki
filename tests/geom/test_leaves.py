@@ -23,6 +23,63 @@ def _tree_with_n_terminal_buds(n):
     return tree
 
 
+def _linear_chain(n_internodes, length=1.0):
+    """root -> n1 -> ... -> n{n_internodes}(apex). Each internode is_main_axis,
+    length `length`. One terminal bud on the apex node."""
+    root = Node(position=np.zeros(3))
+    tree = Tree(root=root)
+    prev = root
+    for i in range(1, n_internodes + 1):
+        node = Node(position=np.array([0.0, float(i) * length, 0.0]))
+        iod = Internode(parent_node=prev, child_node=node, length=length,
+                        is_main_axis=True, light_factor=1.0)
+        prev.children_internodes.append(iod)
+        node.parent_internode = iod
+        tree.all_internodes.append(iod)
+        prev = node
+    bud = Bud(position=prev.position.copy(), direction=np.array([0.0, 1.0, 0.0]),
+              axis_order=0, parent_node=prev, state=BudState.ACTIVE)
+    prev.terminal_bud = bud
+    tree.active_buds.append(bud)
+    return tree
+
+
+def test_spacing_zero_matches_default():
+    """needle_cluster_spacing=0.0 is byte-identical to omitting the param."""
+    tree = _linear_chain(3)
+    p_default = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(), foliage_depth=3)
+    p_zero = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                                    foliage_depth=3, needle_cluster_spacing=0.0)
+    assert np.array_equal(p_default.positions, p_zero.positions)
+    assert np.array_equal(p_default.indices, p_zero.indices)
+
+
+def test_spacing_zero_one_cluster_per_leaf_node():
+    """depth=3 on a 3-internode chain -> 3 leaf-bearing nodes -> 3 ovate clusters
+    -> 3 * 17 = 51 verts."""
+    tree = _linear_chain(3)
+    p = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                               foliage_depth=3, needle_cluster_spacing=0.0)
+    assert p.positions.shape == (51, 3)
+
+
+def test_along_shoot_multiplies_clusters():
+    """spacing=0.5 on length-1.0 internodes: floor(1.0/0.5)+1 = 3 clusters each,
+    3 leaf-bearing internodes -> 9 clusters -> 9 * 17 = 153 verts."""
+    tree = _linear_chain(3)
+    p = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                               foliage_depth=3, needle_cluster_spacing=0.5)
+    assert p.positions.shape == (153, 3)
+
+
+def test_along_shoot_caps_per_internode():
+    """One long internode (length 10) at fine spacing is capped at 8 clusters."""
+    tree = _linear_chain(1, length=10.0)
+    p = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                               foliage_depth=1, needle_cluster_spacing=0.1)
+    assert p.positions.shape == (8 * 17, 3)
+
+
 def test_one_bud_default_shape_vert_count():
     """Default leaf_shape=ovate (base N=16) + entire margin + cluster=1:
     per face = 16 boundary + 1 anchor = 17 verts and 48 indices.

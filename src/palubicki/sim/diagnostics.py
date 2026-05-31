@@ -450,7 +450,7 @@ def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     from palubicki.geom.leaves import _collect_foliage_sites, compute_effective_leaf_size
 
     g = cfg.geom
-    sites = _collect_foliage_sites(tree, g.foliage_depth)
+    sites = _collect_foliage_sites(tree, g.foliage_depth, g.needle_cluster_spacing)
     if not sites:
         return 0.0
 

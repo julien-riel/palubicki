@@ -8,6 +8,8 @@ from palubicki.geom.leaf_blade import build_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.sim.tree import BudState, Internode, Node, Tree
 
+_MAX_CLUSTERS_PER_INTERNODE = 8
+
 
 def compute_effective_leaf_size(
     internode: Internode | None,
@@ -36,6 +38,7 @@ def build_leaves_primitive(
     aspect: float = 1.0,
     splay_deg: float = 0.0,
     foliage_depth: int = 1,
+    needle_cluster_spacing: float = 0.0,
     sun_shade_k: float = 0.0,
     leaf_shape: str = "ovate",
     leaf_margin: str = "entire",
@@ -60,7 +63,7 @@ def build_leaves_primitive(
     clamped to [0.5*leaf_size, 2.0*leaf_size]. Sites with no source internode
     (root apex) use light_factor=1.0 → eff_size=leaf_size.
     """
-    sites = _collect_foliage_sites(tree, foliage_depth)
+    sites = _collect_foliage_sites(tree, foliage_depth, needle_cluster_spacing)
 
     if not sites:
         return Primitive(
@@ -113,28 +116,18 @@ def build_leaves_primitive(
     return Primitive(positions=positions, normals=normals, uvs=uvs, indices=indices, material=material)
 
 
-def _collect_foliage_sites(
+def _leaf_bearing_nodes(
     tree: Tree, foliage_depth: int
-) -> list[tuple[np.ndarray, np.ndarray, Internode | None]]:
-    """Return list of (position, direction, source_internode) for foliage placement.
+) -> list[tuple[Node, np.ndarray, Internode | None]]:
+    """Return (node, direction, source_internode) for every leaf-bearing node:
+    living terminal apices plus up to (foliage_depth-1) nodes walked back along
+    each apex's parent chain (deduped). This is the retention rule shared by both
+    the legacy node-clustered path and the along-shoot path.
 
-    Algorithm:
-      1. Apex set = active terminal buds (no children internodes), matching the
-         legacy behavior. For foliage_depth == 1 this is the only set.
-      2. For depth > 1, walk each apex backward through ``parent_internode`` up to
-         (depth-1) extra steps. Already-visited nodes are skipped.
-
-    ``source_internode`` is the internode whose tangent gave the site its
-    direction. ``None`` for an apex bud whose parent node has no incoming
-    internode (root case) — those sites use a default light_factor of 1.0.
-
-    Direction at each site: parent-internode tangent if available; otherwise
-    the apex bud's growth direction.
+    Direction is the apex bud's growth direction for apices, the parent-internode
+    tangent for walked-back nodes (matching the historical foliage_depth>1 behavior).
     """
-    if foliage_depth < 1:
-        return []
-
-    sites: list[tuple[np.ndarray, np.ndarray, Internode | None]] = []
+    out: list[tuple[Node, np.ndarray, Internode | None]] = []
     apex_nodes: list[Node] = []
     for bud in tree.active_buds:
         if bud.state == BudState.DEAD:
@@ -142,19 +135,11 @@ def _collect_foliage_sites(
         node = bud.parent_node
         if len(node.children_internodes) != 0:
             continue
-        # Site position = node's bent position (apex tip after sag). Direction
-        # stays from the bud (still topological), since it controls leaf
-        # orientation, not placement.
-        site_pos = np.asarray(node.position + node.sag_offset, dtype=np.float64)
-        sites.append((
-            site_pos,
-            np.asarray(bud.direction, dtype=np.float64),
-            node.parent_internode,
-        ))
+        out.append((node, np.asarray(bud.direction, dtype=np.float64), node.parent_internode))
         apex_nodes.append(node)
 
     if foliage_depth <= 1:
-        return sites
+        return out
 
     visited: set[int] = {id(n) for n in apex_nodes}
     for apex in apex_nodes:
@@ -175,12 +160,45 @@ def _collect_foliage_sites(
                 direction = seg / seg_norm if seg_norm > 1e-12 else np.array([0.0, 1.0, 0.0])
             else:
                 direction = np.array([0.0, 1.0, 0.0])
-            site_pos = np.asarray(current.position + current.sag_offset, dtype=np.float64)
-            sites.append((
-                site_pos,
-                direction,
-                current.parent_internode,
-            ))
+            out.append((current, np.asarray(direction, dtype=np.float64), current.parent_internode))
+    return out
+
+
+def _collect_foliage_sites(
+    tree: Tree, foliage_depth: int, needle_cluster_spacing: float = 0.0
+) -> list[tuple[np.ndarray, np.ndarray, Internode | None]]:
+    """Return (position, direction, source_internode) for each foliage cluster.
+
+    needle_cluster_spacing == 0 -> one cluster at each leaf-bearing node (legacy).
+    needle_cluster_spacing > 0  -> clothe each leaf-bearing internode with clusters
+    spaced that many meters apart along the (bent) segment, capped at
+    _MAX_CLUSTERS_PER_INTERNODE; the node end is always included.
+    """
+    if foliage_depth < 1:
+        return []
+    nodes = _leaf_bearing_nodes(tree, foliage_depth)
+    sites: list[tuple[np.ndarray, np.ndarray, Internode | None]] = []
+    for node, direction, source_iod in nodes:
+        node_pos = np.asarray(node.position + node.sag_offset, dtype=np.float64)
+        if needle_cluster_spacing <= 0.0 or source_iod is None:
+            sites.append((node_pos, direction, source_iod))
+            continue
+        parent_node = source_iod.parent_node
+        par_pos = np.asarray(parent_node.position + parent_node.sag_offset, dtype=np.float64)
+        seg = node_pos - par_pos
+        seg_len = float(np.linalg.norm(seg))
+        if seg_len < 1e-12:
+            sites.append((node_pos, direction, source_iod))
+            continue
+        # Clusters clothing the shoot follow the segment they sit on, so this
+        # path deliberately uses the segment tangent rather than the node's
+        # incoming ``direction`` (which can differ on an apex internode).
+        seg_dir = seg / seg_len
+        n = int(seg_len / needle_cluster_spacing) + 1
+        n = max(1, min(_MAX_CLUSTERS_PER_INTERNODE, n))
+        for k in range(n):
+            f = (k + 1) / n
+            sites.append((par_pos + f * seg, seg_dir, source_iod))
     return sites
 
 

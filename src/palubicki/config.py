@@ -251,6 +251,12 @@ class GeomConfig:
     # nearest terminal apex. 1 = legacy (apex only). 3–4 = realistic young
     # shoot coverage. Larger values approach evergreen full-foliage density.
     foliage_depth: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
+    # #36: along-shoot needle distribution. 0.0 = legacy (one cluster per
+    # leaf-bearing node; broadleaves). >0 = clothe each leaf-bearing internode
+    # with clusters spaced this many meters apart (conifers).
+    needle_cluster_spacing: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
+    )
     leaf_sun_shade_k: float = field(
         default=0.0,
         metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}},
@@ -503,6 +509,10 @@ class Config:
             raise ConfigError(f"geom.leaf_aspect must be in (0, 4], got {g.leaf_aspect}")
         if not (0.0 <= g.leaf_splay_deg <= 90.0):
             raise ConfigError(f"geom.leaf_splay_deg must be in [0, 90], got {g.leaf_splay_deg}")
+        if g.needle_cluster_spacing < 0.0:
+            raise ConfigError(
+                f"geom.needle_cluster_spacing must be >= 0, got {g.needle_cluster_spacing}"
+            )
         if not (0.0 <= g.leaf_sun_shade_k <= 2.0):
             raise ConfigError(
                 f"geom.leaf_sun_shade_k must be in [0, 2], got {g.leaf_sun_shade_k}"
