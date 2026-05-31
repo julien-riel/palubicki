@@ -16,8 +16,8 @@ from palubicki.edit.config_io import config_dict_to_overrides, config_to_dict_fo
 from palubicki.edit.schema import build_schema
 from palubicki.export.gltf import ExportError, write_glb_to_bytes
 from palubicki.geom.builder import build_mesh
-from palubicki.sim.simulator import simulate, simulate_forest
 from palubicki.sim.debug_capture import DebugCollector
+from palubicki.sim.simulator import simulate, simulate_forest
 
 logger = logging.getLogger("palubicki.edit")
 
@@ -87,7 +87,7 @@ def create_app(initial_config: Config) -> FastAPI:
         return Response(content=data, media_type="model/gltf-binary")
 
     @app.get("/api/debug")
-    def get_debug():
+    def get_debug() -> JSONResponse:
         timeline = app.state.last_debug
         if timeline is None:
             return JSONResponse(
