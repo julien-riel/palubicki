@@ -273,3 +273,62 @@ def test_leaves_follow_sag_offset_at_apex():
     bent_y_mean = float(prim_bent.positions[:, 1].mean())
 
     assert bent_y_mean < baseline_y_mean - 0.4
+
+
+def test_simple_kind_matches_default_output():
+    """leaf_kind='simple' (the new default path) is byte-identical to the
+    pre-compound single-blade output, for both n_planes=1 (ovate) and
+    n_planes=2 (linear cross-blade)."""
+    tree = _tree_with_n_terminal_buds(3)
+    # n_planes=1 (ovate, default shape)
+    p_old = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                                   foliage_depth=1)
+    p_new = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                                   foliage_depth=1,
+                                   leaf_kind="simple", leaflet_specs=None)
+    np.testing.assert_array_equal(p_old.positions, p_new.positions)
+    np.testing.assert_array_equal(p_old.normals, p_new.normals)
+    np.testing.assert_array_equal(p_old.uvs, p_new.uvs)
+    np.testing.assert_array_equal(p_old.indices, p_new.indices)
+
+    # n_planes=2 (linear → cross-blade): the second-plane basis order must be
+    # preserved, so the regression check covers it too.
+    pl_old = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                    foliage_depth=1, leaf_shape="linear")
+    pl_new = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                    foliage_depth=1, leaf_shape="linear",
+                                    leaf_kind="simple", leaflet_specs=None)
+    np.testing.assert_array_equal(pl_old.positions, pl_new.positions)
+    np.testing.assert_array_equal(pl_old.normals, pl_new.normals)
+    np.testing.assert_array_equal(pl_old.uvs, pl_new.uvs)
+    np.testing.assert_array_equal(pl_old.indices, pl_new.indices)
+
+
+def test_pinnate_vert_count_is_linear_in_leaflets():
+    """A pinnate leaf emits one blade per leaflet, so vertex/index counts scale
+    by len(layout.leaflets) over the simple (single-leaflet) baseline."""
+    from palubicki.geom.compound_leaf import compound_layout
+    from palubicki.geom.leaf_blade import build_blade
+    from palubicki.geom.leaves import selected_leaves
+
+    tree = _tree_with_n_terminal_buds(3)
+    n_records = len(selected_leaves(tree, foliage_depth=1))
+
+    specs = {
+        "leaflet_count": 6, "leaflet_pair_count": 0, "terminal_leaflet": True,
+        "rachis_length": 1.5, "petiole_length": 0.4, "rachis_radius": 0.045,
+    }
+    lay = compound_layout("pinnate", **specs)
+    leaflets_per_leaf = len(lay.leaflets)  # 6 lateral + 1 terminal = 7
+
+    prim = build_leaves_primitive(
+        tree, leaf_size=0.06, material=_mat(), foliage_depth=1,
+        leaf_kind="pinnate", leaflet_specs=specs,
+    )
+    # Ovate blade (default shape) has a fixed vertex count V.
+    blade_pos = build_blade(length=1.0, width=1.0, shape="ovate", margin="entire")[0]
+    v = blade_pos.shape[0]
+    blade_idx = build_blade(length=1.0, width=1.0, shape="ovate", margin="entire")[3]
+    m = blade_idx.shape[0]
+    assert prim.positions.shape[0] == n_records * leaflets_per_leaf * v
+    assert prim.indices.shape[0] == n_records * leaflets_per_leaf * m

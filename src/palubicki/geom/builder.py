@@ -5,6 +5,7 @@ from pathlib import Path
 from palubicki.config import Config, ConfigError, GeomConfig
 from palubicki.geom._textures import _PROC_TEXTURES, default_leaf_png
 from palubicki.geom.bark_blend import BarkBlendStops
+from palubicki.geom.compound_leaf import build_rachis_primitive, resolve_leaflet_blade
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
@@ -53,21 +54,63 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             alpha_cutoff=0.5,
             double_sided=True,
         )
+        g = cfg.geom
+        leaflet_specs = None
+        if g.leaf_kind != "simple":
+            lshape, lmargin, laspect = resolve_leaflet_blade(g)
+            leaflet_specs = {
+                "leaflet_count": g.leaflet_count,
+                "leaflet_pair_count": g.leaflet_pair_count,
+                "terminal_leaflet": g.terminal_leaflet,
+                "rachis_length": g.rachis_length_ratio,
+                "petiole_length": g.petiole_length_ratio,
+                "rachis_radius": g.rachis_radius_ratio,
+                "leaflet_shape": lshape,
+                "leaflet_margin": lmargin,
+                "leaflet_aspect": laspect,
+            }
         leaf_prim = build_leaves_primitive(
             tree,
-            leaf_size=cfg.geom.leaf_size,
+            leaf_size=g.leaf_size,
             material=leaf_mat,
-            aspect=cfg.geom.leaf_aspect,
-            splay_deg=cfg.geom.leaf_splay_deg,
-            foliage_depth=cfg.geom.foliage_depth,
-            needle_cluster_spacing=cfg.geom.needle_cluster_spacing,
-            sun_shade_k=cfg.geom.leaf_sun_shade_k,
-            leaf_shape=cfg.geom.leaf_shape,
-            leaf_margin=cfg.geom.leaf_margin,
-            leaf_margin_depth=cfg.geom.leaf_margin_depth,
-            leaf_margin_count=cfg.geom.leaf_margin_count,
+            aspect=g.leaf_aspect,
+            splay_deg=g.leaf_splay_deg,
+            foliage_depth=g.foliage_depth,
+            needle_cluster_spacing=g.needle_cluster_spacing,
+            sun_shade_k=g.leaf_sun_shade_k,
+            leaf_shape=g.leaf_shape,
+            leaf_margin=g.leaf_margin,
+            leaf_margin_depth=g.leaf_margin_depth,
+            leaf_margin_count=g.leaf_margin_count,
+            leaf_kind=g.leaf_kind,
+            leaflet_specs=leaflet_specs,
         )
         primitives.append(leaf_prim)
+        if leaflet_specs is not None:
+            rachis_mat = Material(
+                name="rachis",
+                base_color=(*g.bark_color, 1.0),
+                metallic=0.0,
+                roughness=0.9,
+                base_color_texture_png=None,
+                alpha_mode="OPAQUE",
+                alpha_cutoff=0.5,
+                double_sided=False,
+            )
+            rachis_prim = build_rachis_primitive(
+                tree,
+                material=rachis_mat,
+                leaf_size=g.leaf_size,
+                foliage_depth=g.foliage_depth,
+                leaf_kind=g.leaf_kind,
+                leaflet_specs=leaflet_specs,
+                ring_sides=max(3, g.ring_sides // 2),
+                needle_cluster_spacing=g.needle_cluster_spacing,
+                sun_shade_k=g.leaf_sun_shade_k,
+                splay_deg=g.leaf_splay_deg,
+            )
+            if rachis_prim.positions.shape[0] > 0:
+                primitives.append(rachis_prim)
 
     return Mesh(primitives=primitives)
 

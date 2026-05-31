@@ -873,6 +873,33 @@ def test_leader_deviation_within_species_bound(species):
     assert lo <= dev <= hi, f"{species}: leader_deviation_deg={dev:.1f} outside {bound}"
 
 
+@pytest.mark.slow
+def test_total_leaf_area_scales_with_leaflets():
+    """Pinnate leaf area > simple leaf area for the same tree (more blades),
+    and simple stays positive. Uses leaflet_aspect=0.5 so leaflets are slim."""
+    import dataclasses
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.diagnostics import _total_leaf_area
+    from palubicki.sim.simulator import simulate
+
+    cfg_simple = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                             output=Path("t.glb"), species="oak")
+    tree = simulate(cfg_simple)
+    a_simple = _total_leaf_area(tree, cfg_simple)
+
+    cfg_pinnate = dataclasses.replace(
+        cfg_simple,
+        geom=dataclasses.replace(
+            cfg_simple.geom, leaf_kind="pinnate", leaflet_count=6,
+            leaflet_aspect=0.5,
+        ),
+    )
+    a_pinnate = _total_leaf_area(tree, cfg_pinnate)
+    assert a_pinnate > a_simple > 0.0
+
+
 def test_total_leaf_area_matches_pre_refactor_pin():
     """Leaf area is preserved across the #14 refactor (azimuth seating keeps the
     cos(splay) shear). Pin captured on main before the refactor, seed 0."""

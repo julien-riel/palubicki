@@ -261,6 +261,27 @@ class GeomConfig:
         default=0.0,
         metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}},
     )
+    # --- Compound leaves (#6) ---
+    leaf_kind: Literal["simple", "pinnate", "palmate", "bipinnate"] = field(
+        default="simple", metadata={"ui": {"label": "Leaf kind"}}
+    )
+    leaflet_count: int = field(default=5, metadata={"ui": {"min": 1, "max": 21, "step": 1}})
+    leaflet_pair_count: int = field(default=0, metadata={"ui": {"min": 0, "max": 12, "step": 1}})
+    terminal_leaflet: bool = field(default=True, metadata={"ui": {"label": "Terminal leaflet"}})
+    rachis_length_ratio: float = field(
+        default=1.5, metadata={"ui": {"min": 0.1, "max": 6.0, "step": 0.1}}
+    )
+    rachis_radius_ratio: float = field(
+        default=0.03, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}}
+    )
+    petiole_length_ratio: float = field(
+        default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.1}}
+    )
+    leaflet_shape: Literal[
+        "linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"
+    ] | None = None
+    leaflet_margin: Literal["entire", "serrate", "dentate", "lobed"] | None = None
+    leaflet_aspect: float | None = None
     root_flare_height: float = field(
         default=0.3, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}}
     )
@@ -535,6 +556,45 @@ class Config:
         if g.leaf_margin_count < 0:
             raise ConfigError(
                 f"geom.leaf_margin_count must be >= 0, got {g.leaf_margin_count}"
+            )
+        if g.leaf_kind not in ("simple", "pinnate", "palmate", "bipinnate"):
+            raise ConfigError(
+                f"geom.leaf_kind must be one of "
+                f"'simple'|'pinnate'|'palmate'|'bipinnate', got {g.leaf_kind!r}"
+            )
+        if g.leaflet_count < 1:
+            raise ConfigError(f"geom.leaflet_count must be >= 1, got {g.leaflet_count}")
+        if g.leaflet_pair_count < 0:
+            raise ConfigError(
+                f"geom.leaflet_pair_count must be >= 0, got {g.leaflet_pair_count}"
+            )
+        if g.leaf_kind == "bipinnate" and g.leaflet_pair_count < 1:
+            raise ConfigError(
+                "geom.leaflet_pair_count must be >= 1 when leaf_kind is 'bipinnate'"
+            )
+        if g.rachis_length_ratio <= 0:
+            raise ConfigError(
+                f"geom.rachis_length_ratio must be > 0, got {g.rachis_length_ratio}"
+            )
+        if g.rachis_radius_ratio <= 0:
+            raise ConfigError(
+                f"geom.rachis_radius_ratio must be > 0, got {g.rachis_radius_ratio}"
+            )
+        if g.petiole_length_ratio < 0:
+            raise ConfigError(
+                f"geom.petiole_length_ratio must be >= 0, got {g.petiole_length_ratio}"
+            )
+        if g.leaflet_shape is not None and g.leaflet_shape not in (
+            "linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"
+        ):
+            raise ConfigError(f"geom.leaflet_shape invalid, got {g.leaflet_shape!r}")
+        if g.leaflet_margin is not None and g.leaflet_margin not in (
+            "entire", "serrate", "dentate", "lobed"
+        ):
+            raise ConfigError(f"geom.leaflet_margin invalid, got {g.leaflet_margin!r}")
+        if g.leaflet_aspect is not None and not (0.0 < g.leaflet_aspect <= 4.0):
+            raise ConfigError(
+                f"geom.leaflet_aspect must be in (0, 4], got {g.leaflet_aspect}"
             )
         if g.root_flare_factor < 1.0:
             raise ConfigError(
