@@ -32,7 +32,23 @@
       <div class="viewer-overlay">
         <button id="toggle-leaves-btn" type="button">Toggle leaves</button>
         <button id="toggle-wireframe-btn" type="button">Wireframe</button>
+        <label class="debug-toggle">
+          <input id="debug-capture-toggle" type="checkbox" /> Capture debug
+        </label>
         <span id="spinner" class="spinner hidden">…</span>
+      </div>
+      <div id="debug-panel" class="debug-panel hidden">
+        <div class="debug-layers">
+          <label><input id="layer-markers-toggle" type="checkbox" checked /> Markers</label>
+          <label><input id="layer-envelope-toggle" type="checkbox" checked /> Envelope</label>
+          <label><input id="layer-buds-toggle" type="checkbox" checked /> Buds</label>
+          <label><input id="layer-shed-toggle" type="checkbox" checked /> Shed</label>
+        </div>
+        <div class="debug-timeline">
+          <button id="timeline-play-btn" type="button">▶</button>
+          <input id="timeline-slider" type="range" min="0" max="0" step="1" value="0" />
+          <span id="timeline-readout">—</span>
+        </div>
       </div>
     </section>
   </main>

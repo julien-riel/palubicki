@@ -207,3 +207,14 @@ def test_generate_with_debug_flag_populates_timeline(client):
     assert isinstance(tl["frames"], list) and len(tl["frames"]) >= 1
     frame = tl["frames"][0]
     assert set(frame.keys()) == {"t", "markers_killed", "buds", "shed"}
+
+
+def test_index_html_has_debug_controls(client):
+    text = client.get("/").text
+    for el_id in (
+        "debug-capture-toggle", "debug-panel", "timeline-slider",
+        "timeline-play-btn", "timeline-readout",
+        "layer-markers-toggle", "layer-envelope-toggle",
+        "layer-buds-toggle", "layer-shed-toggle",
+    ):
+        assert f'id="{el_id}"' in text, f"missing debug control id: {el_id}"
