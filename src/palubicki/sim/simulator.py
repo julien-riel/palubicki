@@ -411,14 +411,14 @@ def _emit_node(
             )
             new_node.dormant_reserve_buds.append(rbud)
 
-    # Leaves (#14): emit leaf_cluster_count leaves at this node, seated by the
+    # Leaves (#14): emit leaf_cluster_count leaves at this node, using the
     # per-axis phyllotactic azimuth (same #24 ordinal that drives lateral buds).
-    # The renderer selects which leaves to draw (apex-proximity) and turns the
-    # stored azimuth into blade geometry.
     if cfg.geom.enable_leaves and cfg.geom.leaf_cluster_count > 0:
         for az in leaf_azimuths(
-            cfg.phyllotaxy, axis_ord,
-            axis_order=cur.axis_order, count=cfg.geom.leaf_cluster_count,
+            cfg.phyllotaxy,
+            node_index=axis_ord,
+            axis_order=cur.axis_order,
+            count=cfg.geom.leaf_cluster_count,
         ):
             new_node.leaves.append(
                 Leaf(parent_node=new_node, azimuth=az, birth_time=t,

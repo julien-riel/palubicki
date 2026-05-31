@@ -867,9 +867,10 @@ def test_enable_leaves_false_emits_no_leaves(tmp_path):
 
 
 def test_leaves_do_not_perturb_skeleton(tmp_path):
+    import numpy as np
+
     from palubicki.config import load_config
     from palubicki.sim.simulator import simulate
-    import numpy as np
 
     def sig(tree):
         out = []
