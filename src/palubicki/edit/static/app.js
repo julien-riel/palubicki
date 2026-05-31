@@ -432,14 +432,24 @@ function buildDebugLayers(tl) {
   viewer.debugLayers.envelope = envelope;
   viewer.debugRoot.add(envelope);
 
-  // Buds — Points cloud rebuilt per frame.
-  const buds = new THREE.Points(new THREE.BufferGeometry(),
+  // Buds — pre-sized Points cloud, written in place per frame (retain-and-mutate
+  // so we never orphan GPU buffers during scrub/play). setDrawRange caps the
+  // rendered count to the current frame's bud count.
+  const maxBuds = tl.frames.reduce((m, f) => Math.max(m, f.buds.length), 0);
+  const budGeo = new THREE.BufferGeometry();
+  budGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(maxBuds * 3), 3));
+  budGeo.setAttribute("color", new THREE.BufferAttribute(new Float32Array(maxBuds * 3), 3));
+  const buds = new THREE.Points(budGeo,
     new THREE.PointsMaterial({ size: 0.08, vertexColors: true }));
   viewer.debugLayers.buds = buds;
   viewer.debugRoot.add(buds);
 
-  // Shed — line segments, cumulative up to the current frame.
-  const shed = new THREE.LineSegments(new THREE.BufferGeometry(),
+  // Shed — pre-sized to the total segment count across all frames; cumulative
+  // segments are written in place each frame and capped via setDrawRange.
+  const totalShedSegs = tl.frames.reduce((m, f) => m + f.shed.length, 0);
+  const shedGeo = new THREE.BufferGeometry();
+  shedGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(totalShedSegs * 6), 3));
+  const shed = new THREE.LineSegments(shedGeo,
     new THREE.LineBasicMaterial({ color: 0xff4040 }));
   viewer.debugLayers.shed = shed;
   viewer.debugRoot.add(shed);
@@ -487,25 +497,32 @@ function setFrame(i) {
   }
   colors.needsUpdate = true;
 
-  // Buds: rebuild positions + colors from this frame.
-  const bp = new Float32Array(frame.buds.length * 3);
-  const bc = new Float32Array(frame.buds.length * 3);
-  frame.buds.forEach((b, j) => {
-    bp[j*3]=b.p[0]; bp[j*3+1]=b.p[1]; bp[j*3+2]=b.p[2];
-    const c = b.state === "ACTIVE" ? [1.0, 0.85, 0.1] : [0.5, 0.5, 0.55]; // dormant = grey
-    bc[j*3]=c[0]; bc[j*3+1]=c[1]; bc[j*3+2]=c[2];
-  });
+  // Buds: write positions + colors in place, then cap the draw range.
   const bGeo = viewer.debugLayers.buds.geometry;
-  bGeo.setAttribute("position", new THREE.BufferAttribute(bp, 3));
-  bGeo.setAttribute("color", new THREE.BufferAttribute(bc, 3));
+  const bp = bGeo.getAttribute("position");
+  const bc = bGeo.getAttribute("color");
+  frame.buds.forEach((b, j) => {
+    bp.setXYZ(j, b.p[0], b.p[1], b.p[2]);
+    if (b.state === "ACTIVE") bc.setXYZ(j, 1.0, 0.85, 0.1);
+    else bc.setXYZ(j, 0.5, 0.5, 0.55); // dormant = grey
+  });
+  bGeo.setDrawRange(0, frame.buds.length);
+  bp.needsUpdate = true;
+  bc.needsUpdate = true;
 
-  // Shed: cumulative segments up to and including frame i.
-  const segs = [];
-  for (let f = 0; f <= i; f++) {
-    for (const s of tl.frames[f].shed) { segs.push(...s[0], ...s[1]); }
-  }
+  // Shed: write cumulative segments (up to and including frame i) in place,
+  // then cap the draw range to the number of vertices written.
   const sGeo = viewer.debugLayers.shed.geometry;
-  sGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(segs), 3));
+  const sp = sGeo.getAttribute("position");
+  let v = 0;
+  for (let f = 0; f <= i; f++) {
+    for (const s of tl.frames[f].shed) {
+      sp.setXYZ(v++, s[0][0], s[0][1], s[0][2]);
+      sp.setXYZ(v++, s[1][0], s[1][1], s[1][2]);
+    }
+  }
+  sGeo.setDrawRange(0, v);
+  sp.needsUpdate = true;
 
   // Readout: time, alive/dead counts, bud count.
   const aliveCount = tl.markers.positions.length - dead.size;
