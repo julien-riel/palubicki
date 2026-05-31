@@ -13,9 +13,12 @@ def test_node_leaves_defaults_empty():
 
 
 def test_leaf_position_is_derived_and_tracks_node():
+    # Default sag_offset is zeros -> leaf sits exactly at the node.
     n = Node(position=np.array([1.0, 2.0, 3.0]))
-    n.sag_offset = np.array([0.0, -0.5, 0.0])
     leaf = Leaf(parent_node=n, azimuth=0.0, birth_time=1.0)
+    assert np.allclose(leaf.position, [1.0, 2.0, 3.0])
+    # With a sag offset, position includes it.
+    n.sag_offset = np.array([0.0, -0.5, 0.0])
     assert np.allclose(leaf.position, [1.0, 1.5, 3.0])
     # Moving the node moves the leaf (no frozen world coordinate).
     n.position = np.array([10.0, 0.0, 0.0])
@@ -33,8 +36,15 @@ def test_leaf_age_uses_clock():
 
 
 def test_tree_all_leaves_walks_graph():
+    from palubicki.sim.tree import Internode
     root = Node(position=np.zeros(3))
-    leaf = Leaf(parent_node=root, azimuth=0.0, birth_time=0.0)
-    root.leaves.append(leaf)
+    child = Node(position=np.array([0.0, 1.0, 0.0]))
+    iod = Internode(parent_node=root, child_node=child, length=1.0, is_main_axis=True)
+    root.children_internodes.append(iod)
+    child.parent_internode = iod
+    lr = Leaf(parent_node=root, azimuth=0.0, birth_time=0.0)
+    lc = Leaf(parent_node=child, azimuth=1.0, birth_time=1.0)
+    root.leaves.append(lr)
+    child.leaves.append(lc)
     tree = Tree(root=root)
-    assert list(tree.all_leaves()) == [leaf]
+    assert set(map(id, tree.all_leaves())) == {id(lr), id(lc)}
