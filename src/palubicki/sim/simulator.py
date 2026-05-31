@@ -16,14 +16,18 @@ from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_l
 from palubicki.sim.light import LightGrid
 from palubicki.sim.light_perception import perceive_light
 from palubicki.sim.obstacles import any_contains, segment_blocked
-from palubicki.sim.phyllotaxy import lateral_bud_directions, reserve_bud_directions
+from palubicki.sim.phyllotaxy import (
+    lateral_bud_directions,
+    leaf_azimuths,
+    reserve_bud_directions,
+)
 from palubicki.sim.radii import update_diameters_incremental
 from palubicki.sim.sag import apply_sag
 from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.sympodial import promote_lateral_if_failing
-from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.tree import Bud, BudState, Internode, Leaf, LeafState, Node, Tree
 from palubicki.sim.tropisms import growth_direction
 
 if TYPE_CHECKING:
@@ -406,6 +410,20 @@ def _emit_node(
                 state=BudState.RESERVE,
             )
             new_node.dormant_reserve_buds.append(rbud)
+
+    # Leaves (#14): emit leaf_cluster_count leaves at this node, using the
+    # per-axis phyllotactic azimuth (same #24 ordinal that drives lateral buds).
+    if cfg.geom.enable_leaves and cfg.geom.leaf_cluster_count > 0:
+        for az in leaf_azimuths(
+            cfg.phyllotaxy,
+            node_index=axis_ord,
+            axis_order=cur.axis_order,
+            count=cfg.geom.leaf_cluster_count,
+        ):
+            new_node.leaves.append(
+                Leaf(parent_node=new_node, azimuth=az, birth_time=t,
+                     state=LeafState.ACTIVE)
+            )
 
     cur.state = BudState.DEAD
     return new_node, terminal

@@ -103,6 +103,54 @@ def lateral_bud_directions(
     return out
 
 
+def leaf_azimuths(
+    cfg: PhyllotaxyConfig,
+    node_index: int,
+    *,
+    axis_order: int,
+    count: int,
+) -> list[float]:
+    """Phyllotactic seating azimuths (radians) for ``count`` leaves at one node.
+
+    Replicates the per-axis ``base_azimuth`` progression of
+    ``lateral_bud_directions`` (so leaves spiral correctly along each axis via the
+    #24 ordinal), then fans ``count`` members evenly ``2*pi/count`` apart. Pure
+    scalar: the renderer turns (azimuth, render-time stem direction, leaf_splay_deg)
+    into blade geometry, keeping the splay area-shear in one place.
+
+    NOTE: the base-azimuth switch below is deliberately duplicated from
+    ``lateral_bud_directions`` rather than shared, so that skeleton-driving function
+    stays byte-for-byte untouched. Keep the two in sync if the progression changes —
+    but NOT the jitter: leaves intentionally omit the ``divergence_jitter_deg`` /
+    RNG salting that ``lateral_bud_directions`` applies, so leaf seating stays pure
+    and deterministic. Do not "sync" jitter in.
+
+    Expects ``count >= 1`` (callers gate on ``leaf_cluster_count > 0``); ``count == 0`` returns ``[]``.
+    """
+    if cfg.distichous_on_plagiotropic and axis_order > 0:
+        mode = "distichous"
+    else:
+        mode = cfg.mode
+
+    if mode == "decussate":
+        base_azimuth = (
+            math.radians(cfg.divergence_angle_deg) * node_index
+            + (math.pi / 2.0) * (node_index % 2)
+        )
+    elif mode == "whorled":
+        k = max(1, cfg.whorl_count)
+        base_azimuth = (
+            math.radians(cfg.divergence_angle_deg) * node_index
+            + (math.pi / k) * (node_index % 2)
+        )
+    elif mode == "distichous":
+        base_azimuth = math.pi * node_index
+    else:  # alternate / opposite -> simple spiral progression
+        base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index
+
+    return [base_azimuth + 2.0 * math.pi * i / count for i in range(count)]
+
+
 def reserve_bud_directions(
     growth_direction: np.ndarray,
     cfg: PhyllotaxyConfig,

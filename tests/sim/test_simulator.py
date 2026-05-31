@@ -825,3 +825,64 @@ def test_collector_captures_one_frame_per_executed_iteration(tmp_path):
     # Frame times are non-decreasing.
     times = [f["t"] for f in tl["frames"]]
     assert times == sorted(times)
+
+
+def test_every_node_emits_leaves(tmp_path):
+    from palubicki.config import load_config
+    from palubicki.sim.simulator import simulate
+    from palubicki.sim.tree import LeafState
+    cfg = load_config(
+        yaml_path=None,
+        cli_overrides={"envelope.marker_count": 200, "sim.max_simulation_years": 5,
+                       "seed": 3, "geom.leaf_cluster_count": 3},
+        output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    n_nodes = 0
+    stack = [tree.root]
+    while stack:
+        node = stack.pop()
+        if node.parent_internode is not None:
+            n_nodes += 1
+            assert len(node.leaves) == 3
+            assert all(lf.state is LeafState.ACTIVE for lf in node.leaves)
+            assert all(lf.birth_time >= 0.0 for lf in node.leaves)
+        for iod in node.children_internodes:
+            stack.append(iod.child_node)
+    assert n_nodes > 0
+    assert len(list(tree.all_leaves())) == n_nodes * 3
+
+
+def test_enable_leaves_false_emits_no_leaves(tmp_path):
+    from palubicki.config import load_config
+    from palubicki.sim.simulator import simulate
+    cfg = load_config(
+        yaml_path=None,
+        cli_overrides={"envelope.marker_count": 200, "sim.max_simulation_years": 5,
+                       "seed": 3, "geom.enable_leaves": False},
+        output=tmp_path / "t.glb",
+    )
+    tree = simulate(cfg)
+    assert list(tree.all_leaves()) == []
+
+
+def test_leaves_do_not_perturb_skeleton(tmp_path):
+    import numpy as np
+
+    from palubicki.config import load_config
+    from palubicki.sim.simulator import simulate
+
+    def sig(tree):
+        out = []
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            out.append(tuple(np.round(node.position, 6).tolist()))
+            for iod in node.children_internodes:
+                stack.append(iod.child_node)
+        return sorted(out)
+
+    base = {"envelope.marker_count": 200, "sim.max_simulation_years": 5, "seed": 3}
+    on = simulate(load_config(yaml_path=None, cli_overrides={**base, "geom.enable_leaves": True}, output=tmp_path / "a.glb"))
+    off = simulate(load_config(yaml_path=None, cli_overrides={**base, "geom.enable_leaves": False}, output=tmp_path / "b.glb"))
+    assert sig(on) == sig(off)

@@ -14,6 +14,12 @@ class BudState(Enum):
     RESERVE = auto()
 
 
+class LeafState(Enum):
+    ACTIVE = auto()
+    SENESCENT = auto()   # reserved for caducity follow-up — unused in MVP
+    ABSCISSED = auto()   # reserved — unused in MVP
+
+
 @dataclass(eq=False)
 class Bud:
     position: np.ndarray
@@ -38,6 +44,22 @@ class Bud:
 
 
 @dataclass(eq=False)
+class Leaf:
+    parent_node: Node
+    azimuth: float            # phyllotactic seating azimuth (radians), fixed at birth
+    birth_time: float         # years, from Clock.t
+    state: LeafState = LeafState.ACTIVE
+
+    @property
+    def position(self) -> np.ndarray:
+        # Derived — tracks sag/elongation automatically, mirrors mesh-time placement.
+        return self.parent_node.position + self.parent_node.sag_offset
+
+    def age(self, clock) -> float:
+        return clock.t - self.birth_time
+
+
+@dataclass(eq=False)
 class Node:
     position: np.ndarray
     parent_internode: Internode | None = None
@@ -45,6 +67,7 @@ class Node:
     terminal_bud: Bud | None = None
     lateral_buds: list[Bud] = field(default_factory=list)
     dormant_reserve_buds: list[Bud] = field(default_factory=list)
+    leaves: list[Leaf] = field(default_factory=list)
     # Set to True by sym.promote_lateral_if_failing when a lateral bud is
     # promoted to terminal at this node. Lets diagnostics count promotion
     # events without traversing structural geometry.
@@ -85,3 +108,12 @@ class Tree:
     root: Node
     active_buds: list[Bud] = field(default_factory=list)
     all_internodes: list[Internode] = field(default_factory=list)
+
+    def all_leaves(self):
+        """Yield every Leaf in the tree (pre-order walk from root)."""
+        stack = [self.root]
+        while stack:
+            node = stack.pop()
+            yield from node.leaves
+            for iod in node.children_internodes:
+                stack.append(iod.child_node)

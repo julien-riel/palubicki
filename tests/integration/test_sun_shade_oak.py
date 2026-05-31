@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 
 from palubicki.config import load_config
-from palubicki.geom.leaves import _collect_foliage_sites
+from palubicki.geom.leaves import selected_leaves
 from palubicki.sim.simulator import simulate
 
 pytestmark = pytest.mark.slow
@@ -14,10 +14,16 @@ def test_oak_lower_canopy_leaves_larger_than_upper(tmp_path):
                       output=tmp_path / "x.glb", species="oak")
     tree = simulate(cfg)
 
-    sites = _collect_foliage_sites(tree, cfg.geom.foliage_depth)
+    sites = selected_leaves(
+        tree, foliage_depth=cfg.geom.foliage_depth,
+        needle_cluster_spacing=cfg.geom.needle_cluster_spacing,
+    )
     assert len(sites) > 10, f"too few foliage sites: {len(sites)}"
 
-    ys = np.array([s[0][1] for s in sites])
+    # selected_leaves yields (leaf, stem_dir, source_internode, render_position).
+    # Canopy height comes from the render position's y; shade from the source
+    # internode's light_factor.
+    ys = np.array([s[3][1] for s in sites])
     lfs = np.array([
         s[2].light_factor if s[2] is not None else 1.0 for s in sites
     ])
