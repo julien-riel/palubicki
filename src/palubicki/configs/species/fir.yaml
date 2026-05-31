@@ -68,15 +68,16 @@ geom:
   bark_color: [0.40, 0.28, 0.20]
   bark_texture: "proc:pine_bark"
   leaf_texture: "proc:pine_needle"
-  leaf_size: 0.05
-  leaf_aspect: 0.025
+  leaf_size: 0.11
+  leaf_aspect: 0.14
   leaf_shape: linear
   leaf_margin: entire
   leaf_margin_depth: 0.0
   leaf_margin_count: 0
-  leaf_cluster_count: 4
+  leaf_cluster_count: 3
   leaf_splay_deg: 20
-  foliage_depth: 3
+  foliage_depth: 7
+  needle_cluster_spacing: 0.05
   leaf_sun_shade_k: 0.0
   root_flare_height: 0.2
   root_flare_factor: 1.3
