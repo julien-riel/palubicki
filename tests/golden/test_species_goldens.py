@@ -32,10 +32,19 @@ def _hash_buffers(glb_path: Path) -> str:
 @pytest.mark.parametrize("species", ["oak", "pine", "birch", "maple", "fir"])
 def test_species_golden(tmp_path, update_goldens, species):
     out = tmp_path / f"{species}.glb"
+    # Render at each preset's OWN marker_count (its calibrated design density),
+    # not a flat --marker-count 1000. #43 enlarged the conifer envelopes ~6.5x;
+    # at 1000 markers that density collapses ~18x below design and the strict
+    # monopodial conifer leaders STARVE (pine main_axis_continuation_rate -> 0.10,
+    # a decapitated stub) or arch on noisy perception (birch leader deviation
+    # -> 45deg). That was the #48 "regression" — an artifact of the proxy
+    # under-sampling the presets, not a defect in the presets themselves (at
+    # design density all three render as upright young conifers). Keep --years 10
+    # so the tree stays young and the test stays fast; density is what the
+    # geometry gate must reproduce faithfully.
     rc = main([
         "generate", "--species", species,
         "--seed", "42",
-        "--marker-count", "1000",
         "--years", "10",
         "-o", str(out),
     ])
