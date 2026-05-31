@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -24,6 +25,9 @@ from palubicki.sim.space_competition import perceive
 from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
 from palubicki.sim.tropisms import growth_direction
+
+if TYPE_CHECKING:
+    from palubicki.sim.debug_capture import DebugCollector
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +51,12 @@ def simulate(cfg: Config) -> Tree:
     return forest.trees[0]
 
 
-def simulate_forest(cfg: Config, collector=None) -> Forest:
+def simulate_forest(cfg: Config, collector: DebugCollector | None = None) -> Forest:
+    """Run the full multi-tree simulation. If *collector* is given it receives a
+    ``capture_static`` call once and one ``capture_frame`` call per executed
+    iteration (dormant-season aging or growth step) for the editor's debug
+    overlay (#29). The collector only reads forest state, so passing one does not
+    perturb the deterministic evolution."""
     forest = build_forest(cfg)
     if collector is not None:
         collector.capture_static(forest, cfg)
