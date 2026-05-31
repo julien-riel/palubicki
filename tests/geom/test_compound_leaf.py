@@ -75,3 +75,34 @@ def test_resolve_leaflet_blade_overrides():
         leaflet_shape="lanceolate", leaflet_margin="entire", leaflet_aspect=0.3,
     )
     assert resolve_leaflet_blade(g) == ("lanceolate", "entire", 0.3)
+
+
+def test_build_rachis_primitive_empty_for_simple():
+    from palubicki.geom.compound_leaf import build_rachis_primitive
+    from tests.geom.test_leaves import _mat, _tree_with_n_terminal_buds
+
+    tree = _tree_with_n_terminal_buds(3)
+    prim = build_rachis_primitive(
+        tree, material=_mat(), leaf_size=0.06, foliage_depth=1,
+        leaf_kind="simple", leaflet_specs=None, ring_sides=5,
+    )
+    assert prim.positions.shape[0] == 0
+
+
+def test_build_rachis_primitive_nonempty_for_pinnate():
+    from palubicki.geom.compound_leaf import build_rachis_primitive
+    from tests.geom.test_leaves import _mat, _tree_with_n_terminal_buds
+
+    tree = _tree_with_n_terminal_buds(3)
+    prim = build_rachis_primitive(
+        tree, material=_mat(), leaf_size=0.06, foliage_depth=1,
+        leaf_kind="pinnate",
+        leaflet_specs={
+            "leaflet_count": 6, "leaflet_pair_count": 0, "terminal_leaflet": True,
+            "rachis_length": 1.5, "petiole_length": 0.4, "rachis_radius": 0.045,
+            "leaflet_shape": "ovate", "leaflet_margin": "entire", "leaflet_aspect": 0.5,
+        },
+        ring_sides=5,
+    )
+    assert prim.positions.shape[0] > 0
+    assert prim.indices.shape[0] % 3 == 0

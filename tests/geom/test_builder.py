@@ -99,3 +99,25 @@ def test_blend_on_emits_colors(tmp_path):
     bark = mesh.primitives[0]
     assert bark.colors is not None
     assert bark.colors.shape == (bark.positions.shape[0], 3)
+
+
+def test_build_mesh_pinnate_adds_rachis_primitive(tmp_path):
+    import dataclasses
+
+    cfg = _cfg(tmp_path)
+    cfg = dataclasses.replace(
+        cfg, geom=dataclasses.replace(cfg.geom, leaf_kind="pinnate", leaflet_count=6)
+    )
+    tree = simulate(cfg)
+    mesh = build_mesh(tree, cfg)
+    names = [p.material.name for p in mesh.primitives]
+    assert "rachis" in names
+    assert "leaf" in names
+
+
+def test_build_mesh_simple_has_no_rachis(tmp_path):
+    cfg = _cfg(tmp_path)  # leaf_kind defaults to 'simple'
+    tree = simulate(cfg)
+    mesh = build_mesh(tree, cfg)
+    names = [p.material.name for p in mesh.primitives]
+    assert "rachis" not in names

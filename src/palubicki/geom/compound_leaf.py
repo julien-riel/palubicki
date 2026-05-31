@@ -3,6 +3,10 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
+from palubicki.geom.mesh import Primitive
+
 # Leaflet placement in the leaf's local (u, v) frame, in whole-leaf-size units.
 #   origin_uv  : (u, v) petiole-attachment point of the leaflet
 #   axis_angle : radians; leaflet v-axis = cos(a)*leaf_up + sin(a)*rot_axis_u
@@ -123,3 +127,117 @@ def resolve_leaflet_blade(geom) -> tuple[str, str, float]:
     margin = geom.leaflet_margin if geom.leaflet_margin is not None else geom.leaf_margin
     aspect = geom.leaflet_aspect if geom.leaflet_aspect is not None else geom.leaf_aspect
     return shape, margin, aspect
+
+
+def _emit_cylinder(p0, p1, radius, ring_sides, base_index):
+    """A capped-less cylinder between 3D points p0->p1. Returns
+    (positions(2R,3), normals(2R,3), uvs(2R,2), indices(6R,)) with indices
+    offset by base_index."""
+    # Function-local import to avoid a leaves<->compound_leaf import cycle.
+    from palubicki.geom.leaves import _basis_perpendicular_to
+
+    p0 = np.asarray(p0, dtype=np.float64)
+    p1 = np.asarray(p1, dtype=np.float64)
+    axis = p1 - p0
+    length = float(np.linalg.norm(axis))
+    if length < 1e-12:
+        z = np.zeros((0, 3), np.float32)
+        return z, z, np.zeros((0, 2), np.float32), np.zeros((0,), np.uint32)
+    axis = axis / length
+    right, forward = _basis_perpendicular_to(axis)
+    ang = np.linspace(0.0, 2.0 * np.pi, ring_sides, endpoint=False)
+    ring = (
+        np.cos(ang)[:, None] * right[None, :]
+        + np.sin(ang)[:, None] * forward[None, :]
+    )  # (R, 3) unit
+    nrm = ring.astype(np.float32)
+    bottom = p0[None, :] + radius * ring
+    top = p1[None, :] + radius * ring
+    positions = np.concatenate([bottom, top]).astype(np.float32)
+    normals = np.concatenate([nrm, nrm])
+    uvs = np.zeros((2 * ring_sides, 2), np.float32)
+    idx: list[int] = []
+    for k in range(ring_sides):
+        a = k
+        b = (k + 1) % ring_sides
+        c = ring_sides + k
+        dd = ring_sides + (k + 1) % ring_sides
+        idx += [a, c, b, b, c, dd]
+    indices = np.asarray(idx, dtype=np.uint32) + np.uint32(base_index)
+    return positions, normals, uvs, indices
+
+
+def build_rachis_primitive(
+    tree, *, material, leaf_size, foliage_depth, leaf_kind, leaflet_specs,
+    ring_sides=5, needle_cluster_spacing=0.0, sun_shade_k=0.0, splay_deg=0.0,
+):
+    """Thin stem tubes for petiole + rachis(es), lifted at every selected leaf
+    site. Empty primitive for leaf_kind='simple' (no rachis)."""
+    # Function-local import to avoid a leaves<->compound_leaf import cycle.
+    from palubicki.geom.leaves import (
+        _basis_perpendicular_to,
+        compute_effective_leaf_size,
+        selected_leaves,
+    )
+
+    empty = Primitive(
+        positions=np.zeros((0, 3), np.float32),
+        normals=np.zeros((0, 3), np.float32),
+        uvs=np.zeros((0, 2), np.float32),
+        indices=np.zeros((0,), np.uint32),
+        material=material,
+    )
+    if leaf_kind == "simple" or leaflet_specs is None:
+        return empty
+    layout = compound_layout(
+        leaf_kind,
+        leaflet_count=leaflet_specs["leaflet_count"],
+        leaflet_pair_count=leaflet_specs["leaflet_pair_count"],
+        terminal_leaflet=leaflet_specs["terminal_leaflet"],
+        rachis_length=leaflet_specs["rachis_length"],
+        petiole_length=leaflet_specs["petiole_length"],
+        rachis_radius=leaflet_specs["rachis_radius"],
+    )
+    if not layout.rachis_segments:
+        return empty
+    records = selected_leaves(
+        tree, foliage_depth=foliage_depth,
+        needle_cluster_spacing=needle_cluster_spacing,
+    )
+    splay_rad = math.radians(splay_deg)
+    pos_chunks, nrm_chunks, uv_chunks, idx_chunks = [], [], [], []
+    cursor = 0
+    for leaf, stem_dir, source_iod, render_pos in records:
+        eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
+        d = np.asarray(stem_dir, dtype=np.float64)
+        d = d / np.linalg.norm(d)
+        right, forward = _basis_perpendicular_to(d)
+        az = leaf.azimuth
+        rot_axis_u = math.cos(az) * right + math.sin(az) * forward
+        leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
+        center = np.asarray(render_pos, dtype=np.float64)
+
+        def lift(uv, _center=center, _u=rot_axis_u, _up=leaf_up, _eff=eff):
+            u, v = uv
+            return _center + _eff * (u * _u + v * _up)
+
+        for s_uv, e_uv, r in layout.rachis_segments:
+            p, nn, uv, ix = _emit_cylinder(
+                lift(s_uv), lift(e_uv), r * eff, ring_sides, cursor
+            )
+            if p.shape[0] == 0:
+                continue
+            pos_chunks.append(p)
+            nrm_chunks.append(nn)
+            uv_chunks.append(uv)
+            idx_chunks.append(ix)
+            cursor += p.shape[0]
+    if not pos_chunks:
+        return empty
+    return Primitive(
+        positions=np.concatenate(pos_chunks),
+        normals=np.concatenate(nrm_chunks),
+        uvs=np.concatenate(uv_chunks),
+        indices=np.concatenate(idx_chunks),
+        material=material,
+    )
