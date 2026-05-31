@@ -35,16 +35,12 @@ def test_alive_positions_returns_only_alive():
 
 
 def test_positions_property_returns_all_positions():
-    import numpy as np
-    from palubicki.sim.markers import MarkerCloud
     pts = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]])
     cloud = MarkerCloud(pts)
     assert np.array_equal(cloud.positions, pts)
 
 
 def test_alive_mask_reflects_kills_and_is_a_copy():
-    import numpy as np
-    from palubicki.sim.markers import MarkerCloud
     pts = np.array([[0.0, 0.0, 0.0], [10.0, 10.0, 10.0]])
     cloud = MarkerCloud(pts)
     mask = cloud.alive_mask()
