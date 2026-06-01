@@ -31,6 +31,13 @@ sim:
     enabled: true
     light_threshold: 0.20
     n_consecutive_steps: 3
+  # Deciduous (birch turns clear yellow). Shed by the seasonal trigger at
+  # sub-annual dt; lifespan is an inert ceiling (see oak.yaml for the rationale).
+  leaf_phenology:
+    enabled: true
+    deciduous: true
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.15
 tropism:
   w_perception: 1.0
   w_orthotropy_main: 0.40
@@ -76,6 +83,7 @@ geom:
   leaf_margin_depth: 0.08
   leaf_margin_count: 12
   leaf_cluster_count: 3
+  leaf_autumn_color: [0.95, 0.78, 0.20]  # clear yellow
   leaf_splay_deg: 20
   foliage_depth: 3
   leaf_sun_shade_k: 0.4

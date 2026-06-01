@@ -32,6 +32,14 @@ sim:
     enabled: true
     light_threshold: 0.12
     n_consecutive_steps: 4
+  # Evergreen: balsam fir needles are retained across years (no seasonal shed).
+  # Needle turnover via the age cap is deferred until a re-leafing model exists
+  # (see pine.yaml), so the lifespan is an inert ceiling above the sim horizon.
+  leaf_phenology:
+    enabled: true
+    deciduous: false
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.2
 tropism:
   w_perception: 1.0
   w_orthotropy_main: 0.50
