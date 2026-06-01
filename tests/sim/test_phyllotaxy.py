@@ -290,3 +290,67 @@ def test_distichous_on_plagiotropic_only_affects_lateral_axes():
     d1_lat = lateral_bud_directions(g, cfg, node_index=1, seed=0, axis_order=1)[0]
     cos_lat = np.dot(perp(d0_lat), perp(d1_lat))
     assert cos_lat < -0.999, f"lateral axis was not distichous (cos={cos_lat})"
+
+
+# ── Spray-plane insertion frame (#55) ──────────────────────────────────────
+
+def test_spray_plane_none_is_legacy_basis():
+    """spray_plane_normal=None must reproduce the legacy arbitrary frame exactly."""
+    cfg = PhyllotaxyConfig(mode="whorled", whorl_count=4, branch_angle_by_order=(45.0,),
+                           divergence_angle_deg=137.5)
+    g = np.array([0.3, 1.0, 0.2])
+    base = lateral_bud_directions(g, cfg, node_index=2, seed=5, axis_order=1)
+    same = lateral_bud_directions(g, cfg, node_index=2, seed=5, axis_order=1,
+                                  spray_plane_normal=None)
+    np.testing.assert_allclose(same, base, atol=1e-12)
+
+
+def test_distichous_laterals_lie_in_spray_plane():
+    """2-ranked (distichous) laterals on a horizontal parent fan WITHIN the
+    parent's spray plane: their directions have ~zero out-of-plane component."""
+    cfg = PhyllotaxyConfig(mode="distichous", branch_angle_by_order=(60.0,))
+    g = np.array([1.0, 0.0, 0.2])            # horizontal-ish parent axis
+    n = np.array([0.0, 1.0, 0.0])            # spray plane = ground plane
+    # node_index 0 and 1 give the two opposite ranks (180deg flip).
+    for node_index in (0, 1):
+        dirs = lateral_bud_directions(g, cfg, node_index=node_index, seed=0,
+                                      axis_order=1, spray_plane_normal=n)
+        for v in dirs:
+            assert abs(float(np.dot(v, n))) < 1e-9, "lateral left the spray plane"
+
+
+def test_spray_plane_radial_is_in_plane_for_zero_azimuth():
+    """The opposite (alternate) ranks splay along +/- the in-plane radial, so
+    both stay in the plane even at a steep insertion angle."""
+    cfg = PhyllotaxyConfig(mode="opposite", branch_angle_by_order=(80.0,),
+                           divergence_angle_deg=0.0)
+    g = np.array([0.0, 0.0, 1.0])
+    n = np.array([0.0, 1.0, 0.0])
+    dirs = lateral_bud_directions(g, cfg, node_index=0, seed=0, axis_order=1,
+                                  spray_plane_normal=n)
+    for v in dirs:
+        assert abs(float(np.dot(v, n))) < 1e-9
+
+
+def test_spray_plane_degenerate_when_axis_parallel_to_normal():
+    """If the axis is parallel to the plane normal there is no in-plane radial;
+    fall back to the legacy frame instead of producing NaNs."""
+    cfg = PhyllotaxyConfig(mode="opposite", branch_angle_by_order=(45.0,),
+                           divergence_angle_deg=0.0)
+    g = np.array([0.0, 1.0, 0.0])
+    n = np.array([0.0, 1.0, 0.0])
+    dirs = lateral_bud_directions(g, cfg, node_index=0, seed=0, axis_order=1,
+                                  spray_plane_normal=n)
+    assert np.isfinite(dirs).all()
+    for v in dirs:
+        assert abs(np.linalg.norm(v) - 1.0) < 1e-7
+
+
+def test_reserve_buds_accept_spray_plane_normal():
+    cfg = PhyllotaxyConfig(mode="alternate", branch_angle_by_order=(60.0,))
+    g = np.array([1.0, 0.0, 0.0])
+    n = np.array([0.0, 1.0, 0.0])
+    dirs = reserve_bud_directions(g, cfg, node_index=0, seed=0, count=2,
+                                  spray_plane_normal=n)
+    assert dirs.shape == (2, 3)
+    assert np.isfinite(dirs).all()

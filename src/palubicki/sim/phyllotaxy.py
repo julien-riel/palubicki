@@ -23,6 +23,7 @@ def lateral_bud_directions(
     *,
     seed: int,
     axis_order: int,
+    spray_plane_normal: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return (K, 3) unit vectors for lateral bud directions at this node.
 
@@ -31,10 +32,15 @@ def lateral_bud_directions(
     on divergence and branch angle is gaussian, deterministic per
     (seed, node_index). The branch angle is hard-clamped to [0deg, 90deg]
     after jitter.
+
+    ``spray_plane_normal`` (#55): when provided, the radial insertion basis is
+    aligned to the parent axis's spray plane (azimuth 0/pi splay WITHIN the plane,
+    pi/2 splays out of it) so laterals fan into a coherent frond instead of an
+    arbitrary perpendicular frame. ``None`` => legacy arbitrary basis.
     """
     g = np.asarray(growth_direction, dtype=np.float64)
     g = g / np.linalg.norm(g)
-    right, up = _frame_perpendicular_to(g)
+    right, up = _insertion_frame(g, spray_plane_normal)
 
     # Effective mode: the flag promotes lateral axes (axis_order > 0) to
     # distichous regardless of cfg.mode.
@@ -158,6 +164,7 @@ def reserve_bud_directions(
     *,
     seed: int,
     count: int,
+    spray_plane_normal: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return (count, 3) unit vectors for RESERVE bud directions at this node.
 
@@ -166,13 +173,17 @@ def reserve_bud_directions(
     branch_angle, capped at 30°) so the activated bud emerges in a direction
     complementary to the lost lateral subtree. Jitter is half of lateral jitter.
 
+    ``spray_plane_normal`` (#55): aligns the radial basis to the parent axis's
+    spray plane, exactly as ``lateral_bud_directions`` does, so a reactivated
+    reserve emerges in the same frond plane. ``None`` => legacy arbitrary basis.
+
     If ``count == 0`` returns a (0, 3) empty array.
     """
     if count <= 0:
         return np.empty((0, 3), dtype=np.float64)
     g = np.asarray(growth_direction, dtype=np.float64)
     g = g / np.linalg.norm(g)
-    right, up = _frame_perpendicular_to(g)
+    right, up = _insertion_frame(g, spray_plane_normal)
 
     base_azimuth = math.radians(cfg.divergence_angle_deg) * node_index + math.pi
     branch_angle = min(math.radians(30.0), math.radians(cfg.branch_angle_by_order[0]) * 0.5)
@@ -207,4 +218,33 @@ def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     right = canonical - np.dot(canonical, d) * d
     right = right / np.linalg.norm(right)
     up = np.cross(d, right)
+    return right, up
+
+
+def _insertion_frame(
+    g: np.ndarray, spray_plane_normal: np.ndarray | None
+) -> tuple[np.ndarray, np.ndarray]:
+    """Radial (right, up) basis perpendicular to axis direction ``g`` (#55).
+
+    Without a spray-plane normal this is the legacy arbitrary perpendicular basis.
+    With one, ``right`` is the in-plane radial (``g × n``) and ``up`` is the
+    out-of-plane axis (``n`` made perpendicular to ``g``), so azimuth 0/pi place
+    laterals WITHIN the parent's spray plane and pi/2 tilts them out of it.
+    Falls back to the arbitrary basis if ``g`` is (near-)parallel to ``n``.
+    """
+    if spray_plane_normal is None:
+        return _frame_perpendicular_to(g)
+    n = np.asarray(spray_plane_normal, dtype=np.float64)
+    nn = float(np.linalg.norm(n))
+    if nn < 1e-12:
+        return _frame_perpendicular_to(g)
+    n = n / nn
+    right = np.cross(g, n)
+    rn = float(np.linalg.norm(right))
+    if rn < 1e-6:  # axis parallel to plane normal: no in-plane radial defined
+        return _frame_perpendicular_to(g)
+    right = right / rn
+    up = n - float(np.dot(n, g)) * g
+    un = float(np.linalg.norm(up))
+    up = up / un if un > 1e-12 else np.cross(right, g)
     return right, up

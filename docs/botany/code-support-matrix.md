@@ -47,14 +47,18 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Sympodial (terminal cède au latéral) | ✅ | `sim/sympodial.py::promote_lateral_if_failing` ; `Node.sympodial_fork` | — |
 | Dominance apicale | ✅ | `sim/bh.py` — allocation Borchert-Honda à deux passes, `lambda_apical` ; dominance **émergente** (pas d'hormone explicite — choix de conception) | — |
 | Acrotonie / mésotonie / basitonie | ✅ | `sim/bud_break_bias.py::position_weight` + `sim.bud_break_bias` (mode + force) | [#3](https://github.com/julien-riel/palubicki/issues/3) livré |
-| Orthotropie vs plagiotropie | ✅ | `sim/tropisms.py` — `w_orthotropy_*`, `w_plagiotropism_*` (projection sur XY) | — |
+| Orthotropie vs plagiotropie | ✅ | `sim/tropisms.py` — `w_orthotropy_*`, `w_plagiotropism_*` (projection sur XY, ou sur le plan de la branche-mère si `spray_plane_enabled`) | — |
 | Plagiotropie par épinastie (arc temporel vers l'horizontale) | ✅ | `sim/tropisms.py` — rampe `1 − exp(−âge/τ)`, `epinasty_tau_years` | [#34](https://github.com/julien-riel/palubicki/issues/34) livré |
+| Éventail latéral cohérent (plan de la branche-mère) | ✅ | `sim/tropisms.py` + `sim/phyllotaxy.py` — `spray_plane_enabled` réfère plagiotropie **et** base d'insertion radiale au plan de l'axe parent (normale figée au débourrement) ; diagnostic `out_of_plane_deviation_deg` | [#55](https://github.com/julien-riel/palubicki/issues/55) livré |
 | Angles de branchaison par ordre d'axe | ✅ | `phyllotaxy.branch_angle_by_order` (ex. chêne `[60,40,30,25]`) | — |
 | Sélection de modèle Hallé–Oldeman (23 modèles) | ❌ | pas d'enum/preset de modèle nommé | `SKIP` — les axes indépendants (mono/sympodial × ortho/plagio × angles par ordre × phyllotaxie) couvrent déjà l'espace ; un catalogue nommé n'ajoute rien |
 
-> **Note spray latéral** — la plagiotropie projette sur le plan **XY mondial**,
-> pas sur le plan de la branche-mère → éventail conifère imparfait.
-> Suivi : [#55](https://github.com/julien-riel/palubicki/issues/55).
+> **Note spray latéral** — `spray_plane_enabled` ([#55](https://github.com/julien-riel/palubicki/issues/55), livré, actif sur `fir`/`pine`)
+> projette la plagiotropie et la base d'insertion sur le **plan de la branche-mère**
+> (dérivé au débourrement, hérité le long du frond) plutôt que sur le plan XY mondial,
+> et ne décale plus la plagiotropie par `axis_decay` aux ordres supérieurs → les
+> branchlets d'ordre 2+ s'aplatissent dans le frond (fir : déviation hors-plan
+> ordre-2 ~24°→12°). Désactivé par défaut (legacy XY bit-identique).
 
 ---
 
@@ -153,7 +157,7 @@ Au-delà de la morphologie, les écarts **physiologiques** relevés par
 | Écart | Statut | Billet / décision |
 |---|---|---|
 | Vigueur abstraite (pas de budget carbone source→puits) | ❌ | [#66](https://github.com/julien-riel/palubicki/issues/66) **fermé `NOT_PLANNED`** — refonderait le moteur ; frontière de conception assumée |
-| Surface foliaire réelle injectée dans la grille de lumière | 🟡 | **Feuillus** : `sim/light.py` dépose l'aire de lame réelle par feuille (`geom/leaves.py` `leaf_area_records`, source partagée avec `total_leaf_area`) ; `light.leaf_area_scale` = multiplicateur. [#62](https://github.com/julien-riel/palubicki/issues/62) livré. **Conifères** : restent sur le scalaire `light.leaf_area` par bourgeon terminal (dominance apicale émerge de ce dépôt) ; couplage des vraies aiguilles reporté à #55 (éventail) + #7 (fascicules) |
+| Surface foliaire réelle injectée dans la grille de lumière | 🟡 | **Feuillus** : `sim/light.py` dépose l'aire de lame réelle par feuille (`geom/leaves.py` `leaf_area_records`, source partagée avec `total_leaf_area`) ; `light.leaf_area_scale` = multiplicateur. [#62](https://github.com/julien-riel/palubicki/issues/62) livré. **Conifères** : restent sur le scalaire `light.leaf_area` par bourgeon terminal (dominance apicale émerge de ce dépôt) ; couplage des vraies aiguilles reporté à [#7](https://github.com/julien-riel/palubicki/issues/7) (fascicules) — #55 n'a livré que la **forme** de l'éventail (plan de la branche-mère), pas le couplage lumière |
 | Pas de re-flush foliaire sur le vieux bois (feuilles émises une fois, jamais renouvelées) | ❌ | surgi de [#61](https://github.com/julien-riel/palubicki/issues/61) (livré) — bloque un vrai cycle décidu/persistant annuel ; à coupler #65 + débourrement (voir roadmap) |
 | Ombre : élague *a posteriori*, ne réduit pas l'initiation | ❌ | [#63](https://github.com/julien-riel/palubicki/issues/63) |
 | Pas de mémoire mécanique du bois (bois de réaction, fluage) | ❌ | [#64](https://github.com/julien-riel/palubicki/issues/64) |
