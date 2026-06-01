@@ -8,41 +8,82 @@ PR) et dans la [matrice de support botanique](botany/code-support-matrix.md).
 > les diagnostics → corriger → recommencer jusqu'à ce que ça lise vrai
 > ([`mindset-boucle-empirique.md`](mindset-boucle-empirique.md)).
 
-## En cours
+## À faire (ordonné pour bâtir sur du solide)
 
-- **#34 — épinastie** (branche `issue-34-…`) · le poids plagiotrope monte avec
-  l'âge de la branche (`t - birth_time`) au lieu d'être plein dès le 1ᵉʳ nœud →
-  ramure mature arquée.
+Ordre établi pour **éviter le rework** : câbler sur les fondations déjà livrées
+avant d'empiler ; rendre la lumière correcte **avant** ce qui y réagit ;
+restaurer le filet de tests rouge tôt ; poser le driver saisonnier avant ce qui
+le lit ; garder les gros changements de moteur et les nouveaux modes orthogonaux
+pour la fin.
 
-## À faire (dans l'ordre)
+### Couplage feuille ↔ lumière (câblage sur #10 axe-temps + #14 feuilles)
 
-Principe : **correctness → filet de mesure de la boucle → réalisme qu'il révèle
-→ outillage → nouveaux gros systèmes.**
+1. **#61 — caducité foliaire** (âge → `SENESCENT` → `ABSCISSED`) · pur câblage
+   sur une infra déjà posée (#14/#10) : `Leaf.birth_time`/`LeafState` existent,
+   le renderer filtre déjà `ACTIVE` (feuilles abscissées disparaissent du mesh
+   gratuitement). Débloque caducité / marcescence / couleur d'automne. Le gain le
+   moins cher du backlog.
+2. **#62 — vraie surface de lame dans la grille LAI** · l'auto-ombrage lit
+   aujourd'hui un `leaf_area` scalaire découplé du feuillage rendu ; injecter la
+   surface réelle (morphologie déjà paramétrée, fonction d'aire partagée avec
+   `geom/leaves.py`). **Prérequis de #63 et #56** : sans lui, toute réponse à
+   l'ombre réagit à un signal faux et devra être re-tunée. Même principe de
+   cohérence que #37 (appliqué aux feuilles, pas aux diamètres).
 
-1. **#7 — foliage (suite) : fascicules d'aiguilles** · raffine les aiguilles de
-   conifères (réparties le long du rameau) en fascicules de 2–5. La caducité /
-   couleur d'automne (états `SENESCENT`/`ABSCISSED` posés mais non câblés) suit
-   sur la même fondation (feuilles first-class sur `Node`). Revisiter les presets
-   de lame d'espèce maintenant que les feuilles sont assises à la divergence
-   phyllotactique.
-2. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et**
+### Restaurer le filet conifère (#48 goldens tenus rouges)
+
+3. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et**
    le repère radial d'insertion au plan de la branche-mère (au lieu du plan XY
-   mondial calculé indépendamment) → éventail plat des conifères. Correctif de
-   *forme* ciblé, distinct du rendu (#53).
-3. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps →
-   translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing →
-   LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md).
-   **Apparence**, orthogonale à la *forme* (#55/#56). Sous-tickets indépendants à
-   découper au fil de l'eau.
-4. **#44 — vignes / lianas** · gros nouveau système : obstacle comme
-   **attracteur** (aujourd'hui purement répulsif) + thigmotropisme + état
-   cherche/accroché. Seulement si scènes de paysage avec structures.
-5. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · gros
-   changement de moteur. Exposition des bourgeons par **grille d'ombrage** (2ᵉ
-   backend, BHse reste le défaut) → la silhouette (cône conifère, fût clair)
-   **émerge** de l'auto-ombrage + dominance apicale au lieu d'être prescrite par
-   l'enveloppe BHse (`shape: cone`). S'appuie sur #37 ; touche l'allocation BH.
-   Le plus profond du backlog ; tranche d'abord le compromis
-   dirigeable-vs-émergent.
-6. **#11, #12 — beaucoup plus tard** · croissance déterminée + fleurs (#11),
-   tallage + graminées (#12). Nouveaux modes hors trajectoire actuelle.
+   mondial) → éventail plat des conifères. Cadre structurel : à faire **avant**
+   d'y poser les aiguilles. Candidat fort pour le correctif de forme de #48.
+4. **#7 — fascicules d'aiguilles** · aiguilles de conifères (réparties le long du
+   rameau, #36) regroupées en fascicules de 2–5, posées sur le cadre de spray
+   corrigé par #55. Re-pin des goldens #48 une seule fois, avec #55.
+
+### Driver saisonnier + réponses à l'ombre
+
+5. **#65 — phénologie graduée** · remplacer l'interrupteur binaire
+   `annual_growth_period` par une rampe (courbe `year_fraction` en MVP,
+   degrés-jours en *nice-to-have*). Généralise la fenêtre de #10 ; **la floraison
+   (#11) lira le même driver**, donc le poser avant d'empiler le saisonnier.
+6. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
+   latéraux à l'ombre (pas seulement élaguer après — `shade_mortality` reste).
+   Réutilise la machinerie de pondération de qualité (#3). Réagit au champ
+   lumineux **corrigé par #62**. Levier d'initiation bon marché ; compose avec #56.
+7. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
+   raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
+   statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
+
+### Changement de moteur profond
+
+8. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
+   backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
+   fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
+   prescrite par l'enveloppe `cone`. Compose avec #62 (lumière correcte) et #63
+   (levier d'initiation). Le plus profond du backlog ; tranche d'abord le
+   compromis dirigeable-vs-émergent.
+
+### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
+
+9. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+   (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
+   déterminées). Lit le driver saisonnier (#65). Débloque forbs, fruits, et un
+   2ᵉ déclencheur sympodial propre.
+10. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+    croissance (zone basale, tallage depuis le collet) ; architecturalement
+    orthogonal, aucun code ligneux à toucher.
+11. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
+    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
+
+### Piste parallèle — apparence (orthogonale à la forme)
+
+12. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps →
+    translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing →
+    LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md).
+    Débloquée par rien, sous-tickets indépendants : à piquer dès qu'on veut une
+    passe visuelle, en parallèle du travail de forme ci-dessus.
+
+> **Hors backlog actif** — #66 (budget carbone source→puits) fermé `NOT_PLANNED` :
+> refonderait le moteur, frontière de conception assumée
+> ([code-support-matrix.md](botany/code-support-matrix.md), réalisme fonctionnel).
