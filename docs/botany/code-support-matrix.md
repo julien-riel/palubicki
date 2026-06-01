@@ -79,8 +79,8 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 
 | Concept | Statut | Preuve (code) | Billet / décision |
 |---|---|---|---|
-| Anatomie : lame, pétiole, angle d'insertion, rotation | ✅ | `geom/leaf_blade.py` (lame) ; pétiole effilé `geom/compound_leaf.py` ([#5](https://github.com/julien-riel/palubicki/issues/5)) ; `leaf_splay_deg` ; `Leaf.azimuth` | [#5](https://github.com/julien-riel/palubicki/issues/5) livré |
-| Nervation géométrique (parallèle/pennée/palmée/dichotome) | ❌ | lame = polygone plat ; seul un indice de texture dans `geom/_textures.py` | `SKIP` structurel — le relief de nervure relève du rendu (normal maps, [#53](https://github.com/julien-riel/palubicki/issues/53)) |
+| Anatomie : lame, pétiole, angle d'insertion, rotation | ✅ | `geom/leaf_blade.py` (lame 2D) + **lame héro 3D** courbée/pliée `geom/leaf_blade3d.py` (pli médian + recourbure, normales/tangentes lissées) sur les feuillus ; pétiole effilé `geom/compound_leaf.py` ([#5](https://github.com/julien-riel/palubicki/issues/5)) ; `leaf_splay_deg` ; `Leaf.azimuth` | [#5](https://github.com/julien-riel/palubicki/issues/5) + [#73](https://github.com/julien-riel/palubicki/issues/73) (lame héro) livrés |
+| Nervation géométrique (parallèle/pennée/palmée/dichotome) | 🟡 | relief de nervure via **normal map** + masque de translucence (lame claire / médiane+nervures sombres) — pennée (chevron) / palmée (éventail) procédurales : `geom/maps.py` + `_textures.leaf_vein_mask` ; pas de géométrie par-veine | [#73](https://github.com/julien-riel/palubicki/issues/73) livré (relief carte) ; géométrie par-veine hors scope (`SKIP` structurel) |
 | Simple vs composée (pennée/palmée/bipennée) | ✅ | `leaf_kind` + `geom/compound_leaf.py` (`_pinnate`/`_palmate`/`_bipinnate`, rachis) | [#6](https://github.com/julien-riel/palubicki/issues/6) livré |
 | Lame paramétrique : forme + marge | ✅ | `leaf_shape` (6 formes) + `leaf_margin` (entire/serrate/dentate/lobed) ; `geom/leaf_blade.py` | [#4](https://github.com/julien-riel/palubicki/issues/4) livré |
 | Durée de vie : caducité / persistance / marcescence | ✅ | `sim/caducity.py::advance_leaf_states` (âge/saison → `LeafState`, déterministe) ; `leaf_phenology` (decidu/persistant, lifespan, marcescence) ; couleur d'automne via `leaf_autumn_color` (COLOR_0) ; renderer rend `ACTIVE`+`SENESCENT`, filtre `ABSCISSED` | [#61](https://github.com/julien-riel/palubicki/issues/61) livré — caducité saisonnière à dt sous-annuel ; re-flush sur vieux bois + turnover aiguilles reportés (voir roadmap) |
@@ -106,7 +106,7 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Croissance secondaire (pipe-model, règle de da Vinci) | ✅ | `sim/radii.py` — `r^n = Σ rᵢ^n`, `pipe_exponent` (~2.35–3.40 par espèce) + graine de vigueur | — |
 | Anneaux annuels | ❌ | non suivis | `SKIP` — faible rendu visuel |
 | Texture/variation d'écorce par diamètre | ✅ | `geom/bark_blend.py` (gradient 3 arrêts young→mature→senescent) ; textures procédurales `geom/_textures.py` | [#9](https://github.com/julien-riel/palubicki/issues/9) livré |
-| Relief d'écorce (normal/height maps) | ❌ | écorce = couleur seule (PBR base color) | [#53](https://github.com/julien-riel/palubicki/issues/53) — épopée qualité de rendu |
+| Relief d'écorce (normal/height maps) | ✅ | écorce PBR complète : normale tangent-space Sobel (OpenGL +Y) depuis un champ de hauteur **propre** par espèce + ORM packé (`geom/maps.py`, `_textures.*_bark_height`) ; specular cuticule | [#73](https://github.com/julien-riel/palubicki/issues/73) livré (P2 de [#53](https://github.com/julien-riel/palubicki/issues/53)) |
 
 ---
 

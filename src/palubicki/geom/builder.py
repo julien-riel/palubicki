@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 from palubicki.config import Config, ConfigError, GeomConfig
-from palubicki.geom._textures import _PROC_TEXTURES, default_leaf_png
+from palubicki.geom import maps
+from palubicki.geom._textures import (
+    _PROC_TEXTURES,
+    bark_height_for,
+    default_leaf_png,
+    leaf_vein_mask,
+)
 from palubicki.geom.bark_blend import BarkBlendStops
 from palubicki.geom.compound_leaf import build_rachis_primitive, resolve_leaflet_blade
 from palubicki.geom.leaves import build_leaves_primitive
@@ -11,18 +18,28 @@ from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
 from palubicki.sim.tree import Tree
 
+# Leaf back-light tint (KHR_materials_diffuse_transmission colour): warm
+# transmitted green so a leaf lit from behind glows instead of going black.
+_LEAF_TRANSMISSION_COLOR = (0.50, 0.65, 0.25)
+
 
 def build_mesh(tree: Tree, cfg: Config) -> Mesh:
-    bark_png = _resolve_texture(cfg.geom.bark_texture)
+    g = cfg.geom
+    bark_png = _resolve_texture(g.bark_texture)
+    bark_normal_png, bark_orm_png = _bark_maps(g)
     bark_mat = Material(
         name="bark",
-        base_color=(*cfg.geom.bark_color, 1.0),
+        base_color=(*g.bark_color, 1.0),
         metallic=0.0,
         roughness=0.9,
         base_color_texture_png=bark_png,
         alpha_mode="OPAQUE",
         alpha_cutoff=0.5,
         double_sided=False,
+        normal_texture_png=bark_normal_png,
+        normal_scale=1.0,
+        orm_texture_png=bark_orm_png,
+        specular_factor=(g.bark_specular if (g.enable_pbr_maps and g.bark_specular > 0) else None),
     )
     stops = _bark_blend_stops(cfg.geom)
     bark_prim = build_bark_primitive(
@@ -40,10 +57,11 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     )
     primitives = [bark_prim]
 
-    if cfg.geom.enable_leaves:
-        leaf_png = _resolve_texture(cfg.geom.leaf_texture)
+    if g.enable_leaves:
+        leaf_png = _resolve_texture(g.leaf_texture)
         if leaf_png is None:
             leaf_png = default_leaf_png()
+        leaf_maps = _leaf_maps(g)
         leaf_mat = Material(
             name="leaf",
             base_color=(0.4, 0.6, 0.2, 1.0),
@@ -53,8 +71,8 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             alpha_mode="MASK",
             alpha_cutoff=0.5,
             double_sided=True,
+            **leaf_maps,
         )
-        g = cfg.geom
         is_compound = g.leaf_kind != "simple"
         if is_compound:
             lshape, lmargin, laspect = resolve_leaflet_blade(g)
@@ -97,7 +115,17 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             leaf_kind=g.leaf_kind,
             leaflet_specs=leaflet_specs,
             autumn_color=g.leaf_autumn_color,
+            blade_fold_deg=g.leaf_blade_fold_deg,
+            blade_curl=g.leaf_blade_curl,
         )
+        if g.leaf_season_variants and g.leaf_autumn_color is not None:
+            # KHR_materials_variants: discrete season swap (summer = the green
+            # base material, autumn = same maps with an autumn base colour). The
+            # primitive's default material stays summer for variant-unaware viewers.
+            autumn_mat = dataclasses.replace(
+                leaf_mat, name="leaf_autumn", base_color=(*g.leaf_autumn_color, 1.0)
+            )
+            leaf_prim.material_variants = [("summer", leaf_mat), ("autumn", autumn_mat)]
         primitives.append(leaf_prim)
 
         stem_mat = Material(
@@ -127,6 +155,51 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             primitives.append(stem_prim)
 
     return Mesh(primitives=primitives)
+
+
+def _bark_maps(g: GeomConfig) -> tuple[bytes | None, bytes | None]:
+    """(normal_png, ORM_png) for the bark material, or (None, None).
+
+    Only proc bark has a clean height field to bake from (design §6.3 — never a
+    lit photo); file/None bark stays flat-normal. ORM = cavity-AO (R) + a matte
+    roughness (G) + zero metal (B)."""
+    if not g.enable_pbr_maps:
+        return None, None
+    name = str(g.bark_texture) if g.bark_texture is not None else None
+    height = bark_height_for(name)
+    if height is None:
+        return None, None
+    normal_png = maps.height_to_normal_png(height, strength=g.bark_normal_strength)
+    occ = maps.occlusion_from_height(height, strength=0.7)
+    orm_png = maps.pack_orm_png(occ, 0.9, 0.0)
+    return normal_png, orm_png
+
+
+def _leaf_maps(g: GeomConfig) -> dict:
+    """Material kwargs for the leaf PBR maps (vein normal, ORM, back-light mask).
+
+    Baked from a UV-aligned vein/midrib source: the lamina is the waxy, slightly
+    occluded, translucent body; the veins/midrib are matte, raised in relief, and
+    opaque to back-light. Empty when ``enable_pbr_maps`` is off."""
+    if not g.enable_pbr_maps:
+        return {}
+    vein = leaf_vein_mask(shape=g.leaf_shape)  # 1 = lamina, →0 over veins/midrib/base
+    rough = 0.55 + 0.35 * (1.0 - vein)         # veins rougher than the waxy lamina
+    occ = 0.70 + 0.30 * vein                   # veins faintly self-occlude
+    out: dict = {
+        "normal_texture_png": maps.height_to_normal_png(
+            vein, strength=g.leaf_normal_strength, wrap_x=False, wrap_y=False),
+        "normal_scale": 1.0,
+        "orm_texture_png": maps.pack_orm_png(occ, rough, 0.0),
+    }
+    if g.leaf_specular > 0:
+        out["specular_factor"] = g.leaf_specular
+    if g.leaf_translucency > 0:
+        out["transmission_texture_png"] = maps.translucency_png(
+            vein, color=_LEAF_TRANSMISSION_COLOR)
+        out["diffuse_transmission_factor"] = g.leaf_translucency
+        out["diffuse_transmission_color"] = _LEAF_TRANSMISSION_COLOR
+    return out
 
 
 def _bark_blend_stops(geom: GeomConfig) -> BarkBlendStops | None:

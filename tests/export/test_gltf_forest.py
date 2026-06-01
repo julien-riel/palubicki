@@ -117,7 +117,10 @@ def test_instance_count_equals_tree_count(tmp_path):
     tree_nodes = [n for n in g.nodes if n.name != "obstacles"]
     assert sum(_instance_count(n) for n in tree_nodes) == len(forest.trees)
     # Distinct seeds -> no sharing -> all instance-of-one -> no instancing ext.
-    assert not g.extensionsUsed
+    # (Material extensions from the P2 photoreal master may still be listed.)
+    used = g.extensionsUsed or []
+    assert "EXT_mesh_gpu_instancing" not in used
+    assert "EXT_instance_features" not in used
     assert all((n.extensions or {}).get("EXT_mesh_gpu_instancing") is None for n in tree_nodes)
 
 
@@ -145,7 +148,8 @@ def test_identical_trees_share_one_instanced_mesh(tmp_path):
 
     assert g.asset.extras["instancing"]["n_meshes"] == 1
     assert g.asset.extras["instancing"]["n_instances"] == n
-    assert g.extensionsUsed == ["EXT_mesh_gpu_instancing", "EXT_instance_features"]
+    assert "EXT_mesh_gpu_instancing" in g.extensionsUsed
+    assert "EXT_instance_features" in g.extensionsUsed
 
     tree_nodes = [nd for nd in g.nodes if nd.name != "obstacles"]
     assert len(tree_nodes) == 1
@@ -235,3 +239,30 @@ def test_trimesh_roundtrip_places_trees(tmp_path):
     # One tree near x=0, one near x=40 -> the scene spans the full separation.
     assert lo[0] < 5.0
     assert hi[0] > 35.0
+
+
+def test_forest_emits_season_variants(tmp_path):
+    """KHR_materials_variants survives the forest path. Regression guard: the
+    localized-primitive rebuild once dropped Primitive.material_variants, so the
+    season swap silently vanished from every forest export."""
+    geom = GeomConfig(leaf_season_variants=True, leaf_autumn_color=(0.8, 0.45, 0.1))
+    cfg = Config(
+        envelope=EnvelopeConfig(rx=1.5, ry=2.5, rz=1.5, shape="ellipsoid", marker_count=1000),
+        sim=SimConfig(max_simulation_years=4.0),
+        tropism=TropismConfig(), phyllotaxy=PhyllotaxyConfig(),
+        shedding=SheddingConfig(), geom=geom, light=LightConfig(enabled=False),
+        output=tmp_path / "scene.glb", seed=42,
+        forest=ForestConfig(seeds=(ForestSeed(position=(0.0, 0.0, 0.0), seed=7),
+                                    ForestSeed(position=(40.0, 0.0, 0.0), seed=7))),
+    )
+    forest = simulate_forest(cfg)
+    write_glb_forest(forest, cfg, tmp_path / "scene.glb", asset_meta={"seed": 42})
+    g = pygltflib.GLTF2().load(str(tmp_path / "scene.glb"))
+
+    root = (g.extensions or {}).get("KHR_materials_variants")
+    assert root is not None, "forest dropped KHR_materials_variants"
+    assert [v["name"] for v in root["variants"]] == ["summer", "autumn"]
+    assert "KHR_materials_variants" in (g.extensionsUsed or [])
+    # at least one primitive carries the per-primitive season mappings.
+    assert any("KHR_materials_variants" in (p.extensions or {})
+               for m in g.meshes for p in m.primitives)

@@ -104,10 +104,25 @@ pour la fin.
     arbres identiques restent partageables sous instancing ; le pivot est localisé
     avec les positions. Shader three.js de référence (`edit/static/wind.js`,
     `onBeforeCompile`) câblé dans le viewer (toggle Wind). Validator Khronos
-    0 erreur/0 warning (arbre, espèce composée, forêt). Suite :
-    P2 master photoréaliste
-    ([#73](https://github.com/julien-riel/palubicki/issues/73)) → P3 profils +
-    gate de validation ([#74](https://github.com/julien-riel/palubicki/issues/74)) →
+    0 erreur/0 warning (arbre, espèce composée, forêt).
+    **P2 ([#73](https://github.com/julien-riel/palubicki/issues/73)) livré** :
+    master photoréaliste PBR metallic-roughness portable. Cartes bakées depuis des
+    champs *propres* procéduraux (`geom/maps.py` : normale tangent-space Sobel
+    OpenGL +Y, ORM packé `O→R/Rough→G/Metal→B`, masque thickness/translucence en
+    alpha) à partir de sources par-espèce (`_textures.py` : champs de hauteur
+    d'écorce + nervures/médiane des feuilles). `Material` étendu (normal/ORM/
+    occlusion/emissive/thickness + tags d'espace : baseColor/emissive **sRGB**,
+    le reste **linéaire**, AO jamais dans baseColor). Lame de feuille **géométrique
+    héro** (`geom/leaf_blade3d.py` : pli médian + recourbure, normales/​tangentes
+    lissées) câblée par défaut sur les feuillus (chêne/​bouleau/​érable/​frêne) ;
+    feuillage plat = chemin legacy byte-identique (empreinte (u,v) inchangée → grille
+    de lumière intacte). Extensions câblées : `KHR_texture_transform` (atlas),
+    `KHR_materials_specular` (cuticule), `KHR_materials_variants` (saisons),
+    `KHR_materials_diffuse_transmission` (**métadonnée prospective** — RC, ignorée
+    des moteurs en 2026, contre-jour réel via shaders subsurface par-moteur).
+    Validator Khronos 0 erreur/0 warning (arbre, chêne/​érable héro avec maps). Suite :
+    P3 profils + gate de validation
+    ([#74](https://github.com/julien-riel/palubicki/issues/74)) →
     P4 LOD + impostor hémi-octaédral ([#75](https://github.com/julien-riel/palubicki/issues/75)) →
     P5 vent skinné hero ([#76](https://github.com/julien-riel/palubicki/issues/76),
     différé). À piquer en parallèle du travail de forme ci-dessus.

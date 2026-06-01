@@ -7,6 +7,7 @@ import numpy as np
 
 from palubicki.geom.compound_leaf import compound_layout
 from palubicki.geom.leaf_blade import build_blade
+from palubicki.geom.leaf_blade3d import build_curved_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.geom.wind import LEAF_STIFFNESS, axis_frames, leaf_phase
 from palubicki.geom.wind import tier as wind_tier_of
@@ -92,6 +93,8 @@ def build_leaves_primitive(
     leaf_kind: str = "simple",
     leaflet_specs: dict | None = None,
     autumn_color: tuple[float, float, float] | None = None,
+    blade_fold_deg: float = 0.0,
+    blade_curl: float = 0.0,
 ) -> Primitive:
     """Triangulate every selected (apex-proximal, ACTIVE) leaf on the tree.
 
@@ -151,6 +154,19 @@ def build_leaves_primitive(
     blade_i_count = blade_idx.shape[0]
     n_planes = 2 if leaf_shape == "linear" else 1
 
+    # Hero blade (P2, geom/leaf_blade3d.py): displace the flat outline into a folded,
+    # recurved blade with smooth per-vertex normals + tangents. Opt-in (fold/curl > 0)
+    # and broadleaf-only — flat needles (n_planes == 2) keep the legacy plane, and
+    # zero fold/curl returns the byte-identical flat blade. The (u, v) footprint is
+    # unchanged, so leaf_area_records (light grid) is unaffected either way.
+    blade_norm_local: np.ndarray | None = None
+    blade_tan_local: np.ndarray | None = None
+    if (blade_fold_deg > 0.0 or blade_curl != 0.0) and n_planes == 1:
+        blade_pos_unit, blade_norm_local, blade_tan_local = build_curved_blade(
+            blade_pos_unit, blade_uv, blade_idx,
+            fold_deg=blade_fold_deg, curl=blade_curl, aspect=aspect,
+        )
+
     verts_per_leaf = n_planes * blade_v_count * leaflets_per_leaf
     idx_per_leaf = n_planes * blade_i_count * leaflets_per_leaf
     n = len(records)
@@ -195,6 +211,7 @@ def build_leaves_primitive(
             indices[i_start : i_start + idx_per_leaf],
             v_start, droop_rad,
             tangents[v_start : v_start + verts_per_leaf],
+            blade_norm_local, blade_tan_local,
         )
         wind[v_start : v_start + verts_per_leaf] = (
             leaf_phase(render_pos, leaf.azimuth, origin), LEAF_STIFFNESS, 1.0
@@ -381,7 +398,7 @@ def leaf_area_records(
 def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
                         leaflets, blade_pos_unit, blade_uv, blade_idx,
                         out_pos, out_norm, out_uv, out_idx, base, droop_rad=0.0,
-                        out_tan=None):
+                        out_tan=None, blade_norm_local=None, blade_tan_local=None):
     """Lift one (possibly compound) leaf into its leaflet blades at ``center``.
 
     Reconstructs the leaf basis from the render-time stem ``direction`` + the
@@ -427,6 +444,7 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
             out_idx[ik : ik + blade_i_count],
             base + vk,
             None if out_tan is None else out_tan[vk : vk + blade_v_count],
+            blade_norm_local, blade_tan_local,
         )
         if n_planes == 2:
             vb = vk + blade_v_count
@@ -445,25 +463,46 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
 
 def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
                 origin, basis_u, basis_v, normal, scale,
-                out_pos, out_norm, out_uv, out_idx, base, out_tan=None):
-    """Lift a (u, v, 0) 2D blade into 3D along given basis vectors."""
-    # blade_pos_unit[:, 0] is u, blade_pos_unit[:, 1] is v; scale to physical size.
+                out_pos, out_norm, out_uv, out_idx, base, out_tan=None,
+                blade_norm_local=None, blade_tan_local=None):
+    """Lift a 2D (or curved 3D) blade into the leaf's world frame along the basis.
+
+    The blade frame maps ``u → basis_u``, ``v → basis_v``, ``z → normal`` (the
+    out-of-plane / adaxial axis). A flat blade has ``z ≡ 0``, so the ``z`` term is
+    a no-op and, with ``blade_norm_local`` / ``blade_tan_local`` both ``None``,
+    this is byte-identical to the legacy flat lift. When the hero blade
+    (``geom/leaf_blade3d.py``) supplies per-vertex local normals/tangents, they
+    are rotated into world space here (handedness recomputed in world space so a
+    left-handed leaf basis can't invert the tangent)."""
+    # blade_pos_unit[:, 0] is u, [:, 1] is v, [:, 2] is z (0 for the flat blade).
     pu = blade_pos_unit[:, 0] * scale
     pv = blade_pos_unit[:, 1] * scale
+    pz = blade_pos_unit[:, 2] * scale
     bu = np.asarray(basis_u, dtype=np.float64)
     bv = np.asarray(basis_v, dtype=np.float64)
+    bw = np.asarray(normal, dtype=np.float64)
     pos = origin[np.newaxis, :] + pu[:, np.newaxis] * bu[np.newaxis, :] \
-          + pv[:, np.newaxis] * bv[np.newaxis, :]
+          + pv[:, np.newaxis] * bv[np.newaxis, :] \
+          + pz[:, np.newaxis] * bw[np.newaxis, :]
     out_pos[:] = pos.astype(np.float32)
-    n = np.asarray(normal, dtype=np.float32)
-    out_norm[:] = n[np.newaxis, :]
     out_uv[:] = blade_uv
     out_idx[:] = blade_idx + np.uint32(base)
-    if out_tan is not None:
-        # TANGENT follows the blade's +U axis (basis_u maps to blade_pos_unit[:,0]).
-        # MikkTSpace handedness w = sign(cross(normal, T) · B) so the +V (basis_v)
-        # bitangent is reconstructed correctly downstream.
-        nf = np.asarray(normal, dtype=np.float64)
+
+    def _lift(local):  # (Nv, 3) blade-frame vectors → world
+        return (local[:, 0:1] * bu[np.newaxis, :]
+                + local[:, 1:2] * bv[np.newaxis, :]
+                + local[:, 2:3] * bw[np.newaxis, :])
+
+    if blade_norm_local is None:
+        out_norm[:] = np.asarray(normal, dtype=np.float32)[np.newaxis, :]
+    else:
+        wn = _lift(np.asarray(blade_norm_local, dtype=np.float64))
+        out_norm[:] = (wn / np.linalg.norm(wn, axis=1, keepdims=True)).astype(np.float32)
+
+    if out_tan is not None and blade_tan_local is None:
+        # Flat blade: TANGENT follows +U (basis_u); MikkTSpace handedness
+        # w = sign(cross(normal, T) · B) so the +V (basis_v) bitangent reconstructs.
+        nf = bw
         cross_nb = np.array([
             nf[1] * bu[2] - nf[2] * bu[1],
             nf[2] * bu[0] - nf[0] * bu[2],
@@ -472,6 +511,26 @@ def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
         w = 1.0 if float(np.dot(cross_nb, bv)) >= 0.0 else -1.0
         out_tan[:, :3] = bu.astype(np.float32)[np.newaxis, :]
         out_tan[:, 3] = w
+    elif out_tan is not None:
+        # Curved blade: lift the local tangent + its (handedness-signed) bitangent.
+        tl = np.asarray(blade_tan_local, dtype=np.float64)
+        nl = np.asarray(blade_norm_local, dtype=np.float64)
+        b_local = tl[:, 3:4] * np.cross(nl, tl[:, :3])
+        world_t = _lift(tl[:, :3])
+        world_n = _lift(nl)
+        world_b = _lift(b_local)
+        n_hat = world_n / np.linalg.norm(world_n, axis=1, keepdims=True)
+        # The leaf basis (bu, bv, bw) is a SHEAR under splay (bu·bv = sin(splay) ≠ 0),
+        # so a locally-orthonormal frame loses orthogonality once lifted. Gram-Schmidt
+        # the world tangent against the world normal so the exported TBN stays square
+        # (MikkTSpace expects T ⟂ N; a skewed basis warps normal-mapped shading).
+        world_t = world_t - n_hat * np.sum(world_t * n_hat, axis=1, keepdims=True)
+        wt = world_t / np.linalg.norm(world_t, axis=1, keepdims=True)
+        # Handedness from the orthogonalised world frame and the lifted bitangent.
+        handed = np.sign(np.sum(np.cross(n_hat, wt) * world_b, axis=1))
+        handed[handed == 0.0] = 1.0
+        out_tan[:, :3] = wt.astype(np.float32)
+        out_tan[:, 3] = handed.astype(np.float32)
 
 
 def _basis_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

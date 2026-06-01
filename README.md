@@ -115,22 +115,29 @@ Strahler / Horton, et flagging des bornes de littérature par espèce.
 
 ## Export & assets 3D
 
-La sortie de base est aujourd'hui un `.glb` (glTF 2.0 binaire) **core, sans
-extension**, ouvrable dans n'importe quel viewer (`generate` / `forest`
-ci-dessus). Au-delà, palubicki vise une véritable **fabrique d'assets** : à
-partir du même graphe de simulation, produire des modèles exploitables pour le
-**photoréalisme** (archviz, Blender/Cycles, Unreal Lumen) *et* pour une **forêt
-de jeu vidéo** (instancing, LOD, impostors), avec **rig de vent** pour
-l'animation et l'interaction.
+La sortie de base est un `.glb` (glTF 2.0 binaire) ouvrable dans n'importe quel
+viewer (`generate` / `forest` ci-dessus). Au-delà, palubicki vise une véritable
+**fabrique d'assets** : à partir du même graphe de simulation, produire des
+modèles exploitables pour le **photoréalisme** (archviz, Blender/Cycles, Unreal
+Lumen) *et* pour une **forêt de jeu vidéo** (instancing, LOD, impostors), avec
+**rig de vent** pour l'animation et l'interaction.
 
-Le principe directeur : **un master canonique** par arbre (PBR standard, non
-compressé, PNG — source de vérité unique) dont on dérive des **profils cibles**.
-Le graphe `sim/` reste en lecture seule ; l'export *lève* ses champs
-(`Internode.diameter` → raideur de vent, `axis_order` → niveaux/LOD,
+Le principe directeur : **un master canonique** par arbre (PBR metallic-roughness
+standard, non compressé, PNG — source de vérité unique) dont on dérive des
+**profils cibles**. Le graphe `sim/` reste en lecture seule ; l'export *lève* ses
+champs (`Internode.diameter` → raideur de vent, `axis_order` → niveaux/LOD,
 `light_factor` → soleil/ombre, `birth_time` → âge d'écorce) vers des **attributs
-portables** (`COLOR_n`/`TEXCOORD_n`) et des buffers d'instances — jamais vers des
-extensions glTF fragiles. La réalité des moteurs, pas l'élégance de la spec, fixe
-le plancher.
+portables** (`COLOR_n`/`TEXCOORD_n`) et des buffers d'instances. La réalité des
+moteurs, pas l'élégance de la spec, fixe le plancher.
+
+Déjà livré : la **forêt instanciée** (arbre-unité + `EXT_mesh_gpu_instancing`,
+P0), le **vent hiérarchique** par attributs-sommets + `TANGENT` (P1), et le
+**master photoréaliste** (P2) — cartes normal / ORM packé / specular cuticule +
+lame de feuille géométrique courbée, gestion correcte des espaces colorimétriques
+(baseColor sRGB, données linéaires sur leurs propres canaux), et le contre-jour
+des feuilles en métadonnée `KHR_materials_diffuse_transmission` (consommé par les
+shaders subsurface par-moteur). Reste à venir : profils cibles + gate de
+validation (P3), LOD + impostor (P4), vent skinné hero (P5).
 
 ```bash
 # Cible (en construction — épic #53) :
@@ -174,7 +181,7 @@ flowchart TD
         leaves --> mesh
     end
 
-    export["export/ — Mesh → .glb<br/>(glTF 2.0 core, config embarquée)"]
+    export["export/ — Mesh → .glb<br/>(glTF 2.0 PBR + maps, config embarquée)"]
     glb([".glb"])
 
     cfg --> cli
@@ -191,7 +198,7 @@ flowchart TD
 
 - `src/palubicki/sim/` — simulation pure (markers, buds, BH, tropismes, shedding). Pas de géométrie, pas de glTF.
 - `src/palubicki/geom/` — squelette → tubes tessellés (repères de transport parallèle) + clusters de feuilles paramétriques. Produit un `Mesh` neutre.
-- `src/palubicki/export/` — `Mesh` → `.glb`. glTF 2.0 core, sans extension, compatibilité viewer maximale.
+- `src/palubicki/export/` — `Mesh` → `.glb`. glTF 2.0 PBR metallic-roughness : maps normal/ORM/specular, vent par attributs portables, forêt instanciée ; extensions import-safe + métadonnée prospective.
 - `src/palubicki/render/` — `.glb` → PNG (diagnostic, matplotlib).
 - `src/palubicki/edit/` — visualiseur web three.js + serveur de re-simulation live.
 - `src/palubicki/cli.py` — orchestre.

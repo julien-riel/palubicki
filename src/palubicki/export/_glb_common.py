@@ -125,6 +125,31 @@ def _add_primitive_attributes(
     return attrs
 
 
+# --------------------------------------------------------------------------- #
+# materials (PBR metallic-roughness + P2 maps & extensions)
+# --------------------------------------------------------------------------- #
+
+_KHR_TEXTURE_TRANSFORM = "KHR_texture_transform"
+_KHR_MATERIALS_SPECULAR = "KHR_materials_specular"
+_KHR_MATERIALS_DIFFUSE_TRANSMISSION = "KHR_materials_diffuse_transmission"
+_KHR_MATERIALS_VARIANTS = "KHR_materials_variants"
+
+
+def _texture_transform_ext(mat, extensions_used: set | None):
+    """``KHR_texture_transform`` extension dict for this material's atlas window,
+    or ``None`` for identity. Registers the extension name when emitted."""
+    xf = getattr(mat, "texture_transform", None)
+    if xf is None or xf.is_identity():
+        return None
+    if extensions_used is not None:
+        extensions_used.add(_KHR_TEXTURE_TRANSFORM)
+    return {_KHR_TEXTURE_TRANSFORM: {
+        "offset": [float(xf.offset[0]), float(xf.offset[1])],
+        "scale": [float(xf.scale[0]), float(xf.scale[1])],
+        "rotation": float(xf.rotation),
+    }}
+
+
 def _add_material(
     mat,
     buffer_data: bytearray,
@@ -135,7 +160,27 @@ def _add_material(
     samplers: list,
     *,
     neutralize_base_color: bool = False,
+    extensions_used: set | None = None,
 ) -> int:
+    """Build one glTF material from ``mat``, emitting every P2 map it carries.
+
+    Base colour rides the sRGB slot; the normal / ORM / occlusion maps ride the
+    linear slots (glTF tags colour space by slot). The ORM image, when present,
+    is added **once** and referenced by both ``metallicRoughnessTexture`` (G,B)
+    and ``occlusionTexture`` (R). Forward-looking + cuticle looks ride material
+    extensions; ``extensions_used`` collects every extension name emitted so the
+    caller can populate ``gltf.extensionsUsed`` (a Validator requirement)."""
+    xf_ext = _texture_transform_ext(mat, extensions_used)
+
+    def _tex(png: bytes) -> int:
+        return _add_texture(png, buffer_data, buffer_views, textures, images, samplers)
+
+    def _info(cls, idx, **kw):
+        info = cls(index=idx, **kw)
+        if xf_ext is not None:
+            info.extensions = dict(xf_ext)
+        return info
+
     base_color = (1.0, 1.0, 1.0, 1.0) if neutralize_base_color else list(mat.base_color)
     pbr = pygltflib.PbrMetallicRoughness(
         baseColorFactor=list(base_color),
@@ -143,9 +188,8 @@ def _add_material(
         roughnessFactor=mat.roughness,
     )
     if mat.base_color_texture_png is not None:
-        tex_idx = _add_texture(mat.base_color_texture_png, buffer_data, buffer_views,
-                               textures, images, samplers)
-        pbr.baseColorTexture = pygltflib.TextureInfo(index=tex_idx)
+        pbr.baseColorTexture = _info(pygltflib.TextureInfo, _tex(mat.base_color_texture_png))
+
     gltf_mat = pygltflib.Material(
         name=mat.name,
         pbrMetallicRoughness=pbr,
@@ -153,8 +197,122 @@ def _add_material(
         alphaCutoff=mat.alpha_cutoff if mat.alpha_mode == "MASK" else None,
         doubleSided=mat.double_sided,
     )
+
+    orm_png = getattr(mat, "orm_texture_png", None)
+    if orm_png is not None:
+        orm_idx = _tex(orm_png)  # one image → two slots (ORM packing)
+        pbr.metallicRoughnessTexture = _info(pygltflib.TextureInfo, orm_idx)
+        gltf_mat.occlusionTexture = _info(
+            pygltflib.OcclusionTextureInfo, orm_idx,
+            strength=float(getattr(mat, "occlusion_strength", 1.0)),
+        )
+
+    normal_png = getattr(mat, "normal_texture_png", None)
+    if normal_png is not None:
+        gltf_mat.normalTexture = _info(
+            pygltflib.NormalMaterialTexture, _tex(normal_png),
+            scale=float(getattr(mat, "normal_scale", 1.0)),
+        )
+
+    emissive_png = getattr(mat, "emissive_texture_png", None)
+    emissive_factor = getattr(mat, "emissive_factor", (0.0, 0.0, 0.0))
+    if emissive_png is not None:
+        gltf_mat.emissiveTexture = _info(pygltflib.TextureInfo, _tex(emissive_png))
+    if any(c > 0.0 for c in emissive_factor):
+        gltf_mat.emissiveFactor = [float(c) for c in emissive_factor]
+
+    mat_ext = _material_ext(mat, _tex, _info, extensions_used)
+    if mat_ext:
+        gltf_mat.extensions = mat_ext
+
     materials.append(gltf_mat)
     return len(materials) - 1
+
+
+def _material_ext(mat, add_tex, make_info, extensions_used: set | None) -> dict:
+    """Assemble the material-level extension dict: cuticle specular + the
+    forward-looking diffuse-transmission back-light (metadata, engine-ignored in
+    2026 — design D1)."""
+    ext: dict = {}
+    spec = getattr(mat, "specular_factor", None)
+    if spec is not None:
+        if extensions_used is not None:
+            extensions_used.add(_KHR_MATERIALS_SPECULAR)
+        ext[_KHR_MATERIALS_SPECULAR] = {"specularFactor": float(spec)}
+
+    trans_png = getattr(mat, "transmission_texture_png", None)
+    trans_factor = float(getattr(mat, "diffuse_transmission_factor", 0.0))
+    if trans_png is not None or trans_factor > 0.0:
+        if extensions_used is not None:
+            extensions_used.add(_KHR_MATERIALS_DIFFUSE_TRANSMISSION)
+        color = getattr(mat, "diffuse_transmission_color", (1.0, 1.0, 1.0))
+        dt: dict = {
+            "diffuseTransmissionFactor": trans_factor,
+            "diffuseTransmissionColorFactor": [float(c) for c in color],
+        }
+        if trans_png is not None:
+            info = make_info(pygltflib.TextureInfo, add_tex(trans_png))
+            dt["diffuseTransmissionTexture"] = _info_to_dict(info)
+        ext[_KHR_MATERIALS_DIFFUSE_TRANSMISSION] = dt
+    return ext
+
+
+def _info_to_dict(info) -> dict:
+    """Serialise a pygltflib TextureInfo to the plain dict an extension expects
+    (extensions hold raw JSON, not typed objects)."""
+    d: dict = {"index": int(info.index)}
+    if getattr(info, "texCoord", None):
+        d["texCoord"] = int(info.texCoord)
+    if getattr(info, "extensions", None):
+        d["extensions"] = info.extensions
+    return d
+
+
+class _VariantRegistry:
+    """Ordered, deduped season-variant names for ``KHR_materials_variants``.
+
+    The document declares one ``variants`` list (``index()`` assigns each season a
+    stable slot); every primitive's ``mappings`` reference those slots."""
+
+    def __init__(self) -> None:
+        self._names: list[str] = []
+
+    def index(self, name: str) -> int:
+        if name not in self._names:
+            self._names.append(name)
+        return self._names.index(name)
+
+    @property
+    def names(self) -> list[str]:
+        return list(self._names)
+
+
+def emit_primitive_variants(prim, gltf_prim, registry, add_material, extensions_used: set) -> None:
+    """Attach this primitive's ``KHR_materials_variants`` mappings (one material per
+    season). The primitive's default ``material`` stays the variant-unaware fallback.
+    No-op when the primitive carries no variants."""
+    variants = getattr(prim, "material_variants", None)
+    if not variants:
+        return
+    mappings = []
+    for name, vmat in variants:
+        vidx = registry.index(name)
+        midx = add_material(vmat)
+        mappings.append({"material": midx, "variants": [vidx]})
+    extensions_used.add(_KHR_MATERIALS_VARIANTS)
+    existing = dict(gltf_prim.extensions or {})
+    existing[_KHR_MATERIALS_VARIANTS] = {"mappings": mappings}
+    gltf_prim.extensions = existing
+
+
+def set_document_variants(gltf, registry, extensions_used: set) -> None:
+    """Declare the document-level ``variants`` list once every primitive is built."""
+    if not registry.names:
+        return
+    extensions_used.add(_KHR_MATERIALS_VARIANTS)
+    existing = dict(gltf.extensions or {})
+    existing[_KHR_MATERIALS_VARIANTS] = {"variants": [{"name": n} for n in registry.names]}
+    gltf.extensions = existing
 
 
 def _add_texture(
