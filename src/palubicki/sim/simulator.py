@@ -10,6 +10,7 @@ import numpy as np
 from palubicki.config import Config
 from palubicki.sim.bh import allocate, compute_v_subtree
 from palubicki.sim.bud_break_bias import compute_axis_positions, position_weight
+from palubicki.sim.caducity import advance_leaf_states
 from palubicki.sim.clock import Clock
 from palubicki.sim.elongation import shoot_extension, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
@@ -443,3 +444,7 @@ def _apply_temporal_dynamics(forest: Forest, cfg: Config, t: float) -> None:
     if cfg.sag.enabled:
         for tree in forest.trees:
             apply_sag(tree, cfg=cfg.sag)
+    # Leaf caducity (#61): age/season -> LeafState. Independent of mesh geometry,
+    # so order vs. sag is irrelevant; abscised leaves drop off the ACTIVE roster
+    # and vanish from the rendered mesh via geom.leaves' existing filter.
+    advance_leaf_states(forest, cfg, t)

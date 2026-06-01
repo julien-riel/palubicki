@@ -70,6 +70,7 @@ class SimConfig:
     shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
     elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
     bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
+    leaf_phenology: LeafPhenologyConfig = field(default_factory=lambda: LeafPhenologyConfig())
 
     @property
     def num_iterations(self) -> int:
@@ -205,6 +206,40 @@ class SagConfig:
     # Internodes whose ``axis_order`` is less than this stay rigid. 1 = trunk
     # doesn't sag (typical); 0 = even trunk can sag (extreme weep).
     rigid_axis_order: int = field(default=1, metadata={"ui": {"min": 0, "max": 4, "step": 1}})
+
+
+@dataclass(frozen=True)
+class LeafPhenologyConfig:
+    """Leaf caducity: age + season drive ``LeafState`` transitions (#61).
+
+    A per-iteration pass advances each leaf ``ACTIVE -> SENESCENT -> ABSCISSED``
+    as a pure function of ``clock.t - birth_time`` (no RNG, fully deterministic).
+    Disabled by default, so a config that never opts in keeps every leaf
+    ``ACTIVE`` for life (legacy behavior / unchanged goldens).
+
+    Two senescence triggers, whichever fires first:
+      * **age cap** — ``age >= leaf_lifespan_years`` (evergreen needle turnover;
+        also a safety cap for deciduous leaves).
+      * **dormant-window entry** (deciduous only) — the leaf senesces as soon as
+        ``year_fraction`` leaves ``sim.annual_growth_period``. This only bites
+        when ``dt_years < 1.0`` carries the clock into the dormant window, same
+        as the growth gate it complements (coordinate the window definition with
+        #65 when graded phenology lands).
+
+    A senesced leaf abscises ``senescence_duration_years`` later — a brief window
+    where the leaf is off the ``ACTIVE`` roster but still on the node, the hook
+    autumn-color tinting (#9 COLOR_0 path) and marcescence will read.
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    # True: shed within the dormant window (broadleaves). False: evergreen —
+    # leaves persist across years, shedding only past the lifespan cap.
+    deciduous: bool = field(default=False, metadata={"ui": {"label": "Deciduous"}})
+    leaf_lifespan_years: float = field(
+        default=2.0, metadata={"ui": {"min": 0.25, "max": 12.0, "step": 0.25}}
+    )
+    senescence_duration_years: float = field(
+        default=0.1, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}}
+    )
 
 
 @dataclass(frozen=True)
@@ -461,6 +496,16 @@ class Config:
         e = self.sim.elongation
         if e.tau_years <= 0:
             raise ConfigError(f"sim.elongation.tau_years must be > 0, got {e.tau_years}")
+        lp = self.sim.leaf_phenology
+        if lp.leaf_lifespan_years <= 0:
+            raise ConfigError(
+                f"sim.leaf_phenology.leaf_lifespan_years must be > 0, got {lp.leaf_lifespan_years}"
+            )
+        if lp.senescence_duration_years < 0:
+            raise ConfigError(
+                "sim.leaf_phenology.senescence_duration_years must be >= 0, "
+                f"got {lp.senescence_duration_years}"
+            )
         bb = s.bud_break_bias
         if bb.mode not in ("uniform", "acrotonic", "basitonic", "mesotonic"):
             raise ConfigError(
