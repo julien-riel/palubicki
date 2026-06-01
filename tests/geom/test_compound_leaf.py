@@ -1,6 +1,30 @@
 import math
 
-from palubicki.geom.compound_leaf import CompoundLayout, compound_layout
+import numpy as np
+
+from palubicki.geom.compound_leaf import (
+    CompoundLayout,
+    _emit_cylinder,
+    compound_layout,
+)
+
+
+def test_emit_cylinder_constant_radius_rings():
+    p, _, _, idx = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.5, 4, 0)
+    # 4 sides -> 8 ring vertices (bottom 0-3, top 4-7), 6*4 indices
+    assert p.shape == (8, 3)
+    assert idx.shape == (24,)
+    bottom_r = [float(np.hypot(v[0], v[2])) for v in p[:4]]
+    top_r = [float(np.hypot(v[0], v[2])) for v in p[4:]]
+    assert all(abs(r - 0.5) < 1e-6 for r in bottom_r + top_r)
+
+
+def test_emit_cylinder_tapers_from_r0_to_r1():
+    p, _, _, _ = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.2, 4, 0)
+    bottom_r = [float(np.hypot(v[0], v[2])) for v in p[:4]]
+    top_r = [float(np.hypot(v[0], v[2])) for v in p[4:]]
+    assert all(abs(r - 0.5) < 1e-6 for r in bottom_r)
+    assert all(abs(r - 0.2) < 1e-6 for r in top_r)
 
 
 def _layout(kind, **kw):
@@ -13,7 +37,8 @@ def _layout(kind, **kw):
 
 
 def test_simple_is_single_blade_no_rachis():
-    lay = _layout("simple")
+    # legacy identity is guaranteed only at petiole_length=0
+    lay = _layout("simple", petiole_length=0.0)
     assert isinstance(lay, CompoundLayout)
     assert len(lay.leaflets) == 1
     origin_uv, axis_angle, scale = lay.leaflets[0]
@@ -21,6 +46,33 @@ def test_simple_is_single_blade_no_rachis():
     assert axis_angle == 0.0
     assert scale == 1.0
     assert lay.rachis_segments == []
+
+
+def test_simple_layout_with_petiole_emits_segment_and_blade_at_tip():
+    layout = compound_layout(
+        "simple", leaflet_count=1, leaflet_pair_count=0,
+        terminal_leaflet=False, rachis_length=0.0,
+        petiole_length=0.3, rachis_radius=0.02, petiole_taper=0.6,
+    )
+    # one blade leaflet, anchored at the petiole tip (0, 0.3)
+    assert layout.leaflets == [((0.0, 0.3), 0.0, 1.0)]
+    # one tapered petiole segment from base to tip
+    assert len(layout.rachis_segments) == 1
+    s_uv, e_uv, r0, r1 = layout.rachis_segments[0]
+    assert s_uv == (0.0, 0.0)
+    assert e_uv == (0.0, 0.3)
+    assert abs(r0 - 0.02) < 1e-12
+    assert abs(r1 - 0.02 * 0.6) < 1e-12
+
+
+def test_simple_layout_zero_petiole_is_legacy_identity():
+    layout = compound_layout(
+        "simple", leaflet_count=1, leaflet_pair_count=0,
+        terminal_leaflet=False, rachis_length=0.0,
+        petiole_length=0.0, rachis_radius=0.02, petiole_taper=0.6,
+    )
+    assert layout.leaflets == [((0.0, 0.0), 0.0, 1.0)]
+    assert layout.rachis_segments == []
 
 
 def test_pinnate_leaflet_count_includes_terminal():

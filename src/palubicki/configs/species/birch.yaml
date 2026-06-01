@@ -79,6 +79,11 @@ geom:
   leaf_splay_deg: 20
   foliage_depth: 3
   leaf_sun_shade_k: 0.4
+  petiole_length_ratio: 0.3
+  petiole_radius_ratio: 0.02
+  petiole_taper: 0.6
+  petiole_droop_deg: 15.0
+  petiole_color: [0.34, 0.44, 0.20]
   root_flare_height: 0.15
   root_flare_factor: 1.15
   root_flare_falloff: linear

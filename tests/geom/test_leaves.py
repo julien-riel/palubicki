@@ -1,6 +1,6 @@
 import numpy as np
 
-from palubicki.geom.leaves import build_leaves_primitive
+from palubicki.geom.leaves import build_leaves_primitive, leaf_basis
 from palubicki.geom.mesh import Material
 from palubicki.sim.tree import Bud, BudState, Internode, Leaf, LeafState, Node, Tree
 
@@ -332,3 +332,38 @@ def test_pinnate_vert_count_is_linear_in_leaflets():
     m = blade_idx.shape[0]
     assert prim.positions.shape[0] == n_records * leaflets_per_leaf * v
     assert prim.indices.shape[0] == n_records * leaflets_per_leaf * m
+
+
+def test_leaf_basis_no_droop_matches_inline_math():
+    import math
+    d = np.array([0.0, 1.0, 0.0])
+    az, splay = 0.7, math.radians(30.0)
+    u, up, w = leaf_basis(d, az, splay, 0.0)
+    # orthonormal lateral/normal axes, unit leaf_up
+    assert abs(np.linalg.norm(u) - 1.0) < 1e-9
+    assert abs(np.linalg.norm(w) - 1.0) < 1e-9
+    assert abs(np.linalg.norm(up) - 1.0) < 1e-9
+    # splay tilts leaf_up off the stem by exactly splay (dot with d == cos splay)
+    assert abs(float(np.dot(up, d)) - math.cos(splay)) < 1e-9
+
+
+def test_leaf_basis_droop_rotates_toward_minus_y():
+    import math
+    # horizontal stem along +X, no splay -> leaf_up == +X
+    d = np.array([1.0, 0.0, 0.0])
+    _, up0, _ = leaf_basis(d, 0.0, 0.0, 0.0)
+    assert abs(up0[0] - 1.0) < 1e-9
+    # droop 90 deg -> leaf_up rotates to -Y
+    _, up90, _ = leaf_basis(d, 0.0, 0.0, math.radians(90.0))
+    assert up90[1] < -0.999
+
+
+def test_leaf_basis_droop_is_rigid_preserves_splay_angle():
+    import math
+    d = np.array([0.0, 1.0, 0.0])
+    az, splay, droop = 1.2, math.radians(35.0), math.radians(40.0)
+    u0, up0, _ = leaf_basis(d, az, splay, 0.0)
+    u1, up1, _ = leaf_basis(d, az, splay, droop)
+    # the angle between lateral axis and leaf_up (the area-defining shear) is
+    # invariant under the rigid droop rotation
+    assert abs(float(np.dot(u0, up0)) - float(np.dot(u1, up1))) < 1e-9
