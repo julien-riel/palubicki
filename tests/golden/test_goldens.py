@@ -172,7 +172,9 @@ def test_golden_forest_v3(tmp_path):
     # geometry) change. Deterministic position-hash on the reference build.
     # Re-pinned for the co-located-bud fix (angular-partition tiebreak in
     # space_competition.py): leaders survive, changing node positions forest-wide.
-    EXPECTED = "939087dc3e99485b26b407e309df7c0ff7d77ba35e1fa0fb7bd53710d2e7aca4"
+    # Re-pinned for #62: broadleaf self-shading now uses real per-leaf blade area
+    # (default GeomConfig is ovate), shifting shade-mortality and forest geometry.
+    EXPECTED = "7e5f20b0783bc4b5ccaccfb5eafc8cb2afac7f8fdac592b03e83121a5e93accf"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")

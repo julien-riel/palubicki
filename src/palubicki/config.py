@@ -385,6 +385,15 @@ class LightConfig:
     grid_size: tuple[float, float, float] | None = None
     grid_resolution: tuple[int, int, int] = (64, 64, 64)
     k_absorption: float = field(default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
+    # Broadleaf foliage occlusion (#62): unitless multiplier on the *real* per-leaf
+    # blade area deposited into the LAI grid. 1.0 = pure rendered foliage area;
+    # >1 thickens the self-shading, 0 disables leaf occlusion.
+    leaf_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    # Needle/conifer foliage occlusion: legacy scalar LAI (m²) deposited at each
+    # terminal bud (leaf_shape == "linear" species). Conifer apical dominance still
+    # emerges from this canopy-shell deposit; real needle-area coupling lands with
+    # the conifer foliage rework (#55 spray + #7 fascicles). Until then this path
+    # is intentionally decoupled from the rendered needles.
     leaf_area: float = field(default=0.04, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}})
     internode_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     n_rays: int = field(default=16, metadata={"ui": {"min": 4, "max": 64, "step": 4}})
@@ -706,6 +715,8 @@ class Config:
             raise ConfigError(f"light.n_rays must be > 0, got {light.n_rays}")
         if light.k_absorption < 0:
             raise ConfigError(f"light.k_absorption must be >= 0, got {light.k_absorption}")
+        if light.leaf_area_scale < 0:
+            raise ConfigError(f"light.leaf_area_scale must be >= 0, got {light.leaf_area_scale}")
         if light.leaf_area < 0:
             raise ConfigError(f"light.leaf_area must be >= 0, got {light.leaf_area}")
         if light.internode_area_scale < 0:

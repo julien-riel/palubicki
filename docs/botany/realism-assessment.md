@@ -35,10 +35,18 @@ aérienne**, avec un bon compromis réalisme / vitesse. Les grandes absences
    qualité de marqueurs). C'est l'écart conceptuel le plus structurant.
 
 2. **Le feuillage est décoratif, pas fonctionnel.**
-   - La surface foliaire réelle (morphologie paramétrée dans `GeomConfig`)
-     n'est **pas** injectée dans la grille de lumière — c'est un `light.leaf_area`
-     scalaire par bourgeon terminal, découplé du feuillage rendu. L'auto-ombrage
-     ne reflète donc pas la morphologie qu'on paramètre.
+   - ~~La surface foliaire réelle n'est pas injectée dans la grille de lumière.~~
+     **Résolu pour les feuillus ([#62](https://github.com/julien-riel/palubicki/issues/62)).**
+     `sim/light.py` dépose désormais l'aire de lame **réelle** par feuille (forme,
+     taille, lame composée, échelle soleil/ombre), via la fonction partagée
+     `geom/leaves.py:leaf_area_records` — même source que le diagnostic
+     `total_leaf_area` et le `.glb`. `light.leaf_area_scale` = multiplicateur.
+     L'auto-ombrage des feuillus reflète maintenant la morphologie paramétrée.
+     **Conifères** : encore sur le scalaire `light.leaf_area` par bourgeon terminal
+     — leur dominance apicale *émerge* de ce dépôt « coquille de canopée », et le
+     coupler aux vraies aiguilles le casse (le leader du pin s'effondre). Reporté à
+     #55 (éventail) + #7 (fascicules), où géométrie d'aiguilles et calibration
+     lumière se règlent ensemble.
    - Aucune règle d'âge branchée : `Leaf.birth_time` / `LeafState`
      (`ACTIVE→SENESCENT→ABSCISSED`) existent mais la transition n'arrive jamais.
      Pas de caducité, pas de marcescence. L'infra est là, le fil est débranché.
@@ -68,11 +76,12 @@ aérienne**, avec un bon compromis réalisme / vitesse. Les grandes absences
 
 À fort rendement **dans le périmètre existant** (l'infra est déjà là) :
 
-1. **Caducité foliaire** (âge → senescence → abscission). Du câblage, débloque
-   le réalisme saisonnier + la résorption automnale.
-2. **Coupler la surface foliaire réelle à la grille de lumière**, pour que
-   l'auto-ombrage reflète la morphologie déjà paramétrée, au lieu d'un
-   `leaf_area` scalaire découplé.
+1. ~~**Caducité foliaire** (âge → senescence → abscission).~~ **Livré**
+   ([#61](https://github.com/julien-riel/palubicki/issues/61),
+   [#67](https://github.com/julien-riel/palubicki/issues/67)).
+2. ~~**Coupler la surface foliaire réelle à la grille de lumière.**~~ **Livré pour
+   les feuillus** ([#62](https://github.com/julien-riel/palubicki/issues/62)) ;
+   conifères reportés à #55/#7 (voir angle mort #2 ci-dessus).
 
 À **ne pas** faire sans changement d'ambition :
 

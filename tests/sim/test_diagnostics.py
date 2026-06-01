@@ -413,7 +413,11 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # per-axis phyllotactic azimuth (was a render-time even fan), rotating each
     # blade about its node — leaf-blade vertex positions shift (leaf AREA is
     # unchanged, guarded by the leaf-area pin). Verified deterministic.
-    EXPECTED_HASH = 36691807.31810808  # noqa: N806
+    # Re-pinned for #62: the light grid now occludes broadleaves with their real
+    # per-leaf blade area (was a 0.04 scalar per terminal), shifting oak's
+    # self-shading → shade-mortality → tree topology / leaf-blade positions. (The
+    # area *formula* is unchanged; conifers are untouched, still on the scalar.)
+    EXPECTED_HASH = 33585763.29480557  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
@@ -901,14 +905,24 @@ def test_total_leaf_area_scales_with_leaflets():
 
 
 def test_total_leaf_area_matches_pre_refactor_pin():
-    """Leaf area is preserved across the #14 refactor (azimuth seating keeps the
-    cos(splay) shear). Pin captured on main before the refactor, seed 0."""
+    """Leaf-area diagnostic regression pin, seed 0.
+
+    The area *formula* is unchanged across #14 (azimuth seating keeps the
+    cos(splay) shear) and #62 (the formula moved verbatim into the shared
+    geom.leaves.leaf_area_records); the rendered-geometry cross-check
+    test_leaf_area_matches_geom_helper guards the formula itself.
+
+    Re-pinned for #62: these three species enable light, so feeding the grid the
+    real per-leaf blade area (instead of the old 0.04 scalar-per-terminal) changes
+    the self-shading signal → the grown skeleton, and hence the leaf count, shifts.
+    Pins captured at #62, seed 0 (oak 791.25→665.10, birch 9.47→8.48,
+    maple 111.28→103.57)."""
     from pathlib import Path
 
     from palubicki.config import load_config
     from palubicki.sim.diagnostics import compute_metrics
     from palubicki.sim.simulator import simulate
-    pins = {"oak": 791.24687450, "birch": 9.46838697, "maple": 111.27648191}
+    pins = {"oak": 665.09540147, "birch": 8.47687259, "maple": 103.56636427}
     for sp, expected in pins.items():
         cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
                           output=Path("t.glb"), species=sp)

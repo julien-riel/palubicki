@@ -1,13 +1,32 @@
 import numpy as np
 import pytest
 
-from palubicki.config import EnvelopeConfig, LightConfig
+from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig
 from palubicki.sim.light import LightGrid
-from palubicki.sim.tree import Bud, BudState, Internode, Node, Tree
+from palubicki.sim.tree import Bud, BudState, Internode, Leaf, Node, Tree
+
+# Default foliage params used by the leaf-injection tests. Real per-leaf blade
+# area (#62) now drives the LAI deposit, so the tests need a concrete GeomConfig
+# to compute the expected occluding area from.
+_GEOM = GeomConfig()
 
 
-def _make_tree_with_terminal_at(pos: np.ndarray) -> Tree:
-    """Tree: root → one internode → terminal bud at `pos`. No lateral buds."""
+def _leaf_area_at(tree: Tree, geom: GeomConfig = _GEOM) -> float:
+    """Expected total occluding area the grid should deposit for `tree`.
+
+    Sourced from the same shared helper the deposit uses; the rendered-geometry
+    cross-check lives in tests/sim/test_diagnostics.py, so here we exercise
+    placement + summation, not the area formula itself."""
+    from palubicki.geom.leaves import leaf_area_records
+
+    return float(sum(area for _pos, area in leaf_area_records(tree, geom)))
+
+
+def _make_tree_with_terminal_at(pos: np.ndarray, *, with_leaf: bool = True) -> Tree:
+    """Tree: root → one internode → terminal bud at `pos`. No lateral buds.
+
+    `with_leaf` seats one ACTIVE Leaf on the terminal node so the real-leaf-area
+    LAI deposit (#62) has foliage to read."""
     root = Node(position=np.zeros(3))
     leaf_node = Node(position=pos)
     iod = Internode(parent_node=root, child_node=leaf_node, length=float(np.linalg.norm(pos)), is_main_axis=True)
@@ -15,6 +34,8 @@ def _make_tree_with_terminal_at(pos: np.ndarray) -> Tree:
     root.children_internodes.append(iod)
     bud = Bud(position=pos.copy(), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=leaf_node)
     leaf_node.terminal_bud = bud
+    if with_leaf:
+        leaf_node.leaves.append(Leaf(parent_node=leaf_node, azimuth=0.0, birth_time=0.0))
     return Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
 
@@ -102,18 +123,19 @@ def test_rebuild_inject_single_leaf():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(10.0, 10.0, 10.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.04,
         internode_area_scale=0.0,   # disable internode injection for this test
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
 
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
-    # cell_volume = 1.0 ; leaf adds 0.04 / 1.0 = 0.04 to one voxel
-    assert grid.lai[5, 7, 1] == pytest.approx(0.04, rel=1e-6)
+    # cell_volume = 1.0 ; the one leaf deposits its real blade area into one voxel.
+    expected = _leaf_area_at(tree)  # / cell_volume == 1.0
+    assert expected > 0.0
+    assert grid.lai[5, 7, 1] == pytest.approx(expected, rel=1e-6)
     # all other voxels are 0
-    assert grid.lai.sum() == pytest.approx(0.04, rel=1e-6)
+    assert grid.lai.sum() == pytest.approx(expected, rel=1e-6)
 
 
 def test_rebuild_skips_dead_buds():
@@ -121,25 +143,24 @@ def test_rebuild_skips_dead_buds():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(10.0, 10.0, 10.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.04,
         internode_area_scale=0.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
     tree.active_buds[0].state = BudState.DEAD
 
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
+    # A dead apex is not a leaf-bearing node → its foliage is not deposited.
     assert grid.lai.sum() == pytest.approx(0.0)
 
 
 def test_rebuild_skips_non_terminal_nodes():
-    """Only terminal buds (leaves) inject LAI, not lateral buds or internal nodes."""
+    """Only leaf-bearing apex nodes inject LAI, not lateral buds or internal nodes."""
     cfg = LightConfig(
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(10.0, 10.0, 10.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.04,
         internode_area_scale=0.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
@@ -149,10 +170,11 @@ def test_rebuild_skips_non_terminal_nodes():
     tree.root.lateral_buds.append(lat)
     tree.active_buds.append(lat)
 
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
-    # Only the terminal contributes
-    assert grid.lai[5, 7, 1] == pytest.approx(0.04)
+    # Only the terminal leaf contributes
+    expected = _leaf_area_at(tree)
+    assert grid.lai[5, 7, 1] == pytest.approx(expected)
     assert grid.lai[2, 3, 4] == pytest.approx(0.0)
 
 
@@ -162,16 +184,89 @@ def test_rebuild_idempotent_zeros_first():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(10.0, 10.0, 10.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.04,
         internode_area_scale=0.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
 
-    grid.rebuild_from_tree(tree, cfg)
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
-    assert grid.lai.sum() == pytest.approx(0.04)  # not 0.08
+    expected = _leaf_area_at(tree)
+    assert grid.lai.sum() == pytest.approx(expected)  # not 2×
+
+
+def test_blade_morphology_changes_lai_deposit():
+    """Acceptance #62: identical skeleton + different broadleaf blade morphology ⇒
+    measurably different self-shading. The deposit is the real blade area, so a big
+    broad palmate blade occludes substantially more than a small narrow one."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        internode_area_scale=0.0,
+    )
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    small = GeomConfig(leaf_size=0.05, leaf_shape="elliptic", leaf_aspect=0.3)
+    large = GeomConfig(leaf_size=0.12, leaf_shape="palmate", leaf_aspect=1.0)
+
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    grid.rebuild_from_tree(tree, cfg, geom=small)
+    lai_small = grid.lai.sum()
+
+    grid.rebuild_from_tree(tree, cfg, geom=large)
+    lai_large = grid.lai.sum()
+
+    assert lai_small > 0.0
+    # Broad palmate at 0.12 must occlude substantially more than a small narrow blade at 0.05.
+    assert lai_large > 2.0 * lai_small
+
+
+def test_needle_path_uses_legacy_terminal_scalar():
+    """Conifers (leaf_shape == 'linear') keep the legacy light.leaf_area scalar at
+    the terminal bud — decoupled from blade size — pending the conifer foliage
+    rework (#55/#7). Verified by: the deposit equals leaf_area/cell_volume and is
+    insensitive to leaf_size, unlike the broadleaf real-area path."""
+    cfg = LightConfig(
+        grid_origin=(0.0, 0.0, 0.0),
+        grid_size=(10.0, 10.0, 10.0),
+        grid_resolution=(10, 10, 10),
+        leaf_area=0.04,
+        internode_area_scale=0.0,
+    )
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    grid = LightGrid.from_config(cfg, EnvelopeConfig())
+    grid.rebuild_from_tree(tree, cfg, geom=GeomConfig(leaf_shape="linear", leaf_size=0.05))
+    lai_small = grid.lai[5, 7, 1]
+
+    grid.rebuild_from_tree(tree, cfg, geom=GeomConfig(leaf_shape="linear", leaf_size=0.20))
+    lai_big = grid.lai[5, 7, 1]
+
+    # cell_volume == 1.0 → scalar deposit is exactly leaf_area, regardless of leaf_size.
+    assert lai_small == pytest.approx(0.04)
+    assert lai_big == pytest.approx(0.04)
+
+
+def test_leaf_area_scale_multiplies_deposit():
+    """light.leaf_area_scale is a linear multiplier on the deposited real area;
+    scale=0 opts out of leaf occlusion (byte-identical to no foliage)."""
+    base = {"grid_origin": (0.0, 0.0, 0.0), "grid_size": (10.0, 10.0, 10.0),
+            "grid_resolution": (10, 10, 10), "internode_area_scale": 0.0}
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    grid1 = LightGrid.from_config(LightConfig(**base, leaf_area_scale=1.0), EnvelopeConfig())
+    grid1.rebuild_from_tree(tree, LightConfig(**base, leaf_area_scale=1.0), geom=_GEOM)
+
+    grid3 = LightGrid.from_config(LightConfig(**base, leaf_area_scale=3.0), EnvelopeConfig())
+    grid3.rebuild_from_tree(tree, LightConfig(**base, leaf_area_scale=3.0), geom=_GEOM)
+
+    grid0 = LightGrid.from_config(LightConfig(**base, leaf_area_scale=0.0), EnvelopeConfig())
+    grid0.rebuild_from_tree(tree, LightConfig(**base, leaf_area_scale=0.0), geom=_GEOM)
+
+    assert grid3.lai.sum() == pytest.approx(3.0 * grid1.lai.sum())
+    assert grid0.lai.sum() == pytest.approx(0.0)
 
 
 def test_rebuild_inject_internode_vertical():
@@ -181,7 +276,7 @@ def test_rebuild_inject_internode_vertical():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(1.0, 1.0, 1.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.0,             # disable leaf injection for this test
+        leaf_area_scale=0.0,             # disable leaf injection for this test
         internode_area_scale=1.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
@@ -195,7 +290,7 @@ def test_rebuild_inject_internode_vertical():
     tip.terminal_bud = bud
     tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
     # Vertical column at (x=5, z=5), y from 0 to 9. Each cell should have LAI > 0.
     column = grid.lai[5, :, 5]
@@ -211,7 +306,7 @@ def test_rebuild_internode_scaled():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(1.0, 1.0, 1.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.0,
+        leaf_area_scale=0.0,
         internode_area_scale=0.5,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
@@ -224,7 +319,7 @@ def test_rebuild_internode_scaled():
     tip.terminal_bud = bud
     tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
-    grid.rebuild_from_tree(tree, cfg)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM)
 
     expected_total = 0.5 * (2 * np.pi * 0.01 * 1.0) / (0.1 * 0.1 * 0.1)
     assert grid.lai.sum() == pytest.approx(expected_total, rel=1e-4)
@@ -236,7 +331,7 @@ def test_rebuild_recomputes_radii():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(1.0, 1.0, 1.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.0,
+        leaf_area_scale=0.0,
         internode_area_scale=1.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
@@ -249,7 +344,7 @@ def test_rebuild_recomputes_radii():
     tip.terminal_bud = bud
     tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
-    grid.rebuild_from_tree(tree, cfg, r_tip=0.005, exponent=2.0)
+    grid.rebuild_from_tree(tree, cfg, geom=_GEOM, r_tip=0.005, exponent=2.0)
 
     # After compute_radii: tip is at r_tip=0.005, single-internode tree → iod.diameter = 0.01
     assert iod.diameter == pytest.approx(0.01)
@@ -262,7 +357,7 @@ def test_rebuild_threads_vigor_diameter_gain():
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(1.0, 1.0, 1.0),
         grid_resolution=(10, 10, 10),
-        leaf_area=0.0,
+        leaf_area_scale=0.0,
         internode_area_scale=1.0,
     )
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
@@ -276,7 +371,7 @@ def test_rebuild_threads_vigor_diameter_gain():
     tree = Tree(root=root, active_buds=[bud], all_internodes=[iod])
 
     grid.rebuild_from_tree(
-        tree, cfg, r_tip=0.005, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=0.25,
+        tree, cfg, geom=_GEOM, r_tip=0.005, exponent=2.0, vigor_ref=1.0, vigor_diameter_gain=0.25,
     )
 
     # sat = 1 - exp(-vigor/vigor_ref) = 1 - exp(-1); r = r_tip*(1 + 0.25*sat).
@@ -460,14 +555,14 @@ def test_rebuild_from_forest_two_trees_lai_sums():
         LightConfig,
     )
     from palubicki.sim.light import LightGrid
-    from palubicki.sim.tree import Bud, Node, Tree
+    from palubicki.sim.tree import Bud, Leaf, Node, Tree
 
     # Build a forest manually: 2 trees, each with a single terminal-bud leaf
     # at a known position.
     env = EnvelopeConfig(rx=1, ry=1, rz=1)
     light_cfg = LightConfig(
         enabled=True, grid_origin=(0, 0, 0), grid_size=(2, 2, 2),
-        grid_resolution=(2, 2, 2), leaf_area=0.04, internode_area_scale=0.0,
+        grid_resolution=(2, 2, 2), internode_area_scale=0.0,
     )
     grid = LightGrid.from_config(light_cfg, env)
 
@@ -476,12 +571,14 @@ def test_rebuild_from_forest_two_trees_lai_sums():
     bud_a = Bud(position=root_a.position.copy(), direction=np.array([0, 1, 0]),
                 axis_order=0, parent_node=root_a)
     root_a.terminal_bud = bud_a
+    root_a.leaves.append(Leaf(parent_node=root_a, azimuth=0.0, birth_time=0.0))
     tree_a = Tree(root=root_a, active_buds=[bud_a])
 
     root_b = Node(position=np.array([1.5, 0.5, 0.5]))
     bud_b = Bud(position=root_b.position.copy(), direction=np.array([0, 1, 0]),
                 axis_order=0, parent_node=root_b)
     root_b.terminal_bud = bud_b
+    root_b.leaves.append(Leaf(parent_node=root_b, azimuth=0.0, birth_time=0.0))
     tree_b = Tree(root=root_b, active_buds=[bud_b])
 
     from palubicki.sim.forest import Forest
@@ -493,10 +590,12 @@ def test_rebuild_from_forest_two_trees_lai_sums():
         markers=None,   # type: ignore[arg-type]
     )
 
-    grid.rebuild_from_forest(forest, light_cfg, r_tip=0.005, exponent=2.49)
+    grid.rebuild_from_forest(forest, light_cfg, geom=_GEOM, r_tip=0.005, exponent=2.49)
 
     cell_volume = float(np.prod(grid.cell_size))
-    expected_lai = light_cfg.leaf_area / cell_volume
+    # Each single-leaf tree deposits the same real blade area into its own cell.
+    expected_lai = _leaf_area_at(tree_a) / cell_volume
+    assert expected_lai > 0.0
     # Cell (0,0,0) holds tree_a's leaf; cell (1,0,0) holds tree_b's leaf
     assert grid.lai[0, 0, 0] == np.float32(expected_lai)
     assert grid.lai[1, 0, 0] == np.float32(expected_lai)
@@ -534,7 +633,7 @@ def test_rebuild_from_forest_applies_obstacle_mask():
         obstacle_voxel_mask=mask,
     )
 
-    grid.rebuild_from_forest(forest, light_cfg, r_tip=0.005, exponent=2.49)
+    grid.rebuild_from_forest(forest, light_cfg, geom=_GEOM, r_tip=0.005, exponent=2.49)
 
     # Cells in mask should be LAI_OPAQUE; others zero
     assert (grid.lai[mask] == np.float32(LAI_OPAQUE)).all()
