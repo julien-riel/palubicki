@@ -199,7 +199,7 @@ def build_rachis_primitive(
         indices=np.zeros((0,), np.uint32),
         material=material,
     )
-    if leaf_kind == "simple" or leaflet_specs is None:
+    if leaflet_specs is None:
         return empty
     layout = compound_layout(
         leaf_kind,
@@ -209,6 +209,7 @@ def build_rachis_primitive(
         rachis_length=leaflet_specs["rachis_length"],
         petiole_length=leaflet_specs["petiole_length"],
         rachis_radius=leaflet_specs["rachis_radius"],
+        petiole_taper=leaflet_specs.get("petiole_taper", 1.0),
     )
     if not layout.rachis_segments:
         return empty

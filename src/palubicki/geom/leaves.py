@@ -71,6 +71,7 @@ def build_leaves_primitive(
     material: Material,
     aspect: float = 1.0,
     splay_deg: float = 0.0,
+    droop_deg: float = 0.0,
     foliage_depth: int = 1,
     needle_cluster_spacing: float = 0.0,
     sun_shade_k: float = 0.0,
@@ -110,10 +111,13 @@ def build_leaves_primitive(
         )
 
     if leaf_kind == "simple" or leaflet_specs is None:
+        pet_len = 0.0 if leaflet_specs is None else leaflet_specs.get("petiole_length", 0.0)
+        pet_taper = 1.0 if leaflet_specs is None else leaflet_specs.get("petiole_taper", 1.0)
+        pet_rad = 0.0 if leaflet_specs is None else leaflet_specs.get("rachis_radius", 0.0)
         layout = compound_layout(
             "simple", leaflet_count=1, leaflet_pair_count=0,
             terminal_leaflet=False, rachis_length=1.0,
-            petiole_length=0.0, rachis_radius=0.0,
+            petiole_length=pet_len, rachis_radius=pet_rad, petiole_taper=pet_taper,
         )
     else:
         layout = compound_layout(
@@ -145,6 +149,7 @@ def build_leaves_primitive(
     indices = np.empty((n * idx_per_leaf,), dtype=np.uint32)
 
     splay_rad = math.radians(splay_deg)
+    droop_rad = math.radians(droop_deg)
     for i, (leaf, stem_dir, source_iod, render_pos) in enumerate(records):
         eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
         v_start = i * verts_per_leaf
@@ -156,7 +161,7 @@ def build_leaves_primitive(
             normals[v_start : v_start + verts_per_leaf],
             uvs[v_start : v_start + verts_per_leaf],
             indices[i_start : i_start + idx_per_leaf],
-            v_start,
+            v_start, droop_rad,
         )
     return Primitive(positions=positions, normals=normals, uvs=uvs, indices=indices, material=material)
 

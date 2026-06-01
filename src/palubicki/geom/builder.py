@@ -55,8 +55,8 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             double_sided=True,
         )
         g = cfg.geom
-        leaflet_specs = None
-        if g.leaf_kind != "simple":
+        is_compound = g.leaf_kind != "simple"
+        if is_compound:
             lshape, lmargin, laspect = resolve_leaflet_blade(g)
             leaflet_specs = {
                 "leaflet_count": g.leaflet_count,
@@ -65,9 +65,20 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
                 "rachis_length": g.rachis_length_ratio,
                 "petiole_length": g.petiole_length_ratio,
                 "rachis_radius": g.rachis_radius_ratio,
+                "petiole_taper": 1.0,
                 "leaflet_shape": lshape,
                 "leaflet_margin": lmargin,
                 "leaflet_aspect": laspect,
+            }
+        else:
+            leaflet_specs = {
+                "leaflet_count": 1,
+                "leaflet_pair_count": 0,
+                "terminal_leaflet": False,
+                "rachis_length": 0.0,
+                "petiole_length": g.petiole_length_ratio,
+                "rachis_radius": g.petiole_radius_ratio,
+                "petiole_taper": g.petiole_taper,
             }
         leaf_prim = build_leaves_primitive(
             tree,
@@ -75,6 +86,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             material=leaf_mat,
             aspect=g.leaf_aspect,
             splay_deg=g.leaf_splay_deg,
+            droop_deg=g.petiole_droop_deg,
             foliage_depth=g.foliage_depth,
             needle_cluster_spacing=g.needle_cluster_spacing,
             sun_shade_k=g.leaf_sun_shade_k,
@@ -86,31 +98,32 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             leaflet_specs=leaflet_specs,
         )
         primitives.append(leaf_prim)
-        if leaflet_specs is not None:
-            rachis_mat = Material(
-                name="rachis",
-                base_color=(*g.bark_color, 1.0),
-                metallic=0.0,
-                roughness=0.9,
-                base_color_texture_png=None,
-                alpha_mode="OPAQUE",
-                alpha_cutoff=0.5,
-                double_sided=False,
-            )
-            rachis_prim = build_rachis_primitive(
-                tree,
-                material=rachis_mat,
-                leaf_size=g.leaf_size,
-                foliage_depth=g.foliage_depth,
-                leaf_kind=g.leaf_kind,
-                leaflet_specs=leaflet_specs,
-                ring_sides=max(3, g.ring_sides // 2),
-                needle_cluster_spacing=g.needle_cluster_spacing,
-                sun_shade_k=g.leaf_sun_shade_k,
-                splay_deg=g.leaf_splay_deg,
-            )
-            if rachis_prim.positions.shape[0] > 0:
-                primitives.append(rachis_prim)
+
+        stem_mat = Material(
+            name=("rachis" if is_compound else "petiole"),
+            base_color=((*g.bark_color, 1.0) if is_compound else (*g.petiole_color, 1.0)),
+            metallic=0.0,
+            roughness=0.9,
+            base_color_texture_png=None,
+            alpha_mode="OPAQUE",
+            alpha_cutoff=0.5,
+            double_sided=False,
+        )
+        stem_prim = build_rachis_primitive(
+            tree,
+            material=stem_mat,
+            leaf_size=g.leaf_size,
+            foliage_depth=g.foliage_depth,
+            leaf_kind=g.leaf_kind,
+            leaflet_specs=leaflet_specs,
+            ring_sides=(max(3, g.ring_sides // 2) if is_compound else max(3, g.petiole_sides)),
+            needle_cluster_spacing=g.needle_cluster_spacing,
+            sun_shade_k=g.leaf_sun_shade_k,
+            splay_deg=g.leaf_splay_deg,
+            droop_deg=g.petiole_droop_deg,
+        )
+        if stem_prim.positions.shape[0] > 0:
+            primitives.append(stem_prim)
 
     return Mesh(primitives=primitives)
 
