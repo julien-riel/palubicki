@@ -252,8 +252,8 @@ def test_needle_path_uses_legacy_terminal_scalar():
 def test_leaf_area_scale_multiplies_deposit():
     """light.leaf_area_scale is a linear multiplier on the deposited real area;
     scale=0 opts out of leaf occlusion (byte-identical to no foliage)."""
-    base = dict(grid_origin=(0.0, 0.0, 0.0), grid_size=(10.0, 10.0, 10.0),
-                grid_resolution=(10, 10, 10), internode_area_scale=0.0)
+    base = {"grid_origin": (0.0, 0.0, 0.0), "grid_size": (10.0, 10.0, 10.0),
+            "grid_resolution": (10, 10, 10), "internode_area_scale": 0.0}
     tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
 
     grid1 = LightGrid.from_config(LightConfig(**base, leaf_area_scale=1.0), EnvelopeConfig())
