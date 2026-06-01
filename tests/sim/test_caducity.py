@@ -10,10 +10,19 @@ import numpy as np
 import pytest
 
 from palubicki.config import LeafPhenologyConfig, load_config
-from palubicki.geom.leaves import selected_leaves
+from palubicki.geom.leaves import build_leaves_primitive, selected_leaves
+from palubicki.geom.mesh import Material
 from palubicki.sim.caducity import advance_leaf_states
 from palubicki.sim.simulator import simulate
 from palubicki.sim.tree import Bud, BudState, Leaf, LeafState, Node, Tree
+
+
+def _leaf_material():
+    return Material(
+        name="leaf", base_color=(0.4, 0.6, 0.2, 1.0), metallic=0.0, roughness=0.85,
+        base_color_texture_png=None, alpha_mode="MASK", alpha_cutoff=0.5,
+        double_sided=True,
+    )
 
 
 def _leafy_tree(*, birth_time=0.0, n_leaves=1):
@@ -135,10 +144,52 @@ def test_abscised_leaf_drops_out_of_selected_leaves():
     leaf = tree.root.leaves[0]
 
     assert len(selected_leaves(tree, foliage_depth=1)) == 1
-    leaf.state = LeafState.ABSCISSED
+    leaf.state = LeafState.SENESCENT  # dead-but-attached: still rendered
+    assert len(selected_leaves(tree, foliage_depth=1)) == 1
+    leaf.state = LeafState.ABSCISSED  # detached: gone from the mesh
     assert selected_leaves(tree, foliage_depth=1) == []
-    leaf.state = LeafState.SENESCENT  # senescent is also off the ACTIVE roster
-    assert selected_leaves(tree, foliage_depth=1) == []
+
+
+def test_autumn_color_tints_only_senescent_leaves():
+    blp = build_leaves_primitive
+    mat = _leaf_material()
+    tree = _leafy_tree(n_leaves=1)
+    autumn = (0.9, 0.4, 0.1)
+
+    # All ACTIVE + autumn set -> no COLOR_0 (nothing senescing yet).
+    prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=autumn)
+    assert prim.colors is None
+
+    # Senescing leaf -> COLOR_0 present; its verts carry the autumn tint.
+    tree.root.leaves[0].state = LeafState.SENESCENT
+    prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=autumn)
+    assert prim.colors is not None
+    assert np.allclose(prim.colors[0], autumn)
+
+    # No autumn_color -> never emit COLOR_0 even when senescing.
+    prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=None)
+    assert prim.colors is None
+
+
+def test_marcescent_retains_senescent_through_winter_drops_in_spring():
+    tree = _leafy_tree(birth_time=0.0)
+    forest = SimpleNamespace(trees=[tree])
+    cfg = _cfg(deciduous=True, lifespan=10.0, senescence=0.1, window=(0.0, 0.5))
+    cfg.sim.leaf_phenology = LeafPhenologyConfig(
+        enabled=True, deciduous=True, leaf_lifespan_years=10.0,
+        senescence_duration_years=0.1, marcescent=True,
+    )
+    leaf = tree.root.leaves[0]
+
+    advance_leaf_states(forest, cfg, t=0.5)   # dormant entry -> senesce
+    assert leaf.state is LeafState.SENESCENT
+    # Through winter, well past senescence_duration: still attached (marcescent).
+    for t in (0.75, 0.9):
+        advance_leaf_states(forest, cfg, t=t)
+        assert leaf.state is LeafState.SENESCENT
+    # Next growth window opens -> finally drops.
+    advance_leaf_states(forest, cfg, t=1.0)
+    assert leaf.state is LeafState.ABSCISSED
 
 
 # --- end-to-end wiring through the simulator --------------------------------

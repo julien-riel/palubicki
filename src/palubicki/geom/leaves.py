@@ -13,6 +13,10 @@ _MAX_CLUSTERS_PER_INTERNODE = 8
 
 _DOWN = np.array([0.0, -1.0, 0.0])
 
+# States that appear in the rendered mesh. SENESCENT leaves are dead-but-attached
+# (autumn foliage / marcescence); ABSCISSED leaves have detached and are gone.
+_RENDERED_LEAF_STATES = (LeafState.ACTIVE, LeafState.SENESCENT)
+
 
 def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0):
     """The per-leaf orthogonal-ish frame: (rot_axis_u, leaf_up, rot_axis_w).
@@ -81,6 +85,7 @@ def build_leaves_primitive(
     leaf_margin_count: int = 0,
     leaf_kind: str = "simple",
     leaflet_specs: dict | None = None,
+    autumn_color: tuple[float, float, float] | None = None,
 ) -> Primitive:
     """Triangulate every selected (apex-proximal, ACTIVE) leaf on the tree.
 
@@ -148,6 +153,14 @@ def build_leaves_primitive(
     uvs = np.empty((n * verts_per_leaf, 2), dtype=np.float32)
     indices = np.empty((n * idx_per_leaf,), dtype=np.uint32)
 
+    # Autumn tint (#61): per-vertex COLOR_0 only when a SENESCENT leaf is present
+    # and a tint is configured. Otherwise colors stays None — byte-identical to
+    # the pre-caducity output (all-ACTIVE / phenology-off case).
+    senescing = any(leaf.state is LeafState.SENESCENT for leaf, *_ in records)
+    want_colors = autumn_color is not None and senescing
+    colors = np.empty((n * verts_per_leaf, 3), dtype=np.float32) if want_colors else None
+    autumn = np.asarray(autumn_color, dtype=np.float32) if want_colors else None
+
     splay_rad = math.radians(splay_deg)
     droop_rad = math.radians(droop_deg)
     for i, (leaf, stem_dir, source_iod, render_pos) in enumerate(records):
@@ -163,7 +176,16 @@ def build_leaves_primitive(
             indices[i_start : i_start + idx_per_leaf],
             v_start, droop_rad,
         )
-    return Primitive(positions=positions, normals=normals, uvs=uvs, indices=indices, material=material)
+        if want_colors:
+            # SENESCENT -> autumn tint; ACTIVE -> neutral white (COLOR_0 multiply
+            # is a no-op, so green leaves render unchanged).
+            colors[v_start : v_start + verts_per_leaf] = (
+                autumn if leaf.state is LeafState.SENESCENT else 1.0
+            )
+    return Primitive(
+        positions=positions, normals=normals, uvs=uvs, indices=indices,
+        material=material, colors=colors,
+    )
 
 
 def _leaf_bearing_nodes(
@@ -217,13 +239,14 @@ def _leaf_bearing_nodes(
 def selected_leaves(
     tree: Tree, *, foliage_depth: int, needle_cluster_spacing: float = 0.0
 ) -> list[tuple[Leaf, np.ndarray, Internode | None, np.ndarray]]:
-    """The apex-proximal, ACTIVE leaves actually rendered this build.
+    """The apex-proximal, rendered leaves actually drawn this build.
 
     Returns (leaf, stem_direction, source_internode, render_position) per drawn
     blade-group. Shared by the renderer and sim/diagnostics so the .glb and the
-    leaf-area metric cannot drift. The foliage_depth apex filter is the MVP
-    stand-in for caducity; when caducity lands it is dropped and the ACTIVE
-    state filter does the work alone.
+    leaf-area metric cannot drift. Rendered states are ACTIVE + SENESCENT (the
+    latter dead-but-attached autumn / marcescent foliage, #61); ABSCISSED leaves
+    have detached and are skipped. The foliage_depth apex filter remains the MVP
+    stand-in for full caducity coverage on old wood.
 
     needle_cluster_spacing > 0 (conifers) fans each leaf into up to
     _MAX_CLUSTERS_PER_INTERNODE positions along the (bent) parent segment, using
@@ -234,7 +257,7 @@ def selected_leaves(
         return []
     out: list[tuple[Leaf, np.ndarray, Internode | None, np.ndarray]] = []
     for node, direction, source_iod in _leaf_bearing_nodes(tree, foliage_depth):
-        active = [lf for lf in node.leaves if lf.state is LeafState.ACTIVE]
+        active = [lf for lf in node.leaves if lf.state in _RENDERED_LEAF_STATES]
         if not active:
             continue
         node_pos = np.asarray(node.position + node.sag_offset, dtype=np.float64)

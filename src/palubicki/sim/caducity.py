@@ -34,6 +34,7 @@ def advance_leaf_states(forest, cfg, t: float) -> None:
     year_fraction = t - math.floor(t)
     in_growth_window = lo <= year_fraction < hi
     seasonal_shed = ph.deciduous and not in_growth_window
+    marcescent = ph.deciduous and ph.marcescent
 
     for tree in forest.trees:
         for leaf in tree.all_leaves():
@@ -43,9 +44,16 @@ def advance_leaf_states(forest, cfg, t: float) -> None:
                     leaf.state = LeafState.SENESCENT
                     leaf.senescence_time = t
             elif leaf.state is LeafState.SENESCENT:
+                if marcescent:
+                    # Dead but retained: drop only once the next growth window
+                    # opens (the new flush pushes the old leaf off). Guard against
+                    # abscising in the same season it senesced.
+                    senesced = leaf.senescence_time if leaf.senescence_time is not None else t
+                    if in_growth_window and (t - senesced) > 0.0:
+                        leaf.state = LeafState.ABSCISSED
                 # senescence_time is always set on the ACTIVE->SENESCENT edge;
                 # the ``or`` is a defensive guard for hand-constructed leaves.
-                if (
+                elif (
                     leaf.senescence_time is None
                     or (t - leaf.senescence_time) >= ph.senescence_duration_years
                 ):

@@ -240,6 +240,11 @@ class LeafPhenologyConfig:
     senescence_duration_years: float = field(
         default=0.1, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}}
     )
+    # Marcescence (oak/beech): dead leaves stay attached (rendered SENESCENT)
+    # through winter instead of abscising after senescence_duration; they finally
+    # drop at the next growth-window onset, pushed off by the new flush. Deciduous
+    # only (an evergreen has no dormant retention to model).
+    marcescent: bool = field(default=False, metadata={"ui": {"label": "Marcescent"}})
 
 
 @dataclass(frozen=True)
@@ -296,6 +301,12 @@ class GeomConfig:
         default=0.0,
         metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}},
     )
+    # Autumn color (#61): per-vertex COLOR_0 multiplier applied to SENESCENT
+    # leaves (same tint mechanism as bark #9). None = senescing leaves keep their
+    # green material until they abscise. Picked against the green leaf base/texture
+    # to read as autumn foliage; only takes effect when leaf_phenology drives
+    # leaves into SENESCENT.
+    leaf_autumn_color: tuple[float, float, float] | None = None
     # --- Compound leaves (#6) ---
     leaf_kind: Literal["simple", "pinnate", "palmate", "bipinnate"] = field(
         default="simple", metadata={"ui": {"label": "Leaf kind"}}
@@ -595,6 +606,14 @@ class Config:
         if not (0.0 <= g.leaf_sun_shade_k <= 2.0):
             raise ConfigError(
                 f"geom.leaf_sun_shade_k must be in [0, 2], got {g.leaf_sun_shade_k}"
+            )
+        if g.leaf_autumn_color is not None and (
+            len(g.leaf_autumn_color) != 3
+            or not all(0.0 <= c <= 1.0 for c in g.leaf_autumn_color)
+        ):
+            raise ConfigError(
+                "geom.leaf_autumn_color must be 3 floats in [0, 1], "
+                f"got {g.leaf_autumn_color}"
             )
         if g.leaf_shape not in ("linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"):
             raise ConfigError(
