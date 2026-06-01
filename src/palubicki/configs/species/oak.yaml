@@ -33,6 +33,17 @@ sim:
     enabled: true
     light_threshold: 0.20
     n_consecutive_steps: 3
+  # Deciduous + marcescent (red oak holds dead leaves through winter). Real
+  # shedding is the SEASONAL trigger (dormant-window entry), which only fires at
+  # sub-annual dt; the lifespan is an inert safety ceiling set above the sim
+  # horizon so the age cap never bites at the default annual step (where there is
+  # no season and no leaf re-flush on old wood — that would just thin the crown).
+  leaf_phenology:
+    enabled: true
+    deciduous: true
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.15
+    marcescent: true
 tropism:
   w_perception: 1.0
   w_orthotropy_main: 0.35
@@ -77,6 +88,7 @@ geom:
   leaf_margin: lobed
   leaf_margin_depth: 0.35
   leaf_margin_count: 7
+  leaf_autumn_color: [0.55, 0.30, 0.12]  # russet brown
   leaf_cluster_count: 3
   leaf_splay_deg: 25
   foliage_depth: 4

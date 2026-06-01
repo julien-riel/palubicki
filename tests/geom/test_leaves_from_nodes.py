@@ -17,18 +17,28 @@ def _oak_tree(tmp_path):
     return simulate(cfg), cfg
 
 
-def test_selected_leaves_only_active(tmp_path):
+def test_selected_leaves_render_active_and_senescent_not_abscised(tmp_path):
+    # Rendered states are ACTIVE + SENESCENT (dead-but-attached autumn/marcescent
+    # foliage, #61); only ABSCISSED drops out of the mesh.
     tree, cfg = _oak_tree(tmp_path)
     g = cfg.geom
     recs = selected_leaves(tree, foliage_depth=g.foliage_depth,
                            needle_cluster_spacing=g.needle_cluster_spacing)
     assert len(recs) > 0
     assert all(leaf.state is LeafState.ACTIVE for leaf, _d, _s, _p in recs)
+
+    # Senescing a leaf does NOT remove it from the render set.
     first_leaf = recs[0][0]
     first_leaf.state = LeafState.SENESCENT
-    recs2 = selected_leaves(tree, foliage_depth=g.foliage_depth,
-                            needle_cluster_spacing=g.needle_cluster_spacing)
-    assert len(recs2) < len(recs)
+    recs_senescent = selected_leaves(tree, foliage_depth=g.foliage_depth,
+                                     needle_cluster_spacing=g.needle_cluster_spacing)
+    assert len(recs_senescent) == len(recs)
+
+    # Abscising it does.
+    first_leaf.state = LeafState.ABSCISSED
+    recs_abscised = selected_leaves(tree, foliage_depth=g.foliage_depth,
+                                    needle_cluster_spacing=g.needle_cluster_spacing)
+    assert len(recs_abscised) < len(recs)
 
 
 def test_build_leaves_primitive_nonempty(tmp_path):

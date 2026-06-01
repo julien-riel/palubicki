@@ -96,6 +96,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             leaf_margin_count=g.leaf_margin_count,
             leaf_kind=g.leaf_kind,
             leaflet_specs=leaflet_specs,
+            autumn_color=g.leaf_autumn_color,
         )
         primitives.append(leaf_prim)
 

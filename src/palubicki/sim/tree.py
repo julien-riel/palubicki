@@ -16,8 +16,8 @@ class BudState(Enum):
 
 class LeafState(Enum):
     ACTIVE = auto()
-    SENESCENT = auto()   # reserved for caducity follow-up — unused in MVP
-    ABSCISSED = auto()   # reserved — unused in MVP
+    SENESCENT = auto()   # senescing (off the ACTIVE roster, still on the node)
+    ABSCISSED = auto()   # shed — filtered out of the rendered mesh
 
 
 @dataclass(eq=False)
@@ -49,6 +49,9 @@ class Leaf:
     azimuth: float            # phyllotactic seating azimuth (radians), fixed at birth
     birth_time: float         # years, from Clock.t
     state: LeafState = LeafState.ACTIVE
+    # Clock.t at the ACTIVE->SENESCENT transition (None while ACTIVE). Times the
+    # SENESCENT->ABSCISSED lag and, later, autumn-color progress (#61).
+    senescence_time: float | None = None
 
     @property
     def position(self) -> np.ndarray:
