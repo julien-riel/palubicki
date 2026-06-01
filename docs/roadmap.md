@@ -83,11 +83,24 @@ pour la fin.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-9. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps →
-    translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing →
-    LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md).
-    Débloquée par rien, sous-tickets indépendants : à piquer dès qu'on veut une
-    passe visuelle, en parallèle du travail de forme ci-dessus.
+9. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+    reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
+    (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
+    look**). Sous-tickets P0…P5 indépendants, un PR chacun.
+    **P0 ([#71](https://github.com/julien-riel/palubicki/issues/71)) livré** :
+    l'export forêt émet l'**arbre-unité à son origine locale** (collet à `(x,0,z)`)
+    + transform par instance — `EXT_mesh_gpu_instancing` (T + `_FEATURE_ID` espèce/
+    seed via `EXT_instance_features`) quand des arbres partagent la même géométrie,
+    sinon un node TRS « instance-of-one ». Plus aucun sommet-monde baké ; taille
+    **sous-linéaire** pour les espèces répétées (`export/instancing.py` remplace
+    l'ancien `write_glb_forest`). Suite :
+    P1 vent par-sommets + `TANGENT` ([#72](https://github.com/julien-riel/palubicki/issues/72),
+    prérequis des normal maps) → P2 master photoréaliste
+    ([#73](https://github.com/julien-riel/palubicki/issues/73)) → P3 profils +
+    gate de validation ([#74](https://github.com/julien-riel/palubicki/issues/74)) →
+    P4 LOD + impostor hémi-octaédral ([#75](https://github.com/julien-riel/palubicki/issues/75)) →
+    P5 vent skinné hero ([#76](https://github.com/julien-riel/palubicki/issues/76),
+    différé). À piquer en parallèle du travail de forme ci-dessus.
 
 > **Suivi surgi de #61 (caducité, livré)** — *re-flush foliaire sur le vieux
 > bois*. Les feuilles ne sont émises qu'à la naissance du nœud et jamais
