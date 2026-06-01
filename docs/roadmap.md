@@ -93,9 +93,19 @@ pour la fin.
     seed via `EXT_instance_features`) quand des arbres partagent la même géométrie,
     sinon un node TRS « instance-of-one ». Plus aucun sommet-monde baké ; taille
     **sous-linéaire** pour les espèces répétées (`export/instancing.py` remplace
-    l'ancien `write_glb_forest`). Suite :
-    P1 vent par-sommets + `TANGENT` ([#72](https://github.com/julien-riel/palubicki/issues/72),
-    prérequis des normal maps) → P2 master photoréaliste
+    l'ancien `write_glb_forest`).
+    **P1 ([#72](https://github.com/julien-riel/palubicki/issues/72)) livré** :
+    vent hiérarchique (Crysis/GPU-Gems) autorisé **une seule fois** depuis le graphe
+    FSPM (`geom/wind.py`, lecture seule) dans un contrat d'attributs portable —
+    `COLOR_0=(phase,stiffness,leafMask)`, `TEXCOORD_1/2=pivot+tier`, teinte
+    d'écorce/automne déplacée sur `COLOR_1` — plus l'émission de `TANGENT` (VEC4,
+    quasi-gratuite depuis le repère parallel-transport des tubes), **prérequis des
+    normal maps de P2**. `phase` est hashée en repère local-arbre pour que les
+    arbres identiques restent partageables sous instancing ; le pivot est localisé
+    avec les positions. Shader three.js de référence (`edit/static/wind.js`,
+    `onBeforeCompile`) câblé dans le viewer (toggle Wind). Validator Khronos
+    0 erreur/0 warning (arbre, espèce composée, forêt). Suite :
+    P2 master photoréaliste
     ([#73](https://github.com/julien-riel/palubicki/issues/73)) → P3 profils +
     gate de validation ([#74](https://github.com/julien-riel/palubicki/issues/74)) →
     P4 LOD + impostor hémi-octaédral ([#75](https://github.com/julien-riel/palubicki/issues/75)) →

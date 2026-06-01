@@ -208,14 +208,14 @@ def _mat(base):
                     alpha_cutoff=0.5, double_sided=False)
 
 
-def _one_tri(colors=None):
+def _one_tri(tint=None):
     return Primitive(
         positions=np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32),
         normals=np.tile([0, 0, 1], (3, 1)).astype(np.float32),
         uvs=np.zeros((3, 2), np.float32),
         indices=np.array([0, 1, 2], np.uint32),
         material=_mat((0.9, 0.1, 0.1, 1.0)),
-        colors=colors,
+        tint=tint,
     )
 
 
@@ -228,5 +228,5 @@ def test_flatten_uses_base_color_without_vertex_colors():
 def test_flatten_uses_mean_vertex_color():
     from palubicki.render.renderer import _flatten
     vc = np.array([[0.0, 0.0, 0.0], [0.6, 0.6, 0.6], [0.6, 0.6, 0.6]], np.float32)
-    _, _, cols = _flatten(Mesh(primitives=[_one_tri(colors=vc)]))
+    _, _, cols = _flatten(Mesh(primitives=[_one_tri(tint=vc)]))
     np.testing.assert_allclose(cols[0], [0.4, 0.4, 0.4], atol=1e-6)

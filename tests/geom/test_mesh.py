@@ -49,7 +49,7 @@ def _bare_mat():
                     alpha_cutoff=0.5, double_sided=False)
 
 
-def test_primitive_colors_defaults_none():
+def test_primitive_wind_attrs_default_none():
     p = Primitive(
         positions=np.zeros((3, 3), np.float32),
         normals=np.zeros((3, 3), np.float32),
@@ -57,17 +57,24 @@ def test_primitive_colors_defaults_none():
         indices=np.array([0, 1, 2], np.uint32),
         material=_bare_mat(),
     )
-    assert p.colors is None
+    assert p.tint is None
+    assert p.wind is None
+    assert p.pivot is None
+    assert p.wind_tier is None
+    assert p.tangents is None
 
 
-def test_primitive_accepts_colors():
+def test_primitive_accepts_wind_attrs():
     cols = np.ones((3, 3), np.float32)
+    wind = np.zeros((3, 3), np.float32)
     p = Primitive(
         positions=np.zeros((3, 3), np.float32),
         normals=np.zeros((3, 3), np.float32),
         uvs=np.zeros((3, 2), np.float32),
         indices=np.array([0, 1, 2], np.uint32),
         material=_bare_mat(),
-        colors=cols,
+        tint=cols,
+        wind=wind,
     )
-    assert p.colors is cols
+    assert p.tint is cols
+    assert p.wind is wind

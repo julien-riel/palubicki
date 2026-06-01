@@ -38,9 +38,9 @@ def _flatten(mesh: Mesh) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         n = p.normals[idx].astype(np.float32, copy=False).mean(axis=1)
         n /= np.linalg.norm(n, axis=1, keepdims=True).clip(1e-9)
         norms.append(n)
-        # Face color: mean of triangle's vertex colors when present, else primitive base_color.
-        if p.colors is not None and p.colors.shape[0] == p.positions.shape[0]:
-            face_rgb = p.colors[idx].astype(np.float32, copy=False).mean(axis=1)
+        # Face color: mean of triangle's vertex tint when present, else primitive base_color.
+        if p.tint is not None and p.tint.shape[0] == p.positions.shape[0]:
+            face_rgb = p.tint[idx].astype(np.float32, copy=False).mean(axis=1)
             cols.append(face_rgb)
         else:
             rgb = np.asarray(p.material.base_color[:3], dtype=np.float32)

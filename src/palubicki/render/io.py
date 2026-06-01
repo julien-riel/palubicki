@@ -140,7 +140,7 @@ def _glb_to_mesh(path: Path, *, drop_leaves: bool = False) -> Mesh:
             uvs=np.zeros((verts_w.shape[0], 2), dtype=np.float32),
             indices=faces,
             material=material,
-            colors=vertex_colors,
+            tint=vertex_colors,
         ))
 
     if not primitives:

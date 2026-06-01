@@ -169,6 +169,42 @@ def test_identical_trees_share_one_instanced_mesh(tmp_path):
     assert all(f["featureCount"] == n for f in feats)
 
 
+def _read_accessor(g, acc_idx):
+    """Decode a float accessor into an (count, ncomp) ndarray."""
+    acc = g.accessors[acc_idx]
+    ncomp = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}[acc.type]
+    bv = g.bufferViews[acc.bufferView]
+    arr = np.frombuffer(g.binary_blob(), dtype=np.float32,
+                        count=acc.count * ncomp, offset=bv.byteOffset)
+    return arr.reshape(acc.count, ncomp)
+
+
+def test_shared_instanced_mesh_carries_wind_contract_localized(tmp_path):
+    """The shared (EXT_mesh_gpu_instancing) mesh must still carry the full P1 wind
+    contract, and its branch pivot (TEXCOORD_1=pivot.xy) must be LOCALIZED to the
+    unit-tree origin — not baked at world x=0/30/60/90 — so vertex-pivot stays
+    intact once the per-instance TRANSLATION re-adds the collar."""
+    n = 4
+    seeds = [ForestSeed(position=(30.0 * k, 0.0, 0.0), seed=7) for k in range(n)]
+    cfg = _cfg(tmp_path, seeds)
+    write_glb_forest(simulate_forest(cfg), cfg, tmp_path / "scene.glb", asset_meta={"seed": 42})
+    g = pygltflib.GLTF2().load(str(tmp_path / "scene.glb"))
+
+    assert g.asset.extras["instancing"]["n_meshes"] == 1
+    prims = g.meshes[0].primitives
+    assert prims, "shared mesh has no primitives"
+    for prim in prims:
+        a = prim.attributes
+        assert a.COLOR_0 is not None and g.accessors[a.COLOR_0].type == "VEC3"     # wind
+        assert a.TANGENT is not None and g.accessors[a.TANGENT].type == "VEC4"
+        assert a.TEXCOORD_1 is not None and g.accessors[a.TEXCOORD_1].type == "VEC2"
+        assert getattr(a, "TEXCOORD_2", None) is not None
+        # Pivot.xy (TEXCOORD_1) is localized: every value sits within a crown radius
+        # of the unit-tree origin, never at the world placements (30/60/90 m).
+        pivot_xy = _read_accessor(g, a.TEXCOORD_1)
+        assert np.abs(pivot_xy).max() < 5.0, np.abs(pivot_xy).max()
+
+
 def test_repeated_species_file_size_sub_linear(tmp_path):
     """Eight identical trees must not cost eight trees' worth of bytes."""
     one = _cfg(tmp_path, [ForestSeed(position=(0.0, 0.0, 0.0), seed=7)])

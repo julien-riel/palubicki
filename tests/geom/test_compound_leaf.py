@@ -10,17 +10,20 @@ from palubicki.geom.compound_leaf import (
 
 
 def test_emit_cylinder_constant_radius_rings():
-    p, _, _, idx = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.5, 4, 0)
+    p, _, _, tan, idx = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.5, 4, 0)
     # 4 sides -> 8 ring vertices (bottom 0-3, top 4-7), 6*4 indices
     assert p.shape == (8, 3)
     assert idx.shape == (24,)
+    # TANGENT is VEC4 (xyz + handedness), one per vertex, handedness +1.
+    assert tan.shape == (8, 4)
+    assert np.allclose(tan[:, 3], 1.0)
     bottom_r = [float(np.hypot(v[0], v[2])) for v in p[:4]]
     top_r = [float(np.hypot(v[0], v[2])) for v in p[4:]]
     assert all(abs(r - 0.5) < 1e-6 for r in bottom_r + top_r)
 
 
 def test_emit_cylinder_tapers_from_r0_to_r1():
-    p, _, _, _ = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.2, 4, 0)
+    p, _, _, _, _ = _emit_cylinder((0, 0, 0), (0, 1, 0), 0.5, 0.2, 4, 0)
     bottom_r = [float(np.hypot(v[0], v[2])) for v in p[:4]]
     top_r = [float(np.hypot(v[0], v[2])) for v in p[4:]]
     assert all(abs(r - 0.5) < 1e-6 for r in bottom_r)

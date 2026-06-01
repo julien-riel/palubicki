@@ -8,6 +8,8 @@ import numpy as np
 from palubicki.geom.compound_leaf import compound_layout
 from palubicki.geom.leaf_blade import build_blade
 from palubicki.geom.mesh import Material, Primitive
+from palubicki.geom.wind import LEAF_STIFFNESS, axis_frames, leaf_phase
+from palubicki.geom.wind import tier as wind_tier_of
 from palubicki.sim.tree import BudState, Internode, Leaf, LeafState, Node, Tree
 
 if TYPE_CHECKING:
@@ -157,9 +159,18 @@ def build_leaves_primitive(
     uvs = np.empty((n * verts_per_leaf, 2), dtype=np.float32)
     indices = np.empty((n * idx_per_leaf,), dtype=np.uint32)
 
-    # Autumn tint (#61): per-vertex COLOR_0 only when a SENESCENT leaf is present
-    # and a tint is configured. Otherwise colors stays None — byte-identical to
-    # the pre-caducity output (all-ACTIVE / phenology-off case).
+    # Wind contract (geom/wind.py): leafMask = 1 (flutter), near-zero stiffness
+    # (always flexible), per-leaf phase so the canopy shimmers out of step. pivot +
+    # wind_tier come from the leaf's branch axis (so foliage rides that branch's
+    # swing and a trunk-apex leaf stays tier 0); TANGENT is the blade frame's U axis.
+    wind = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
+    pivot = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
+    wind_tier = np.empty((n * verts_per_leaf,), dtype=np.float32)
+    tangents = np.empty((n * verts_per_leaf, 4), dtype=np.float32)
+
+    # Autumn tint (#61): per-vertex COLOR_1 (tint) only when a SENESCENT leaf is
+    # present and a tint is configured. Otherwise tint stays None — byte-identical
+    # to the pre-caducity output (all-ACTIVE / phenology-off case).
     senescing = any(leaf.state is LeafState.SENESCENT for leaf, *_ in records)
     want_colors = autumn_color is not None and senescing
     colors = np.empty((n * verts_per_leaf, 3), dtype=np.float32) if want_colors else None
@@ -167,6 +178,10 @@ def build_leaves_primitive(
 
     splay_rad = math.radians(splay_deg)
     droop_rad = math.radians(droop_deg)
+    origin = np.asarray(tree.root.position, dtype=np.float64)  # tree-relative phase
+    # Pivot + tier = the leaf's branch axis (same as that twig's bark), so foliage
+    # rides the tier-1 branch swing — NOT the leaf's own seat (which gives ~0 arm).
+    frames = axis_frames(tree)
     for i, (leaf, stem_dir, source_iod, render_pos) in enumerate(records):
         eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
         v_start = i * verts_per_leaf
@@ -179,16 +194,24 @@ def build_leaves_primitive(
             uvs[v_start : v_start + verts_per_leaf],
             indices[i_start : i_start + idx_per_leaf],
             v_start, droop_rad,
+            tangents[v_start : v_start + verts_per_leaf],
         )
+        wind[v_start : v_start + verts_per_leaf] = (
+            leaf_phase(render_pos, leaf.azimuth, origin), LEAF_STIFFNESS, 1.0
+        )
+        branch_pivot, axis_order = frames.get(id(leaf.parent_node), (render_pos, 0))
+        pivot[v_start : v_start + verts_per_leaf] = np.asarray(branch_pivot, dtype=np.float32)
+        wind_tier[v_start : v_start + verts_per_leaf] = float(wind_tier_of(axis_order))
         if want_colors:
-            # SENESCENT -> autumn tint; ACTIVE -> neutral white (COLOR_0 multiply
+            # SENESCENT -> autumn tint; ACTIVE -> neutral white (COLOR_1 multiply
             # is a no-op, so green leaves render unchanged).
             colors[v_start : v_start + verts_per_leaf] = (
                 autumn if leaf.state is LeafState.SENESCENT else 1.0
             )
     return Primitive(
         positions=positions, normals=normals, uvs=uvs, indices=indices,
-        material=material, colors=colors,
+        material=material, tint=colors, wind=wind, pivot=pivot,
+        wind_tier=wind_tier, tangents=tangents,
     )
 
 
@@ -357,7 +380,8 @@ def leaf_area_records(
 
 def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
                         leaflets, blade_pos_unit, blade_uv, blade_idx,
-                        out_pos, out_norm, out_uv, out_idx, base, droop_rad=0.0):
+                        out_pos, out_norm, out_uv, out_idx, base, droop_rad=0.0,
+                        out_tan=None):
     """Lift one (possibly compound) leaf into its leaflet blades at ``center``.
 
     Reconstructs the leaf basis from the render-time stem ``direction`` + the
@@ -402,6 +426,7 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
             out_uv[vk : vk + blade_v_count],
             out_idx[ik : ik + blade_i_count],
             base + vk,
+            None if out_tan is None else out_tan[vk : vk + blade_v_count],
         )
         if n_planes == 2:
             vb = vk + blade_v_count
@@ -414,12 +439,13 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
                 out_uv[vb : vb + blade_v_count],
                 out_idx[ib : ib + blade_i_count],
                 base + vb,
+                None if out_tan is None else out_tan[vb : vb + blade_v_count],
             )
 
 
 def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
                 origin, basis_u, basis_v, normal, scale,
-                out_pos, out_norm, out_uv, out_idx, base):
+                out_pos, out_norm, out_uv, out_idx, base, out_tan=None):
     """Lift a (u, v, 0) 2D blade into 3D along given basis vectors."""
     # blade_pos_unit[:, 0] is u, blade_pos_unit[:, 1] is v; scale to physical size.
     pu = blade_pos_unit[:, 0] * scale
@@ -433,6 +459,19 @@ def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
     out_norm[:] = n[np.newaxis, :]
     out_uv[:] = blade_uv
     out_idx[:] = blade_idx + np.uint32(base)
+    if out_tan is not None:
+        # TANGENT follows the blade's +U axis (basis_u maps to blade_pos_unit[:,0]).
+        # MikkTSpace handedness w = sign(cross(normal, T) · B) so the +V (basis_v)
+        # bitangent is reconstructed correctly downstream.
+        nf = np.asarray(normal, dtype=np.float64)
+        cross_nb = np.array([
+            nf[1] * bu[2] - nf[2] * bu[1],
+            nf[2] * bu[0] - nf[0] * bu[2],
+            nf[0] * bu[1] - nf[1] * bu[0],
+        ])
+        w = 1.0 if float(np.dot(cross_nb, bv)) >= 0.0 else -1.0
+        out_tan[:, :3] = bu.astype(np.float32)[np.newaxis, :]
+        out_tan[:, 3] = w
 
 
 def _basis_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

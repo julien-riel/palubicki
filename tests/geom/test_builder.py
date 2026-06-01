@@ -105,18 +105,18 @@ def _cfg_blend(tmp_path, *, young):
     )
 
 
-def test_blend_off_no_colors(tmp_path):
+def test_blend_off_no_tint(tmp_path):
     cfg = _cfg_blend(tmp_path, young=None)
     mesh = build_mesh(simulate(cfg), cfg)
-    assert mesh.primitives[0].colors is None
+    assert mesh.primitives[0].tint is None
 
 
-def test_blend_on_emits_colors(tmp_path):
+def test_blend_on_emits_tint(tmp_path):
     cfg = _cfg_blend(tmp_path, young=(0.45, 0.38, 0.30))
     mesh = build_mesh(simulate(cfg), cfg)
     bark = mesh.primitives[0]
-    assert bark.colors is not None
-    assert bark.colors.shape == (bark.positions.shape[0], 3)
+    assert bark.tint is not None
+    assert bark.tint.shape == (bark.positions.shape[0], 3)
 
 
 def test_build_mesh_pinnate_adds_rachis_primitive(tmp_path):

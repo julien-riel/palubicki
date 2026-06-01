@@ -11,15 +11,16 @@ pytestmark = pytest.mark.slow
 
 
 def _hash_buffers(glb_path: Path) -> str:
-    """Hash all primitive buffer data (positions, normals, uvs, indices) for stability
-    across runs that share the same simulation output."""
+    """Hash all primitive buffer data (positions, normals, uvs, the full P1 wind +
+    look contract, indices) for stability across runs that share the same sim output."""
     loaded = pygltflib.GLTF2().load(str(glb_path))
     sha = hashlib.sha256()
     for mesh in loaded.meshes:
         for prim in mesh.primitives:
-            for acc_idx in (prim.attributes.POSITION, prim.attributes.NORMAL,
-                            prim.attributes.TEXCOORD_0, prim.attributes.COLOR_0,
-                            prim.indices):
+            a = prim.attributes
+            for acc_idx in (a.POSITION, a.NORMAL, a.TEXCOORD_0, a.TANGENT, a.COLOR_0,
+                            getattr(a, "COLOR_1", None), a.TEXCOORD_1,
+                            getattr(a, "TEXCOORD_2", None), prim.indices):
                 if acc_idx is None:
                     continue
                 acc = loaded.accessors[acc_idx]
