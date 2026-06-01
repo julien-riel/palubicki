@@ -143,6 +143,16 @@ class TropismConfig:
     w_direction_inertia: float = field(default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     photo_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)  # not exposed; vec3 stays defaulted
     axis_decay: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}})
+    # Spray-plane lateral fan (#55): reference plagiotropism AND the radial
+    # insertion basis to the parent axis's plane (derived at bud-break) instead of
+    # world-XY, so order-2+ laterals fan into a coherent flat frond (conifer spray)
+    # rather than splaying out of plane. When on, plagiotropism is not decayed by
+    # axis_decay (in-plane flattening stays full strength at every order). Off by
+    # default => bit-identical legacy behaviour (arbitrary insertion frame +
+    # world-XY plagiotropism with order decay).
+    spray_plane_enabled: bool = field(
+        default=False, metadata={"ui": {"label": "Spray-plane lateral fan"}}
+    )
 
 
 @dataclass(frozen=True)

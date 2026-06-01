@@ -51,6 +51,10 @@ tropism:
   w_phototropism: 0.15
   w_direction_inertia: 0.8
   axis_decay: 0.9
+  # #55: fan laterals WITHIN the parent branch's plane (flat distichous spray)
+  # instead of an arbitrary world-XY frame; in-plane plagiotropism is not decayed
+  # by axis_decay, so order-2+ branchlets flatten into the frond like order-1.
+  spray_plane_enabled: true
 phyllotaxy:
   mode: alternate
   divergence_angle_deg: 137.5

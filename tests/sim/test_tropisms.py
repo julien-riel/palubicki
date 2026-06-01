@@ -3,7 +3,10 @@ import numpy as np
 import pytest
 
 from palubicki.config import TropismConfig
-from palubicki.sim.tropisms import growth_direction
+from palubicki.sim.tropisms import (
+    growth_direction,
+    spray_plane_normal_from_direction,
+)
 
 
 def test_only_gravity_overrides_to_up():
@@ -315,6 +318,98 @@ def test_epinasty_old_branch_recovers_full_plagiotropism():
                              cfg=cfg_on, is_main_axis=False, branch_age_years=80.0)
     np.testing.assert_allclose(d_old, full, atol=1e-3)
     assert abs(float(np.dot(d_old, [0.0, 1.0, 0.0]))) < 1e-3  # near-zero vertical component
+
+
+def test_spray_normal_horizontal_direction_is_up():
+    """A horizontal axis's spray plane is the ground plane (normal = world-up)."""
+    n = spray_plane_normal_from_direction(np.array([1.0, 0.0, 0.3]))
+    assert n is not None
+    np.testing.assert_allclose(n, [0.0, 1.0, 0.0], atol=1e-9)
+
+
+def test_spray_normal_vertical_direction_is_none():
+    """A near-vertical axis (the trunk) has no horizontal-ish plane."""
+    assert spray_plane_normal_from_direction(np.array([0.0, 1.0, 0.0])) is None
+    assert spray_plane_normal_from_direction(np.zeros(3)) is None
+
+
+def test_spray_normal_is_perpendicular_to_direction():
+    d = np.array([1.0, 0.7, -0.4])
+    n = spray_plane_normal_from_direction(d)
+    assert n is not None
+    assert abs(float(np.dot(n, d / np.linalg.norm(d)))) < 1e-9
+    assert abs(np.linalg.norm(n) - 1.0) < 1e-9
+
+
+def test_spray_plane_normal_none_matches_world_xy():
+    """Passing spray_plane_normal=None is bit-identical to the legacy XY path."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=0.3,
+    )
+    cur = np.array([1.0, 1.0, 0.5])
+    base = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                            cfg=cfg, is_main_axis=False)
+    same = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                            cfg=cfg, is_main_axis=False, spray_plane_normal=None)
+    np.testing.assert_allclose(same, base, atol=1e-12)
+
+
+def test_plagiotropism_flattens_into_given_spray_plane():
+    """With a spray-plane normal, plagiotropism removes the out-of-plane
+    component of current_direction instead of the world-vertical one."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=0.0,
+    )
+    # Spray plane = the X=0 plane (normal +X). A direction with an X component
+    # should be flattened onto that plane (x -> 0), NOT onto world-XY.
+    n = np.array([1.0, 0.0, 0.0])
+    cur = np.array([0.5, 0.0, 1.0])
+    d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                         cfg=cfg, is_main_axis=False, spray_plane_normal=n)
+    assert abs(float(np.dot(d, n))) < 1e-9          # lies in the spray plane
+    np.testing.assert_allclose(d, [0.0, 0.0, 1.0], atol=1e-7)
+
+
+def test_spray_plane_plagiotropism_skipped_when_parallel_to_normal():
+    """current_direction (near-)parallel to the plane normal is ambiguous and
+    the flattening term is skipped that iteration."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=10.0,
+        w_phototropism=0.0, w_direction_inertia=1.0,
+    )
+    n = np.array([1.0, 0.0, 0.0])
+    cur = np.array([1.0, 0.0, 0.0])
+    d = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                         cfg=cfg, is_main_axis=False, spray_plane_normal=n)
+    np.testing.assert_allclose(d, [1.0, 0.0, 0.0], atol=1e-7)
+
+
+def test_spray_plane_plagiotropism_not_decayed_by_axis_order():
+    """In-plane flattening keeps full strength at higher orders (axis_decay is
+    applied to the world-XY path but NOT the spray-plane path)."""
+    cfg = TropismConfig(
+        w_perception=0.0, w_orthotropy_main=0.0, w_orthotropy_lateral=0.0,
+        w_gravitropism_main=0.0, w_gravitropism_lateral=0.0,
+        w_plagiotropism_main=0.0, w_plagiotropism_lateral=1.0,
+        w_phototropism=0.0, w_direction_inertia=0.0,
+        axis_decay=0.5,
+    )
+    n = np.array([1.0, 0.0, 0.0])
+    cur = np.array([0.5, 0.0, 1.0])
+    d0 = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                          cfg=cfg, is_main_axis=False, axis_order=0, spray_plane_normal=n)
+    d3 = growth_direction(v_perception=np.zeros(3), current_direction=cur,
+                          cfg=cfg, is_main_axis=False, axis_order=3, spray_plane_normal=n)
+    np.testing.assert_allclose(d3, d0, atol=1e-12)
+    assert abs(float(np.dot(d3, n))) < 1e-9
 
 
 def test_epinasty_monotone_in_age():

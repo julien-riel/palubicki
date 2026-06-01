@@ -41,6 +41,16 @@ class Bud:
     # dormancy decision (recent_vigor < vigor_dormancy -> DORMANT) so a single
     # starved/lucky iteration cannot flip the bud's state. Updated each iteration.
     recent_vigor: float = 0.0
+    # Spray-plane normal for this bud's anatomical axis (#55). Fixed at bud-break:
+    # a lateral axis inherits its parent axis's normal (coherent multi-order frond)
+    # or, when starting off a normal-less axis (the trunk), derives one from its own
+    # birth direction (the plane containing that direction, as horizontal as
+    # possible). Threaded into phyllotaxy (insertion frame) and tropisms (the
+    # plagiotropic restoring plane) so laterals fan WITHIN the parent's plane
+    # instead of an arbitrary world-XY frame. ``None`` => legacy behaviour
+    # (arbitrary perpendicular frame + world-XY plagiotropism); the spray-plane
+    # feature is off, or this is a normal-less axis (trunk / near-vertical birth).
+    spray_plane_normal: np.ndarray | None = None
 
 
 @dataclass(eq=False)

@@ -29,7 +29,7 @@ from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
 from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tree import Bud, BudState, Internode, Leaf, LeafState, Node, Tree
-from palubicki.sim.tropisms import growth_direction
+from palubicki.sim.tropisms import growth_direction, spray_plane_normal_from_direction
 
 if TYPE_CHECKING:
     from palubicki.sim.debug_capture import DebugCollector
@@ -290,6 +290,7 @@ def _grow_tree(
             light_gradient=light_grad,
             axis_order=bud.axis_order,
             branch_age_years=branch_age_years,
+            spray_plane_normal=bud.spray_plane_normal,
         )
         # U-turn check on the blended growth direction (envelope-boundary curl).
         if float(np.dot(d, bud.direction)) < cfg.sim.cos_min_perception:
@@ -336,6 +337,23 @@ def _internode_target(cur: Bud, v_b: float, cfg: Config, iteration: int, t: floa
     return base_length
 
 
+def _lateral_spray_normal(
+    spray_on: bool, parent_axis_normal: np.ndarray | None, birth_direction: np.ndarray
+) -> np.ndarray | None:
+    """Spray-plane normal a NEW lateral axis carries (#55).
+
+    Off => None (legacy). On => inherit the parent axis's normal when it has one
+    (coherent multi-order frond: order-2+ fan in the order-1 plane), else derive a
+    fresh one from the lateral's own birth direction (the case where the parent is
+    the trunk / a normal-less axis). May still be None if the birth direction is
+    near-vertical (no well-defined horizontal-ish plane)."""
+    if not spray_on:
+        return None
+    if parent_axis_normal is not None:
+        return parent_axis_normal
+    return spray_plane_normal_from_direction(birth_direction)
+
+
 def _emit_node(
     cur: Bud, d: np.ndarray, new_pos: np.ndarray, target: float, v_b: float, is_main: bool,
     light_info, tree: Tree, cfg: Config, t: float, state: _SimState,
@@ -363,14 +381,21 @@ def _emit_node(
     new_node.parent_internode = iod
     tree.all_internodes.append(iod)
 
+    # Spray-plane normal (#55) of ``cur``'s axis: positions cur's laterals within
+    # its frond plane and flattens them toward it. None when the feature is off
+    # (cur.spray_plane_normal stays None) or cur is on a normal-less axis (trunk).
+    spray_on = cfg.tropism.spray_plane_enabled
+    axis_normal = cur.spray_plane_normal
+
     # The terminal continues ``cur``'s axis, so it carries the next phyllotactic
-    # ordinal along that lineage.
+    # ordinal along that lineage — and the same spray-plane normal.
     terminal = Bud(
         position=new_pos.copy(), direction=d,
         axis_order=cur.axis_order, parent_node=new_node,
         low_quality_steps=cur.low_quality_steps,
         low_light_steps=cur.low_light_steps,
         axis_node_ordinal=cur.axis_node_ordinal + 1,
+        spray_plane_normal=axis_normal,
     )
     new_node.terminal_bud = terminal
 
@@ -385,6 +410,7 @@ def _emit_node(
         node_index=axis_ord,
         seed=cfg.seed,
         axis_order=cur.axis_order,
+        spray_plane_normal=axis_normal,
     )
     state.node_index += 1
     # Laterals each begin a NEW axis → their phyllotactic ordinal restarts at 0
@@ -393,6 +419,7 @@ def _emit_node(
         lat = Bud(
             position=new_pos.copy(), direction=ld,
             axis_order=cur.axis_order + 1, parent_node=new_node,
+            spray_plane_normal=_lateral_spray_normal(spray_on, axis_normal, ld),
         )
         new_node.lateral_buds.append(lat)
 
@@ -403,12 +430,14 @@ def _emit_node(
             node_index=axis_ord,
             seed=cfg.seed,
             count=cfg.phyllotaxy.dormant_reserve_count,
+            spray_plane_normal=axis_normal,
         )
         for rd in reserve_dirs:
             rbud = Bud(
                 position=new_pos.copy(), direction=rd,
                 axis_order=cur.axis_order + 1, parent_node=new_node,
                 state=BudState.RESERVE,
+                spray_plane_normal=_lateral_spray_normal(spray_on, axis_normal, rd),
             )
             new_node.dormant_reserve_buds.append(rbud)
 

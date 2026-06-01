@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from palubicki.sim.tree import BudState, Internode, Node, Tree
+from palubicki.sim.tropisms import spray_plane_normal_from_direction
 
 if TYPE_CHECKING:
     from palubicki.config import Config
@@ -358,6 +359,36 @@ def _divergence_angle_metrics(
     return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
 
 
+def _out_of_plane_metrics(
+    chains: list[list[Internode]],
+    axis_orders: dict[int, int],
+) -> dict:
+    """Out-of-parent-plane deviation (deg) per lateral axis_order (#55).
+
+    For each lateral, the parent axis's spray plane is reconstructed from the
+    parent internode tangent (normal = component of world-up perpendicular to it,
+    matching ``tropisms.spray_plane_normal_from_direction``). The deviation is
+    ``arcsin(|lateral_tangent · normal|)``: 0deg = lying IN the parent's frond
+    plane, 90deg = perpendicular to it. Parents whose tangent is near-vertical
+    (the trunk) have no horizontal-ish plane and are skipped — so order-1 laterals
+    are absent and order-2+ (the coherent-spray target) is what this measures.
+    Grouped by the LATERAL's axis_order.
+    """
+    by_order: dict[int, list[float]] = defaultdict(list)
+    for chain in chains:
+        for cur in chain:
+            n = spray_plane_normal_from_direction(_tangent(cur))
+            if n is None:
+                continue
+            for lat in cur.child_node.children_internodes:
+                if lat.is_main_axis:
+                    continue
+                lt = _tangent(lat)
+                dev = math.degrees(math.asin(min(1.0, abs(float(np.dot(lt, n))))))
+                by_order[axis_orders[id(lat)]].append(dev)
+    return {"out_of_plane_deviation_deg": {k: _stats(v) for k, v in by_order.items()}}
+
+
 # ── Internode length by axis order ────────────────────────────────────────
 
 def _internode_length_metrics(
@@ -475,6 +506,7 @@ def compute_metrics(
     out.update(_strahler_metrics(tree.root))
     out.update(_insertion_angle_metrics(internodes, axis_orders))
     out.update(_divergence_angle_metrics(chains, axis_orders))
+    out.update(_out_of_plane_metrics(chains, axis_orders))
     out.update(_internode_length_metrics(internodes, axis_orders))
     out["sympodial_fork_count"] = _sympodial_fork_count(nodes)
     out["bud_state_histogram"] = _bud_state_histogram(nodes)
@@ -515,6 +547,7 @@ _ANGLE_KEYS = (
     "insertion_angle_deg_vs_parent",
     "insertion_angle_deg_vs_main_sibling",
     "divergence_angle_deg",
+    "out_of_plane_deviation_deg",
     "internode_length_by_order",
 )
 
@@ -749,6 +782,7 @@ def format_report(
         ("insertion (vs parent)",      "insertion_angle_deg_vs_parent",      "insertion_angle_deg_vs_parent"),
         ("insertion (vs main sib)",    "insertion_angle_deg_vs_main_sibling", None),
         ("divergence",                  "divergence_angle_deg",                "divergence_angle_deg"),
+        ("out-of-parent-plane",         "out_of_plane_deviation_deg",          None),
     ]
     for label, key, range_prefix in angle_blocks:
         d = metrics.get(key) or {}

@@ -52,6 +52,11 @@ tropism:
   w_phototropism: 0.20
   w_direction_inertia: 0.8
   axis_decay: 0.9
+  # #55: reference plagiotropism and the radial insertion basis to the parent
+  # branch's plane instead of world-XY, so order-2+ branchlets lie in their
+  # parent limb's plane rather than climbing out toward light gaps. Pine stays
+  # whorled (radial), but the per-limb frame keeps the sub-branches coherent.
+  spray_plane_enabled: true
 phyllotaxy:
   mode: whorled
   whorl_count: 5
