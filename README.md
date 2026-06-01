@@ -192,7 +192,7 @@ est dans git) :
 - [`docs/tree-data-model.md`](docs/tree-data-model.md) — le graphe arborescent (Node / Internode / Bud / Leaf).
 - [`docs/render-pipeline.md`](docs/render-pipeline.md) — du graphe au `.glb` : géométrie, matériaux, format, et la matrice des écarts vs. un pipeline de production.
 - [`docs/botany/plant-structure.md`](docs/botany/plant-structure.md) — primer de morphologie végétale (le vocabulaire mappé sur les structures de données).
-- [`docs/botany/simulator-gap-analysis.md`](docs/botany/simulator-gap-analysis.md) — statut de chaque concept botanique vs. le simulateur.
+- [`docs/botany/code-support-matrix.md`](docs/botany/code-support-matrix.md) — matrice support / billet : chaque concept botanique du primer, supporté ou non dans le code, avec l'issue qui le corrige.
 - [`docs/botany/realism-assessment.md`](docs/botany/realism-assessment.md) — évaluation du réalisme, lue depuis le code.
 - [`docs/botany/sources.md`](docs/botany/sources.md) — bibliographie primaire.
 - [`docs/mindset-boucle-empirique.md`](docs/mindset-boucle-empirique.md) — la méthode de travail (boucle empirique auto-correctrice).

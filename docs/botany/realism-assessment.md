@@ -2,8 +2,8 @@
 
 Évaluation faite **uniquement à partir du code** (`src/palubicki/sim/`), pas de
 la documentation, puis recoupée avec
-[`simulator-gap-analysis.md`](simulator-gap-analysis.md). Le but n'est pas de
-lister toutes les absences (le gap-analysis le fait déjà) mais de distinguer
+[`code-support-matrix.md`](code-support-matrix.md). Le but n'est pas de
+lister toutes les absences (la matrice de support le fait déjà) mais de distinguer
 les **choix de périmètre assumés** des **angles morts qui dégradent le réalisme
 dans le périmètre actuel**.
 

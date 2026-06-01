@@ -2,7 +2,7 @@
 
 Ce fichier fait foi pour la priorisation (pas l'ordre des issues GitHub). Il
 décrit **ce qui reste à faire** ; l'historique du livré est dans git (commits,
-PR) et dans la [gap-analysis botanique](botany/simulator-gap-analysis.md).
+PR) et dans la [matrice de support botanique](botany/code-support-matrix.md).
 
 > **Méthode transversale — boucle empirique auto-correctrice** : poser → observer
 > les diagnostics → corriger → recommencer jusqu'à ce que ça lise vrai

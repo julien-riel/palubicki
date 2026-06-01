@@ -1,5 +1,5 @@
 ---
-description: Start work on a GitHub issue — runs a fixed-order ceremony (self-assign, branch, empty commit, push, draft PR) for julien-riel/palubicki. With no issue number, picks the next ticket from docs/roadmap.md. Aborts on any precondition failure; may suggest destructive recovery commands but never runs them without explicit user confirmation. Reminds, at ticket completion, to update docs/roadmap.md + docs/botany/simulator-gap-analysis.md.
+description: Start work on a GitHub issue — runs a fixed-order ceremony (self-assign, branch, empty commit, push, draft PR) for julien-riel/palubicki. With no issue number, picks the next ticket from docs/roadmap.md. Aborts on any precondition failure; may suggest destructive recovery commands but never runs them without explicit user confirmation. Reminds, at ticket completion, to update docs/roadmap.md + docs/botany/code-support-matrix.md.
 ---
 
 # Start work on an issue
@@ -84,8 +84,8 @@ If all five pass, proceed.
 
 This belongs to the *end* of the work, not `/work` itself — but record it here so it isn't forgotten. Before marking the PR ready / merging, **update both docs in the same PR** so they never drift from the code:
 
-- **`docs/roadmap.md`** — move the finished issue out of "À faire (dans l'ordre)" into the "Fait" table (with its PR number), and re-check the ordering of what remains (a finished ticket often unblocks or reprioritizes the next ones).
-- **`docs/botany/simulator-gap-analysis.md`** — flip the relevant row(s) from ❌/🟡 to ✅ / the right Δ, update the section verdict, and refresh the "Last reviewed" line + the "Top remaining recommendations" list if the change affects them.
+- **`docs/roadmap.md`** — remove the finished issue from "À faire (dans l'ordre)" / "En cours" (the delivered history lives in git, not in a "Fait" table), and re-check the ordering of what remains (a finished ticket often unblocks or reprioritizes the next ones).
+- **`docs/botany/code-support-matrix.md`** — flip the relevant concept's status (❌/🟡 → ✅) and update its "Billet / décision" column (drop the issue link once delivered, or move it to a `SKIP`/note as appropriate); update the "Billets à créer" section if the change resolves or adds a suggestion.
 
 If the ticket was purely software/tooling (no botanical concept touched), the gap-analysis may not need an edit — say so explicitly rather than skipping silently.
 

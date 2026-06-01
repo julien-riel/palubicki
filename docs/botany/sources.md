@@ -1,9 +1,8 @@
 # Sources botaniques & modélisation procédurale
 
-Bibliographie des références qui sous-tendent le simulateur. Les primers
-maison ([plant-structure.md](./plant-structure.md),
-[simulator-gap-analysis.md](./simulator-gap-analysis.md)) sont des
-vulgarisations — *ceci* est le matériau d'origine.
+Bibliographie des références qui sous-tendent le simulateur. Le primer maison
+([plant-structure.md](./plant-structure.md)) est une vulgarisation — *ceci* est
+le matériau d'origine.
 
 **Légende disponibilité :** 🟢 PDF libre · 🔴 derrière paywall (DOI / accès
 institutionnel). Tout le canon « plantes procédurales » est hébergé en accès
