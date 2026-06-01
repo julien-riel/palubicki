@@ -153,7 +153,7 @@ Au-delà de la morphologie, les écarts **physiologiques** relevés par
 | Écart | Statut | Billet / décision |
 |---|---|---|
 | Vigueur abstraite (pas de budget carbone source→puits) | ❌ | [#66](https://github.com/julien-riel/palubicki/issues/66) **fermé `NOT_PLANNED`** — refonderait le moteur ; frontière de conception assumée |
-| Surface foliaire réelle non injectée dans la grille de lumière | ❌ | [#62](https://github.com/julien-riel/palubicki/issues/62) |
+| Surface foliaire réelle injectée dans la grille de lumière | 🟡 | **Feuillus** : `sim/light.py` dépose l'aire de lame réelle par feuille (`geom/leaves.py` `leaf_area_records`, source partagée avec `total_leaf_area`) ; `light.leaf_area_scale` = multiplicateur. [#62](https://github.com/julien-riel/palubicki/issues/62) livré. **Conifères** : restent sur le scalaire `light.leaf_area` par bourgeon terminal (dominance apicale émerge de ce dépôt) ; couplage des vraies aiguilles reporté à #55 (éventail) + #7 (fascicules) |
 | Pas de re-flush foliaire sur le vieux bois (feuilles émises une fois, jamais renouvelées) | ❌ | surgi de [#61](https://github.com/julien-riel/palubicki/issues/61) (livré) — bloque un vrai cycle décidu/persistant annuel ; à coupler #65 + débourrement (voir roadmap) |
 | Ombre : élague *a posteriori*, ne réduit pas l'initiation | ❌ | [#63](https://github.com/julien-riel/palubicki/issues/63) |
 | Pas de mémoire mécanique du bois (bois de réaction, fluage) | ❌ | [#64](https://github.com/julien-riel/palubicki/issues/64) |

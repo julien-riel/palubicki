@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from palubicki.config import EnvelopeConfig, LightConfig
+from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig
 from palubicki.sim.radii import compute_radii
 from palubicki.sim.tree import BudState, Tree
 
@@ -80,11 +80,14 @@ class LightGrid:
         return self.origin + (np.array([i, j, k], dtype=np.float64) + 0.5) * self.cell_size
 
     def rebuild_from_tree(
-        self, tree: Tree, cfg: LightConfig, *, r_tip: float | None = None, exponent: float | None = None,
+        self, tree: Tree, cfg: LightConfig, *, geom: GeomConfig,
+        r_tip: float | None = None, exponent: float | None = None,
         vigor_ref: float = 1.0, vigor_diameter_gain: float = 0.0,
     ) -> None:
         """Full rebuild. Zero LAI, optionally recompute radii, then inject leaves + internodes.
 
+        Broadleaf occlusion is the real per-leaf blade area from ``geom`` (#62);
+        conifers keep the legacy terminal-bud scalar (see :meth:`_inject_tree`).
         ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
         light grid's occlusion diameters match the vigor-seeded rendered geometry (#37).
         """
@@ -99,30 +102,15 @@ class LightGrid:
                 vigor_ref=vigor_ref, vigor_diameter_gain=vigor_diameter_gain,
             )
 
-        leaf_lai = cfg.leaf_area / cell_volume
         sub_step = float(np.min(self.cell_size))
-
-        stack = [tree.root]
-        while stack:
-            node = stack.pop()
-            for child_iod in node.children_internodes:
-                stack.append(child_iod.child_node)
-                self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
-            bud = node.terminal_bud
-            if bud is None or bud.state == BudState.DEAD:
-                continue
-            if node.children_internodes:
-                continue
-            cell = self.world_to_cell(bud.position)
-            if cell is None:
-                continue
-            self.lai[cell] += leaf_lai
+        self._inject_tree(tree, geom, cfg, sub_step, cell_volume)
 
     def rebuild_from_forest(
         self,
         forest,
         cfg: LightConfig,
         *,
+        geom: GeomConfig,
         r_tip: float | None = None,
         exponent: float | None = None,
         vigor_ref: float = 1.0,
@@ -131,6 +119,8 @@ class LightGrid:
         """Full rebuild for a forest. Zero LAI → inject leaves+internodes per tree →
         apply obstacle mask (lai[mask] = LAI_OPAQUE).
 
+        Broadleaf occlusion is the real per-leaf blade area from ``geom`` (#62);
+        conifers keep the legacy terminal-bud scalar (see :meth:`_inject_tree`).
         ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
         light grid's occlusion diameters match the vigor-seeded rendered geometry (#37)."""
         from palubicki.sim.obstacles import LAI_OPAQUE
@@ -142,7 +132,6 @@ class LightGrid:
                 self.lai[forest.obstacle_voxel_mask] = np.float32(LAI_OPAQUE)
             return
 
-        leaf_lai = cfg.leaf_area / cell_volume
         sub_step = float(np.min(self.cell_size))
 
         for tree in forest.trees:
@@ -151,21 +140,7 @@ class LightGrid:
                     tree, r_tip=r_tip, exponent=exponent,
                     vigor_ref=vigor_ref, vigor_diameter_gain=vigor_diameter_gain,
                 )
-            stack = [tree.root]
-            while stack:
-                node = stack.pop()
-                for child_iod in node.children_internodes:
-                    stack.append(child_iod.child_node)
-                    self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
-                bud = node.terminal_bud
-                if bud is None or bud.state == BudState.DEAD:
-                    continue
-                if node.children_internodes:
-                    continue
-                cell = self.world_to_cell(bud.position)
-                if cell is None:
-                    continue
-                self.lai[cell] += leaf_lai
+            self._inject_tree(tree, geom, cfg, sub_step, cell_volume)
 
         if forest.obstacle_voxel_mask is not None:
             self.lai[forest.obstacle_voxel_mask] = np.float32(LAI_OPAQUE)
@@ -392,6 +367,58 @@ class LightGrid:
 
         out[active] = np.exp(-optical_depth)
         return out
+
+    def _inject_tree(
+        self, tree: Tree, geom: GeomConfig, cfg: LightConfig,
+        sub_step: float, cell_volume: float,
+    ) -> None:
+        """Deposit one tree's internode + foliage occlusion into the LAI grid.
+
+        Foliage takes one of two paths, gated on foliage type (#62):
+
+        * **Broadleaves** (``leaf_shape != "linear"``): the *real* per-leaf blade
+          area from :func:`palubicki.geom.leaves.leaf_area_records` — the same
+          per-Leaf area the ``total_leaf_area`` diagnostic and the rendered ``.glb``
+          use — deposited at each rendered leaf's cell, so self-shading reflects the
+          actual foliage morphology (blade shape/size, compound layout, sun/shade).
+          ``light.leaf_area_scale`` is a unitless multiplier; ``<= 0`` opts out.
+        * **Conifers** (``leaf_shape == "linear"``): the legacy ``light.leaf_area``
+          scalar at each terminal bud, interleaved with internode injection in the
+          *same* traversal as before #62 (so the conifer grid is byte-identical to
+          the pre-#62 output). Conifer apical dominance emerges from this canopy-
+          shell deposit; coupling real needle area lands with the conifer foliage
+          rework (#55 spray + #7 fascicles), where spray geometry, fascicles, and
+          light calibration are tuned together.
+        """
+        is_needle = geom.leaf_shape == "linear"
+        if not is_needle:
+            scale = cfg.leaf_area_scale
+            if scale > 0.0:
+                from palubicki.geom.leaves import leaf_area_records
+
+                for pos, area in leaf_area_records(tree, geom):
+                    cell = self.world_to_cell(pos)
+                    if cell is not None:
+                        self.lai[cell] += area * scale / cell_volume
+
+        needle_lai = (cfg.leaf_area / cell_volume) if (is_needle and cfg.leaf_area > 0.0) else 0.0
+        stack = [tree.root]
+        while stack:
+            node = stack.pop()
+            for child_iod in node.children_internodes:
+                stack.append(child_iod.child_node)
+                self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
+            if not needle_lai:
+                continue
+            bud = node.terminal_bud
+            if bud is None or bud.state == BudState.DEAD:
+                continue
+            if node.children_internodes:
+                continue
+            cell = self.world_to_cell(bud.position)
+            if cell is None:
+                continue
+            self.lai[cell] += needle_lai
 
     def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""

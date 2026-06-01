@@ -238,7 +238,7 @@ def test_simulator_light_enabled_reduces_density():
         "output": Path("/tmp/x.glb"),
     }
     tree_off = simulate(Config(light=LightConfig(enabled=False), **base_kwargs))
-    tree_on = simulate(Config(light=LightConfig(enabled=True, k_absorption=1.0, leaf_area=0.2), **base_kwargs))
+    tree_on = simulate(Config(light=LightConfig(enabled=True, k_absorption=1.0, leaf_area_scale=92.0), **base_kwargs))
     assert len(tree_on.all_internodes) < len(tree_off.all_internodes)
 
 

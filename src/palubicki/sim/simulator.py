@@ -135,7 +135,7 @@ def _perceive_forest_light(forest: Forest, union_buds, cfg: Config, iteration: i
     if light_grid is None:
         return None
     light_grid.rebuild_from_forest(
-        forest, cfg.light,
+        forest, cfg.light, geom=cfg.geom,
         r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
         vigor_ref=cfg.sim.vigor_ref, vigor_diameter_gain=cfg.sim.vigor_diameter_gain,
     )

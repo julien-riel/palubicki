@@ -7,8 +7,13 @@ activating V2 (BHls) light model produces expected biological outcomes:
   2. Light concentration biases biomass higher (positive-y centroid shift).
 
 Parameters are tuned for reliable signal: large envelope (rx=2, ry=3, rz=2),
-high marker count (3000), strong absorption (k_absorption=1.0), large leaf area
-(leaf_area=0.2), and enough years (max_simulation_years=12) to accumulate effect.
+high marker count (3000), strong absorption (k_absorption=1.0), large leaf-area
+scale (leaf_area_scale=92, thickening the real per-leaf blade occlusion), and
+enough years (max_simulation_years=12) to accumulate effect.
+
+The light grid now deposits each leaf's real blade area (#62) times
+``leaf_area_scale``; the scales here (37, 92) reproduce the magnitude of the old
+scalar-per-terminal deposits (0.08, 0.2) given the default ovate blade.
 """
 from pathlib import Path
 
@@ -46,10 +51,10 @@ def _base_cfg(**overrides) -> Config:
 
 
 def test_light_enabled_reduces_internode_count():
-    """Light absorption (k=0.3, leaf_area=0.08) sheds shaded branches, producing fewer
-    internodes than a tree grown without light shadowing (9135 → ~2198 in practice)."""
+    """Light absorption (k=0.3, leaf_area_scale=37) sheds shaded branches, producing fewer
+    internodes than a tree grown without light shadowing."""
     tree_off = simulate(_base_cfg(light=LightConfig(enabled=False)))
-    tree_on = simulate(_base_cfg(light=LightConfig(enabled=True, k_absorption=0.3, leaf_area=0.08)))
+    tree_on = simulate(_base_cfg(light=LightConfig(enabled=True, k_absorption=0.3, leaf_area_scale=37.0)))
     assert len(tree_on.all_internodes) < len(tree_off.all_internodes)
 
 
@@ -71,7 +76,7 @@ def test_light_enabled_raises_centroid():
     tree_off = simulate(_base_cfg(sim=SimConfig(max_simulation_years=30.0), light=LightConfig(enabled=False)))
     tree_on = simulate(_base_cfg(
         sim=SimConfig(max_simulation_years=30.0),
-        light=LightConfig(enabled=True, k_absorption=2.5, leaf_area=0.2),
+        light=LightConfig(enabled=True, k_absorption=2.5, leaf_area_scale=92.0),
     ))
     centroid_y_off = np.mean([iod.child_node.position[1] for iod in tree_off.all_internodes])
     centroid_y_on = np.mean([iod.child_node.position[1] for iod in tree_on.all_internodes])

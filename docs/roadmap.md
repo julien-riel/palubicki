@@ -16,67 +16,70 @@ restaurer le filet de tests rouge tôt ; poser le driver saisonnier avant ce qui
 le lit ; garder les gros changements de moteur et les nouveaux modes orthogonaux
 pour la fin.
 
-### Couplage feuille ↔ lumière (câblage sur #10 axe-temps + #14 feuilles)
-
-1. **#62 — vraie surface de lame dans la grille LAI** · l'auto-ombrage lit
-   aujourd'hui un `leaf_area` scalaire découplé du feuillage rendu ; injecter la
-   surface réelle (morphologie déjà paramétrée, fonction d'aire partagée avec
-   `geom/leaves.py`). **Prérequis de #63 et #56** : sans lui, toute réponse à
-   l'ombre réagit à un signal faux et devra être re-tunée. Même principe de
-   cohérence que #37 (appliqué aux feuilles, pas aux diamètres).
+> **#62 (vraie surface de lame dans la grille LAI) — livré pour les feuillus.**
+> L'auto-ombrage des feuillus lit l'aire de lame réelle (`leaf_area_records`,
+> partagée avec `total_leaf_area`) au lieu d'un scalaire. Les **conifères** restent
+> sur le dépôt scalaire `light.leaf_area` par bourgeon terminal : leur dominance
+> apicale émerge de cette « coquille de canopée » et la coupler aux vraies aiguilles
+> casse le leader (pin). Le couplage lumière des conifères est donc **plié dans
+> #55/#7** ci-dessous, où géométrie d'aiguilles et calibration lumière se règlent
+> ensemble.
 
 ### Restaurer le filet conifère (#48 goldens tenus rouges)
 
-2. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et**
+1. **#55 — spray latéral cohérent (forme)** · référencer la plagiotropie **et**
    le repère radial d'insertion au plan de la branche-mère (au lieu du plan XY
    mondial) → éventail plat des conifères. Cadre structurel : à faire **avant**
    d'y poser les aiguilles. Candidat fort pour le correctif de forme de #48.
-3. **#7 — fascicules d'aiguilles** · aiguilles de conifères (réparties le long du
+   **Reprend aussi le couplage lumière conifère reporté de #62** (vraie aire
+   d'aiguille dans la grille LAI, avec re-calibration de la dominance apicale).
+2. **#7 — fascicules d'aiguilles** · aiguilles de conifères (réparties le long du
    rameau, #36) regroupées en fascicules de 2–5, posées sur le cadre de spray
    corrigé par #55. Re-pin des goldens #48 une seule fois, avec #55.
 
 ### Driver saisonnier + réponses à l'ombre
 
-4. **#65 — phénologie graduée** · remplacer l'interrupteur binaire
+3. **#65 — phénologie graduée** · remplacer l'interrupteur binaire
    `annual_growth_period` par une rampe (courbe `year_fraction` en MVP,
    degrés-jours en *nice-to-have*). Généralise la fenêtre de #10 ; **la floraison
    (#11) lira le même driver**, donc le poser avant d'empiler le saisonnier.
    **Coordonne avec #61 (livré)** : la caducité saisonnière lit déjà la fenêtre
    binaire `annual_growth_period` ; #65 doit reprendre le *même* déclencheur de
    sénescence (entrée en dormance) quand il transforme la porte binaire en rampe.
-5. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
+4. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
    latéraux à l'ombre (pas seulement élaguer après — `shade_mortality` reste).
    Réutilise la machinerie de pondération de qualité (#3). Réagit au champ
-   lumineux **corrigé par #62**. Levier d'initiation bon marché ; compose avec #56.
-6. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
+   lumineux **corrigé par #62 (feuillus ; conifères via #55)**. Levier
+   d'initiation bon marché ; compose avec #56.
+5. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
    raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
    statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
 
 ### Changement de moteur profond
 
-7. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
+6. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
    backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
    fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
-   prescrite par l'enveloppe `cone`. Compose avec #62 (lumière correcte) et #63
-   (levier d'initiation). Le plus profond du backlog ; tranche d'abord le
+   prescrite par l'enveloppe `cone`. Compose avec #62 (lumière feuillus correcte)
+   et #63 (levier d'initiation). Le plus profond du backlog ; tranche d'abord le
    compromis dirigeable-vs-émergent.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-8. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+7. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
    déterminées). Lit le driver saisonnier (#65). Débloque forbs, fruits, et un
    2ᵉ déclencheur sympodial propre.
-9. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+8. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-10. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
-    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
-    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
+9. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+   purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
+   `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-11. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps →
+10. **#53 — qualité infographique (épopée rendu/export glTF)** · normal maps →
     translucence feuille (`KHR_materials_diffuse_transmission`) → ORM → atlasing →
     LOD/instancing/vent. Matrice §12 de [`render-pipeline.md`](render-pipeline.md).
     Débloquée par rien, sous-tickets indépendants : à piquer dès qu'on veut une

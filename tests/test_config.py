@@ -90,6 +90,7 @@ def test_light_config_defaults():
     assert c.grid_size is None
     assert c.grid_resolution == (64, 64, 64)
     assert c.k_absorption == 0.5
+    assert c.leaf_area_scale == 1.0
     assert c.leaf_area == 0.04
     assert c.internode_area_scale == 1.0
     assert c.n_rays == 16
