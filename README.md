@@ -113,6 +113,38 @@ branches élaguées avec timeline) et export `.glb` / YAML.
 longueurs d'internode proximales vs distales, diamètre de base, indices de
 Strahler / Horton, et flagging des bornes de littérature par espèce.
 
+## Export & assets 3D
+
+La sortie de base est aujourd'hui un `.glb` (glTF 2.0 binaire) **core, sans
+extension**, ouvrable dans n'importe quel viewer (`generate` / `forest`
+ci-dessus). Au-delà, palubicki vise une véritable **fabrique d'assets** : à
+partir du même graphe de simulation, produire des modèles exploitables pour le
+**photoréalisme** (archviz, Blender/Cycles, Unreal Lumen) *et* pour une **forêt
+de jeu vidéo** (instancing, LOD, impostors), avec **rig de vent** pour
+l'animation et l'interaction.
+
+Le principe directeur : **un master canonique** par arbre (PBR standard, non
+compressé, PNG — source de vérité unique) dont on dérive des **profils cibles**.
+Le graphe `sim/` reste en lecture seule ; l'export *lève* ses champs
+(`Internode.diameter` → raideur de vent, `axis_order` → niveaux/LOD,
+`light_factor` → soleil/ombre, `birth_time` → âge d'écorce) vers des **attributs
+portables** (`COLOR_n`/`TEXCOORD_n`) et des buffers d'instances — jamais vers des
+extensions glTF fragiles. La réalité des moteurs, pas l'élégance de la spec, fixe
+le plancher.
+
+```bash
+# Cible (en construction — épic #53) :
+palubicki bake oak.glb --profile web      # meshopt + KTX2 + instancing + LOD/impostor
+palubicki bake oak.glb --profile unreal   # non compressé + PNG + extensions import-safe
+```
+
+- **Conception & plan** : [`docs/export-pipeline-design.md`](docs/export-pipeline-design.md)
+  — architecture en couches, rig de vent, forêts instanciées, et le plan
+  d'implémentation (P0 forêt → P1 vent → P2 photoréalisme → P3 profils → P4
+  LOD/impostor → P5 skin).
+- **Référence technique** : [`docs/render-pipeline.md`](docs/render-pipeline.md).
+- **Suivi** : épic GitHub [#53](https://github.com/julien-riel/palubicki/issues/53).
+
 ## Architecture
 
 Le pipeline est strictement étagé : la **simulation** ne connaît ni géométrie ni
@@ -191,6 +223,7 @@ est dans git) :
 - [`docs/simulation-loop.md`](docs/simulation-loop.md) — la boucle de simulation, du général au détaillé.
 - [`docs/tree-data-model.md`](docs/tree-data-model.md) — le graphe arborescent (Node / Internode / Bud / Leaf).
 - [`docs/render-pipeline.md`](docs/render-pipeline.md) — du graphe au `.glb` : géométrie, matériaux, format, et la matrice des écarts vs. un pipeline de production.
+- [`docs/export-pipeline-design.md`](docs/export-pipeline-design.md) — la conception & le plan de la fabrique d'assets (master + profils, vent, forêts instanciées, LOD/impostors).
 - [`docs/botany/plant-structure.md`](docs/botany/plant-structure.md) — primer de morphologie végétale (le vocabulaire mappé sur les structures de données).
 - [`docs/botany/code-support-matrix.md`](docs/botany/code-support-matrix.md) — matrice support / billet : chaque concept botanique du primer, supporté ou non dans le code, avec l'issue qui le corrige.
 - [`docs/botany/realism-assessment.md`](docs/botany/realism-assessment.md) — évaluation du réalisme, lue depuis le code.

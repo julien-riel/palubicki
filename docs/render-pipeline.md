@@ -14,6 +14,53 @@ actually looks like a plant inside Unreal, Unity, Blender, or a web viewer.*
 
 ---
 
+## 0. Reconciliation note (2026) — read this first
+
+This reference is sound on *what* the gaps are, but a 2026 survey of the four
+target engines (three.js, Blender 4.x, Unreal GLTFCore/Interchange, Unity
+glTFast) corrected several **feasibility and priority** assumptions below. The
+full design and the phased plan live in
+[`export-pipeline-design.md`](./export-pipeline-design.md); the corrections that
+override statements later in *this* document:
+
+1. **`KHR_materials_diffuse_transmission` is NOT a usable default (§5.2).** It is
+   still a Release Candidate and is unsupported in three.js, Blender, Unreal AND
+   Unity as of 2026 — building leaf backlight on it renders flat/opaque
+   everywhere. Default to a **thickness/translucency mask + per-engine subsurface
+   shader** (Unreal *Two-Sided Foliage*, Unity HDRP *Translucent*); emit the
+   extension only as forward-looking, engine-ignored metadata.
+2. **`MSFT_lod` is a dead vendor extension (§7.2).** Ignored by three.js,
+   Blender, Unreal and Unity. Use it for **web viewers only**; engines use native
+   LOD groups, and the full master is kept intact for Unreal-Nanite auto-LOD.
+3. **Wind data must ride `COLOR_n`/`TEXCOORD_n`, never `_underscore` custom
+   attributes (§9).** three.js and Unity silently drop custom attributes on
+   import. Use `COLOR_0=(phase,stiffness,leafMask)` + `TEXCOORD_1=pivot` (float),
+   and the consuming material must declare them or Unity strips them.
+4. **Normal maps require an explicit `TANGENT` attribute (§4.2), not yet
+   exported.** Without it, mirrored UV islands seam. It is nearly free for tubes:
+   the parallel-transport frame is already computed and discarded at
+   `geom/tubes.py:249-259`. This makes wind (which emits TANGENT) a prerequisite
+   for normal maps — hence the plan does wind *before* materials.
+5. **The forest path bakes world-space verts today (§7.1).** `write_glb_forest`
+   builds full geometry per tree with `node.translation` unused
+   (`export/gltf.py`), which defeats instancing. Fix: unit-tree-at-origin +
+   `EXT_mesh_gpu_instancing`. Nuance: each tree is uniquely seeded → distinct
+   topology, so share a mesh only when configs match, otherwise emit
+   **instance-of-one** (a node of count 1 carrying just its world transform).
+6. **Impostors need a headless GL backend (§7.3).** `render/renderer.py` is
+   matplotlib (screen-space) and cannot bake multi-angle offscreen. Use a
+   **hemi-octahedral** atlas (not full-octahedral) via moderngl/pyrender; this is
+   the biggest infra risk and is deferred.
+7. **Architecture = one canonical uncompressed PNG master + derived target
+   profiles** (WEB_UNITY meshopt+KTX2+instancing; UNREAL_DCC uncompressed+PNG+
+   import-safe). Unreal reads no Draco/meshopt/KTX2/gpu_instancing, so an
+   uncompressed fallback is mandatory, not optional (§8, §12).
+8. **Recommended order is resequenced (§12):** forest instancing first (highest
+   ROI, independent of texture work), then wind (unblocks normal maps via
+   TANGENT), then materials — *not* look-first.
+
+---
+
 ## 1. Why a second layer exists
 
 The plant graph is *correct* but it is not an *asset*. A node-and-edge tree of
@@ -144,7 +191,10 @@ glTF channel `pygltflib` already supports:
 1. **Normal maps (`normalTexture`).** The single biggest realism-per-byte win.
    Bark gets depth without geometry; leaves get vein relief. Procedural bark in
    `_textures.py` can emit a companion normal map from the same height field
-   essentially for free.
+   essentially for free. **Prerequisite:** export an explicit `TANGENT`
+   attribute (§0) — without it, mirrored UV islands seam and lighting is wrong.
+   It is nearly free for tubes (frame already computed at `geom/tubes.py:249-259`)
+   but is not emitted today.
 2. **Occlusion-Roughness-Metallic (`occlusionTexture` + metallic-roughness
    texture, the "ORM" packing).** Roughness variation (wet vs dry bark, waxy vs
    matte leaf) is what stops a surface looking like plastic.
@@ -185,7 +235,10 @@ foliage reads as "fake." The fixes, in glTF terms:
 
 - **`KHR_materials_transmission` / `KHR_materials_diffuse_transmission`** — the
   standard extensions for thin-surface light transport. `diffuse_transmission`
-  (a more recent ratified extension) is the better fit for leaves specifically.
+  is the right *physics* for leaves — but see §0: it is still a Release Candidate
+  and unsupported in all four target engines as of 2026, so it cannot be the
+  default. Emit it as forward-looking metadata; drive the actual backlight from a
+  thickness mask + per-engine subsurface shader.
 - Failing extension support, engines expose a **two-sided / subsurface foliage
   shader** (Unreal's *Two Sided Foliage* model, Unity's *Translucency*) — you
   export an opaque double-sided card plus a **thickness/transmission map** and
@@ -235,8 +288,11 @@ means **no instancing reuse**. For forest export, emit a tree at the origin and 
 
 ### 7.2 Level of detail (LOD)
 
-**`MSFT_lod`** is the glTF extension carrying discrete LOD chains. A tree needs
-at least three:
+**`MSFT_lod`** is the glTF extension carrying discrete LOD chains — but it is a
+**dead vendor extension** ignored by three.js, Blender, Unreal and Unity (§0).
+Treat it as **web-viewer-only** wiring; game engines build LOD groups natively
+from the same tiers, and the full master is left intact for Nanite. A tree needs
+at least three tiers regardless of how they're wired:
 
 - **LOD0** full tubes + cards (hero, near).
 - **LOD1** reduced `ring_sides`, clustered cards, atlased.
@@ -248,11 +304,14 @@ merge cards by cluster for leaves. palubicki generates a single LOD today.
 ### 7.3 Impostors / billboards
 
 At distance, the cheapest correct tree is **not geometry at all** — it is an
-**octahedral impostor** (a small atlas of the tree rendered from ~8–16 angles,
+**hemi-octahedral impostor** (a small atlas rendered from ~12–16 angles above
+the horizon — hemi, not full-octahedral, since trees are never seen from below;
 displayed on a camera-facing card with normal + depth so it still lights and
 parallaxes correctly). This is how every open-world game renders distant
-forests. Generating impostor atlases from the existing offline rasterizer
-(`render/renderer.py`) is a realistic future step.
+forests. **Caveat (§0):** the current offline rasterizer (`render/renderer.py`)
+is matplotlib — screen-space only, it *cannot* bake multi-angle offscreen.
+Impostor baking requires a headless GL backend (moderngl/pyrender), which is the
+single biggest infra dependency and is deferred to last.
 
 ---
 
@@ -280,10 +339,13 @@ Static trees read as dead. Wind is expected. glTF supports two mechanisms:
 1. **Vertex animation via a skeleton (skin + joints).** Paint branch hierarchies
    as a bone chain; engines sway the skeleton. Heavy, most controllable.
 2. **Shader-driven wind from vertex attributes.** The dominant game approach:
-   bake per-vertex data into `COLOR_0` or a custom attribute — **branch pivot,
-   stiffness, phase, and a foliage-vs-trunk mask** — and let an engine wind
-   shader (SpeedTree-style, Unreal's *SimpleGrassWind* / *Pivot Painter*) deform
-   at runtime. No skeleton, scales to thousands of instances.
+   bake per-vertex data into **standard `COLOR_n`/`TEXCOORD_n` channels — never
+   `_underscore` custom attributes**, which three.js and Unity silently drop on
+   import (§0). Concretely: `COLOR_0=(phase, stiffness, leafMask)` (float) +
+   `TEXCOORD_1=branch pivot`, and let an engine wind shader (SpeedTree-style,
+   Unreal's *SimpleGrassWind* / *Pivot Painter*) deform at runtime. No skeleton,
+   scales to thousands of instances. (Unity keeps the channel only if the
+   material declares it.)
 
 The FSPM graph is ideally placed to author approach (2): pivot = parent node
 position, stiffness ∝ pipe-model radius, phase from branch index. palubicki
@@ -352,10 +414,14 @@ FSPM tree-graph  (sim/tree.py — nodes, internodes, pipe radii, light_factor)
 | **Texture compression** | ❌ gap | export flag | `KHR_texture_basisu` (KTX2) |
 | **Wind authoring data** | ❌ gap | bake pivot/stiffness/phase to attributes | `COLOR_0` / custom attribute |
 
-**Recommended order of work** (realism-per-effort): normal maps → leaf
-translucency → roughness/ORM → texture atlasing → radius-adaptive `ring_sides`
-→ LOD → wind attributes → instancing → compression. The first three transform
-the look; the rest transform the budget.
+**Recommended order of work** — *superseded by the 2026 plan (§0)*. The original
+look-first order was: normal maps → leaf translucency → roughness/ORM →
+atlasing → `ring_sides` → LOD → wind → instancing → compression. The reconciled
+plan in [`export-pipeline-design.md`](./export-pipeline-design.md) instead does
+**forest instancing first** (P0, highest ROI, independent of texture work), then
+**wind** (P1 — its `TANGENT` emission unblocks normal maps), then the
+**photoreal master** (P2: geometric leaf blade + normal/ORM + color management),
+then profiles+validation (P3), LOD+impostor (P4), and hero skinned wind (P5).
 
 ---
 
