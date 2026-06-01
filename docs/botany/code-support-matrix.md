@@ -79,7 +79,7 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Nervation géométrique (parallèle/pennée/palmée/dichotome) | ❌ | lame = polygone plat ; seul un indice de texture dans `geom/_textures.py` | `SKIP` structurel — le relief de nervure relève du rendu (normal maps, [#53](https://github.com/julien-riel/palubicki/issues/53)) |
 | Simple vs composée (pennée/palmée/bipennée) | ✅ | `leaf_kind` + `geom/compound_leaf.py` (`_pinnate`/`_palmate`/`_bipinnate`, rachis) | [#6](https://github.com/julien-riel/palubicki/issues/6) livré |
 | Lame paramétrique : forme + marge | ✅ | `leaf_shape` (6 formes) + `leaf_margin` (entire/serrate/dentate/lobed) ; `geom/leaf_blade.py` | [#4](https://github.com/julien-riel/palubicki/issues/4) livré |
-| Durée de vie : caducité / persistance / marcescence | 🟡 | `Leaf.birth_time`/`age()` présents ; `LeafState.SENESCENT`/`ABSCISSED` **réservés, non câblés** (`sim/tree.py`) | [#61](https://github.com/julien-riel/palubicki/issues/61) — câbler âge → sénescence → abscission |
+| Durée de vie : caducité / persistance / marcescence | ✅ | `sim/caducity.py::advance_leaf_states` (âge/saison → `LeafState`, déterministe) ; `leaf_phenology` (decidu/persistant, lifespan, marcescence) ; couleur d'automne via `leaf_autumn_color` (COLOR_0) ; renderer rend `ACTIVE`+`SENESCENT`, filtre `ABSCISSED` | [#61](https://github.com/julien-riel/palubicki/issues/61) livré — caducité saisonnière à dt sous-annuel ; re-flush sur vieux bois + turnover aiguilles reportés (voir roadmap) |
 | Hétérophyllie soleil/ombre | ✅ | `geom/leaves.py::compute_effective_leaf_size`, `leaf_sun_shade_k` | — |
 | Aiguilles de conifère, fascicules (2–5) | 🟡 | aiguilles linéaires + `needle_cluster_spacing` (réparties le long du rameau) ; **pas** de regroupement en fascicule | [#7](https://github.com/julien-riel/palubicki/issues/7) |
 
@@ -154,7 +154,7 @@ Au-delà de la morphologie, les écarts **physiologiques** relevés par
 |---|---|---|
 | Vigueur abstraite (pas de budget carbone source→puits) | ❌ | [#66](https://github.com/julien-riel/palubicki/issues/66) **fermé `NOT_PLANNED`** — refonderait le moteur ; frontière de conception assumée |
 | Surface foliaire réelle non injectée dans la grille de lumière | ❌ | [#62](https://github.com/julien-riel/palubicki/issues/62) |
-| Caducité foliaire (âge → sénescence → abscission) non câblée | 🟡 | [#61](https://github.com/julien-riel/palubicki/issues/61) |
+| Pas de re-flush foliaire sur le vieux bois (feuilles émises une fois, jamais renouvelées) | ❌ | surgi de [#61](https://github.com/julien-riel/palubicki/issues/61) (livré) — bloque un vrai cycle décidu/persistant annuel ; à coupler #65 + débourrement (voir roadmap) |
 | Ombre : élague *a posteriori*, ne réduit pas l'initiation | ❌ | [#63](https://github.com/julien-riel/palubicki/issues/63) |
 | Pas de mémoire mécanique du bois (bois de réaction, fluage) | ❌ | [#64](https://github.com/julien-riel/palubicki/issues/64) |
 | Phénologie binaire (pas de degrés-jours / rampe saisonnière) | 🟡 | [#65](https://github.com/julien-riel/palubicki/issues/65) |
