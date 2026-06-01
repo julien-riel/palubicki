@@ -25,13 +25,31 @@ def _cfg(tmp_path, enable_leaves=True):
     )
 
 
-def test_mesh_has_two_primitives_when_leaves_on(tmp_path):
+def test_mesh_has_petiole_primitive_when_leaves_on(tmp_path):
+    # Default GeomConfig has petiole_length_ratio > 0, so simple leaves emit a
+    # third "petiole" stem primitive alongside bark + leaf.
     cfg = _cfg(tmp_path)
     tree = simulate(cfg)
     mesh = build_mesh(tree, cfg)
-    assert len(mesh.primitives) == 2
+    assert len(mesh.primitives) == 3
     assert mesh.primitives[0].material.name == "bark"
     assert mesh.primitives[1].material.name == "leaf"
+    assert mesh.primitives[2].material.name == "petiole"
+
+
+def test_mesh_no_petiole_primitive_when_petiole_length_zero(tmp_path):
+    cfg = _cfg(tmp_path)
+    cfg = Config(
+        envelope=cfg.envelope, sim=cfg.sim, tropism=cfg.tropism,
+        phyllotaxy=cfg.phyllotaxy, shedding=cfg.shedding,
+        geom=GeomConfig(enable_leaves=True, petiole_length_ratio=0.0),
+        seed=cfg.seed, output=cfg.output,
+    )
+    tree = simulate(cfg)
+    mesh = build_mesh(tree, cfg)
+    names = [p.material.name for p in mesh.primitives]
+    assert "petiole" not in names
+    assert names[:2] == ["bark", "leaf"]
 
 
 def test_mesh_one_primitive_when_leaves_off(tmp_path):

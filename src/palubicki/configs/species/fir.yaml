@@ -79,6 +79,7 @@ geom:
   foliage_depth: 7
   needle_cluster_spacing: 0.05
   leaf_sun_shade_k: 0.0
+  petiole_length_ratio: 0.0   # needles are sessile — no petiole stalk
   root_flare_height: 0.2
   root_flare_factor: 1.3
   root_flare_falloff: linear
