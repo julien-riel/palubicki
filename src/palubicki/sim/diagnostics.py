@@ -513,8 +513,8 @@ def compute_metrics(
 ) -> dict:
     """Compute structural metrics for one or many trees.
 
-    Tree     → flat dict per the schema in docs/superpowers/specs/
-                2026-05-27-tree-diagnostics-design.md.
+    Tree     → flat dict of structural metrics (Strahler/Horton ratios,
+                per-order angles, bud-state histogram, height/crown, etc.).
     list[Tree] → aggregated dict (mean / stddev / per_seed at each leaf).
 
     `cfg` is optional; only consumed by total_leaf_area.

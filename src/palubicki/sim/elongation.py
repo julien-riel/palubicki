@@ -1,7 +1,5 @@
 """Progressive internode elongation (S-curve).
 
-Spec: docs/superpowers/specs/2026-05-27-phase2d-temporal-dynamics-design.md (§4.3)
-
 Design compromise: Node.position is fixed at creation to the final geometric
 location (cur.position + d * length_target). The internode's effective length
 ramps from 0 toward length_target via a sigmoid. Consequence: during the

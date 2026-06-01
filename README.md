@@ -7,10 +7,16 @@ l'espace et la lumière, allocation de ressources, tropismes, sénescence)
 plutôt que d'être sculptée à la main. Chaque arbre est le résultat d'une
 **simulation** année par année, pas d'un gabarit.
 
-Basé sur Palubicki, Horel, Longay, Runions, Lane, Měch, Prusinkiewicz —
-*Self-organizing tree models for image synthesis*, SIGGRAPH 2009.
+Le modèle est un **FSPM par colonisation de l'espace** (functional-structural
+plant model) : des bourgeons-agents réagissent à des champs (marqueurs d'espace,
+lumière) sur un graphe arborescent. Ce n'est pas un L-system — ce choix donne
+nativement la compétition pour la lumière et les contraintes mécaniques. Base
+théorique : Palubicki, Horel, Longay, Runions, Lane, Měch, Prusinkiewicz —
+*Self-organizing tree models for image synthesis*, SIGGRAPH 2009
+([papier](https://algorithmicbotany.org/papers/selforg.sig2009.html)).
 
-V1 implements the BHse model: marker points distributed in a parametric envelope drive bud competition for space; Borchert-Honda allocation routes resources from the root to the buds; tropisms (gravity, photo direction, inertia) bias growth; low-quality branches are shed. Output is a `.glb` (glTF 2.0 binary) usable in any standard viewer.
+La sortie est un `.glb` (glTF 2.0 binaire) ouvrable dans n'importe quel viewer
+standard.
 
 > **Comment on travaille ici** — beaucoup de réglages pilotent un comportement
 > *émergent* qu'aucune table de constantes ne donne d'avance. On les accorde par
@@ -27,238 +33,85 @@ pip install -e ".[dev]"
 ## Usage
 
 ```bash
-# Bushy ellipsoid tree (oak-like)
+# Arbre touffu en ellipsoïde (type chêne)
 palubicki generate -o oak.glb \
-  --envelope half_ellipsoid --envelope-radii 4 6 4 \
-  --seed 42
+  --envelope half_ellipsoid --envelope-radii 4 6 4 --seed 42
 
-# Conifer
+# Conifère
 palubicki generate -o pine.glb \
-  --envelope cone --envelope-radii 2 8 2 \
-  --w-gravity 0.5
+  --envelope cone --envelope-radii 2 8 2 --w-gravity 0.5
 
-# Dump all defaults to start a config file
+# Vider tous les défauts pour démarrer un fichier de config
 palubicki dump-defaults > my-config.yaml
 palubicki generate -o tree.glb --config my-config.yaml
 
-# Recover the config used to generate an existing .glb
+# Récupérer la config qui a produit un .glb existant
 palubicki dump-config tree.glb > used.yaml
 ```
 
-### Preview — render a `.glb` to PNG
+### Espèces
 
-For quick visual iteration without an external glTF viewer:
+Presets packagés (`src/palubicki/configs/species/`), sélectionnés avec
+`--species` : **oak**, **pine**, **birch**, **maple**. La précédence est
+CLI > YAML > preset.
 
 ```bash
-# Install the optional render extra (matplotlib)
+palubicki generate --species oak --seed 42 -o oak.glb
+palubicki generate --species oak --w-gravity 0.5 -o oak_droopy.glb   # override
+palubicki dump-defaults --species pine > my_pine.yaml                # point de départ
+```
+
+### Lumière (BHls)
+
+`--light-enabled` couple la qualité des bourgeons à la lumière reçue
+(Beer-Lambert sur une grille de voxels) : `Q = nb_markers × light_factor`. La
+lumière pilote aussi le phototropisme local et la mort des branches en ombre
+profonde. Le poids du phototropisme est désactivé par défaut — l'activer via
+`tropism.w_phototropism` dans le YAML.
+
+```bash
+palubicki generate -o oak_light.glb \
+  --envelope ellipsoid --envelope-radii 3 5 3 --light-enabled --seed 42
+```
+
+### Forêts + obstacles
+
+`palubicki forest -o scene.glb --config scene.yaml`. Le YAML ajoute une section
+`forest:` (plusieurs graines, chacune avec position, `seed`, `species`,
+`overrides` en clés pointées) et une liste d'obstacles (AABB, Sphère, OBB, Mesh
+OBJ). Les arbres se disputent un nuage de marqueurs et une grille de lumière
+partagés ; les obstacles tuent des marqueurs, bloquent la croissance et occultent
+la lumière.
+
+### Aperçu PNG
+
+```bash
 pip install -e ".[render]"
-
-# Default: 800x800 white background
-palubicki preview tree.glb -o tree.png
-
-# Custom view angle and size
 palubicki preview tree.glb -o tree.png --size 1200x900 --elevation 15 --azimuth 60
-
-# Transparent background, no leaves (silhouette of bark only)
 palubicki preview forest.glb -o forest.png --bg transparent --no-leaves
 ```
 
-The renderer is **diagnostic level**: silhouette + flat Lambert shading + base
-material colors. No textures, no shadows, no anti-aliasing tricks. It exists
-so that iterating on configs and species presets doesn't require opening every
-`.glb` in an external viewer.
+Le rendu est **de niveau diagnostic** (silhouette + Lambert plat + couleurs de
+matériau) : il sert à itérer sur les configs sans ouvrir chaque `.glb` dans un
+viewer externe.
 
-In notebooks, use the underlying API directly:
-
-```python
-from palubicki.render import render_glb
-import matplotlib.pyplot as plt
-plt.imshow(render_glb("oak.glb"))
-```
-
-### Visualiseur web — voir le `.glb` et déboguer la simulation
-
-Le visualiseur web est un éditeur three.js servi localement : il **charge et
-affiche le `.glb` généré** dans le navigateur, le re-simule à la volée quand on
-bouge les paramètres, et expose des **aides de débogage visuel** pour comprendre
-ce que la sim a produit.
+### Visualiseur web
 
 ```bash
 pip install -e ".[edit]"
 palubicki edit --species oak --seed 42
 ```
 
-Ouvre `http://127.0.0.1:8765/` :
+Ouvre `http://127.0.0.1:8765/` : panneau de paramètres (sliders, régénération à
+la volée), viewer three.js (`OrbitControls`), aides de débogage (toggle feuilles,
+wireframe, overlays des internes de sim : marqueurs, enveloppe, bourgeons,
+branches élaguées avec timeline) et export `.glb` / YAML.
 
-- **Panneau de paramètres** (à gauche) — sliders pour les réglages les plus
-  tweakés, sélecteur d'espèce, bouton **Régénérer** pour relancer la simulation
-  avec les valeurs courantes.
-- **Visualiseur 3D** (à droite) — rendu three.js du `.glb` avec `OrbitControls`
-  (rotation / zoom / pan).
-- **Affichage de débogage** — surcouche du viewer avec **Toggle leaves** (isoler
-  le squelette ligneux du feuillage) et **Wireframe** (inspecter la
-  tessellation et la topologie des tubes). C'est par là qu'on lit *ce que la
-  simulation a réellement construit* plutôt que ce qu'on croit avoir réglé.
-- **Export** — **Export .glb** sauve l'arbre courant ; **Export YAML** vide la
-  config courante (réutilisable avec `palubicki generate --config`).
+### Diagnostics chiffrés
 
-Pour des métriques chiffrées (hauteur, longueurs d'internode proximales vs
-distales, diamètre de base, indices de Strahler / Horton), le complément en
-ligne de commande est `palubicki diagnose` — l'œil quantitatif de la boucle
-empirique décrite plus haut.
-
-### V2 — voxel light shadowing (BHls hybrid)
-
-Enable with `--light-enabled`. The bud's quality becomes
-`Q = nb_markers × light_factor`, where `light_factor ∈ [0,1]` is the fraction
-of hemispheric rays reaching the bud through accumulated leaf/branch density
-(Beer-Lambert). Light also drives local phototropism (the growth direction
-biases toward the brightest opening) and shedding (branches in deep shadow
-die).
-
-When activating light, the default `tropism.w_phototropism = 0.0` ignores the
-gradient — configure it via the YAML config (`tropism.w_phototropism: 0.3`).
-
-Example:
-
-```bash
-palubicki generate -o oak_light.glb \
-  --envelope ellipsoid --envelope-radii 3 5 3 \
-  --light-enabled --seed 42
-```
-
-### V3 — obstacles + forêt multi-arbres
-
-Subcommand `palubicki forest -o scene.glb --config scene.yaml`. The YAML adds a
-top-level `forest:` section with multiple seeds (each with its own position,
-optional `seed`, `species`, and dotted-key `overrides`) and a list of
-obstacles (AABB, Sphere, OBB, Mesh OBJ). Trees compete on a shared marker
-cloud and a shared light grid; obstacles kill markers, block growth segments,
-and occlude light.
-
-### V4 — species presets
-
-Three packaged presets: `oak`, `pine`, `birch`. Each is a YAML in
-`src/palubicki/configs/species/` selected with the `--species` flag.
-
-```bash
-palubicki generate --species oak --seed 42 -o oak.glb
-palubicki generate --species pine --seed 42 -o pine.glb
-palubicki generate --species birch --seed 42 -o birch.glb
-
-# Override a preset value (CLI wins over YAML wins over preset)
-palubicki generate --species oak --w-gravity 0.5 -o oak_droopy.glb
-
-# Dump a preset to a file as starting point for a custom species
-palubicki dump-defaults --species pine > my_pine.yaml
-```
-
-Forêts mixtes : ajouter `species: oak` (ou `pine`/`birch`) à chaque entrée
-`forest.seeds` du YAML pour appliquer le preset à cet arbre, puis appliquer
-les `overrides` par-dessus.
-
-Textures bark + leaf : générateurs procéduraux PIL packagés sous l'URI
-`proc:<name>` (e.g. `bark_texture: "proc:oak_bark"`). Pointer vers un PNG
-externe reste possible : `bark_texture: ./my_bark.png`.
-
-## Tuning notes
-
-Shedding is sensitive. The default `quality_threshold = 0.0` is permissive — it only removes branches whose subtree Q drops to literal 0 averaged over `window=5` iterations. If you want more aggressive pruning of weak branches, increase the threshold incrementally (try `0.1`, then `0.5`); be aware that high values combined with marker depletion can avalanche and strip the entire tree.
-
-If your tree looks too dense or too sparse:
-- **Too dense:** raise `shedding.quality_threshold` (e.g. `0.1`–`0.3`), or lower `marker_count`.
-- **Too sparse / single stem:** lower `shedding.quality_threshold` to 0 (or disable with `--no-shed`), and consider lowering `r_kill` so markers persist longer.
-- **Branches escaping the envelope:** keep `re_perceive_per_substep=True` (the default) — disable only via `--no-resample` for performance, accepting visual spikes.
-
-### Phase 2A — branching architecture
-
-- **Sympodial mode** (`sim.sympodial.enabled: true`): when an apical bud's
-  quality stays below `q_threshold` for `n_consecutive_steps` consecutive
-  iterations, the best-Q sibling lateral takes over as the new leader (oak,
-  maple, lime). Disable for monopodial species (pine, birch).
-- **Branch angle by order** (`phyllotaxy.branch_angle_by_order`): replaces
-  the legacy scalar `branch_angle_deg`. The list indexes the insertion angle
-  by axis order — e.g. `[60.0, 40.0, 30.0, 25.0]` opens primary laterals
-  wide and tightens distal ramification.
-- **Explicit plagiotropism** (`tropism.w_plagiotropism_main/_lateral`):
-  projects the current direction onto the horizontal plane. Use on laterals
-  to splay branches flat without polluting the gravity tuning (pendula
-  species can stack gravitropism + plagiotropism independently).
-
-### Phase 2B — bud lifecycle (shade mortality + reiteration)
-
-Two new mechanisms make the canopy carve itself realistically and recover from
-branch loss:
-
-- **Shade-induced mortality** (`sim.shade_mortality`): a bud whose `light_factor`
-  stays below `light_threshold` for `n_consecutive_steps` consecutive iterations
-  dies (state → DEAD). This produces a natural live-crown ratio — lower branches
-  in deep shade die off instead of dragging quality down. Requires
-  `light.enabled: true` (the config raises `ConfigError` otherwise).
-- **Reiteration via dormant reserves** (`phyllotaxy.dormant_reserve_count` +
-  `shedding.reactivation_count`): every emitted node carries K pre-formed
-  RESERVE buds (state `BudState.RESERVE`, invisible to perception and light).
-  When the shedding pass removes a child subtree, `reactivation_count` reserves
-  on the parent node flip to ACTIVE and join `tree.active_buds`. This is the
-  epicormic-shoot / water-sprout mechanism — strong in oak and poplar, absent
-  in conifers.
-
-Species defaults:
-
-| Species | shade_mortality.threshold | reserves / node | activations / shed |
-|---------|---------------------------|-----------------|--------------------|
-| oak     | 0.20                      | 2               | 1                  |
-| pine    | 0.12                      | 0               | 0                  |
-| birch   | 0.20                      | 1               | 1                  |
-
-### Phase 2C — decussate phyllotaxy + sun/shade leaves
-
-- **Decussate phyllotaxy** (`phyllotaxy.mode: decussate`): each node alternates
-  lateral-pair azimuth by 90° around the parent axis. Use
-  `divergence_angle_deg: 0.0` for canonical decussation (maple, ash, dogwood);
-  non-zero values create a decussate spiral.
-- **Sun/shade leaf heterophylly** (`geom.leaf_sun_shade_k`): per-leaf size is
-  scaled by `(1 + k * (1 - light_factor))`, clamped to `[0.5×, 2×]`. The
-  `Internode.light_factor` is captured at creation; leaves of shaded internodes
-  grow larger to capture more photons.
-- **New species preset**: `maple.yaml` combines decussate phyllotaxy, sun/shade
-  leaves (k=0.6), sympodial branching, and reiteration. Oak and birch use
-  k=1.0 and k=0.4 respectively; pine stays at k=0 (needles don't show plasticity).
-
-### Phase 2D — temporal dynamics (progressive elongation + dynamic diameter/sag)
-
-Every internode now tracks its birth time (in years) and a target length. The
-effective `length` ramps via a sigmoid as the tree ages; pipe-model diameters
-and cantilever-bend sag are recomputed live on the growing tree. A
-finalization snap at the end of `simulate()` sets every length to its target
-and reruns diameters + sag once more, so the exported geometry is always
-fully grown — regardless of when an internode was born.
-
-- **`sim.elongation`** (per-preset): `enabled`, `tau_years` (sigmoid
-  width, in years), `age_factor_min` (final scale), `age_factor_decay` (curvature).
-  Late-born internodes have shorter targets, capturing the
-  early-vigorous-vs-late-conservative chronology of real shoots.
-- **`Node.sag_offset`** separates the visual sag from topological position.
-  `apply_sag` is now idempotent (resets offsets to zero each call) and safe
-  to run per-iteration.
-- **`update_diameters_incremental`** in `sim/radii.py` exposes pipe-model
-  recomputation as a public callable.
-
-### Time model
-
-The simulator advances in fractional years rather than bare iterations.
-`sim.dt_years` is how much time one iteration represents (default `1.0` — one
-iteration ≈ one growing year); `sim.max_simulation_years` is the total
-simulated span (default `30.0`), so the iteration count is
-`round(max_simulation_years / dt_years)` (exposed as `SimConfig.num_iterations`,
-and overridable on the CLI via `--years` / `--dt-years`). Each internode records
-its `birth_time` in years, and elongation ramps over `tau_years`.
-`sim.annual_growth_period = [lo, hi]` (year fractions in `[0, 1)`) gates growth
-to a window: with `dt_years < 1.0`, new internodes are only emitted when the
-current year-fraction falls in `[lo, hi)`; outside it the tree only ages
-(elongation, diameters, sag) and emits nothing. At the default `dt_years = 1.0`
-and `[0.0, 1.0]` window every iteration grows, identical to the prior
-iteration-count behavior.
+`palubicki diagnose` est l'œil quantitatif de la boucle empirique : hauteur,
+longueurs d'internode proximales vs distales, diamètre de base, indices de
+Strahler / Horton, et flagging des bornes de littérature par espèce.
 
 ## Architecture
 
@@ -304,45 +157,43 @@ flowchart TD
     diag -.->|boucle empirique<br/>auto-correctrice| cfg
 ```
 
-- `src/palubicki/sim/` — pure simulation (markers, buds, BH, tropisms, shedding). No geometry, no glTF.
-- `src/palubicki/geom/` — skeleton → tessellated tubes (parallel transport frames) + parametric leaf clusters (1..N cross-quads per bud). Outputs a neutral `Mesh`.
-- `src/palubicki/export/` — `Mesh` → `.glb`. Core glTF 2.0, no extensions, max viewer compatibility.
+- `src/palubicki/sim/` — simulation pure (markers, buds, BH, tropismes, shedding). Pas de géométrie, pas de glTF.
+- `src/palubicki/geom/` — squelette → tubes tessellés (repères de transport parallèle) + clusters de feuilles paramétriques. Produit un `Mesh` neutre.
+- `src/palubicki/export/` — `Mesh` → `.glb`. glTF 2.0 core, sans extension, compatibilité viewer maximale.
 - `src/palubicki/render/` — `.glb` → PNG (diagnostic, matplotlib).
 - `src/palubicki/edit/` — visualiseur web three.js + serveur de re-simulation live.
-- `src/palubicki/cli.py` — orchestrates.
+- `src/palubicki/cli.py` — orchestre.
 
 La boucle pointillée `diagnose → config` est le cœur méthodologique du projet :
 on accorde les paramètres en réagissant aux métriques mesurées, pas à des valeurs
-posées d'avance (voir
-[`docs/mindset-boucle-empirique.md`](docs/mindset-boucle-empirique.md)).
+posées d'avance.
 
 ## Configuration
 
-All parameters are exposed via YAML. CLI flags expose the most-tweaked ones; the rest are YAML-only. Run `palubicki dump-defaults` for the full schema with defaults.
-
-The effective config (including all overrides) is embedded in `asset.extras.config` of the produced `.glb` for reproducibility.
+Tous les paramètres sont exposés en YAML. Les flags CLI exposent les plus
+tweakés ; le reste est YAML-only. `palubicki dump-defaults` vide le schéma complet
+avec les défauts. La config effective (overrides inclus) est embarquée dans
+`asset.extras.config` du `.glb` produit, pour la reproductibilité.
 
 ## Tests
 
 ```bash
-pytest                  # unit tests (fast)
-pytest -m slow          # integration + goldens
-pytest --cov            # coverage report
+pytest                  # tests unitaires (rapides)
+pytest -m slow          # intégration + goldens
+pytest --cov            # rapport de couverture
 ```
 
-## Roadmap
+## Documentation
 
-- **V2** : voxel light shadowing (BHls).
-- **V3** : obstacles + multi-tree forest simulation.
-- ~~**V4** : species presets (oak, pine, birch) — livré~~.
-- **Phase 1** (livré) : main-vs-lateral tropisms + gaussian jitter on phyllotaxy + stochastic internode length.
-- **Phase 2A** (livré) : sympodial branching mode, `branch_angle_by_order`, explicit plagiotropism term.
-- **Phase 2B** (livré) : bud life cycle (shade mortality, reiteration via dormant reserves).
-- **Phase 2C** (livré) : decussate phyllotaxy + sun/shade leaves + maple species preset.
-- **Phase 2D** (livré) : progressive elongation + dynamic secondary growth.
+L'architecture du système est décrite dans `docs/` (état actuel — l'historique
+est dans git) :
 
-See `docs/superpowers/roadmap/`.
-
-## References
-
-Palubicki et al., 2009 — [Self-organizing tree models for image synthesis](https://algorithmicbotany.org/papers/selforg.sig2009.html).
+- [`docs/simulation-loop.md`](docs/simulation-loop.md) — la boucle de simulation, du général au détaillé.
+- [`docs/tree-data-model.md`](docs/tree-data-model.md) — le graphe arborescent (Node / Internode / Bud / Leaf).
+- [`docs/render-pipeline.md`](docs/render-pipeline.md) — du graphe au `.glb` : géométrie, matériaux, format, et la matrice des écarts vs. un pipeline de production.
+- [`docs/botany/plant-structure.md`](docs/botany/plant-structure.md) — primer de morphologie végétale (le vocabulaire mappé sur les structures de données).
+- [`docs/botany/simulator-gap-analysis.md`](docs/botany/simulator-gap-analysis.md) — statut de chaque concept botanique vs. le simulateur.
+- [`docs/botany/realism-assessment.md`](docs/botany/realism-assessment.md) — évaluation du réalisme, lue depuis le code.
+- [`docs/botany/sources.md`](docs/botany/sources.md) — bibliographie primaire.
+- [`docs/mindset-boucle-empirique.md`](docs/mindset-boucle-empirique.md) — la méthode de travail (boucle empirique auto-correctrice).
+- [`docs/roadmap.md`](docs/roadmap.md) — ce qui reste à faire.
