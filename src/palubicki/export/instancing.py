@@ -55,6 +55,9 @@ from palubicki.export._glb_common import (
     _add_accessor,
     _add_material,
     _add_primitive_attributes,
+    _VariantRegistry,
+    emit_primitive_variants,
+    set_document_variants,
 )
 from palubicki.geom.mesh import Material, Mesh, Primitive
 
@@ -106,6 +109,8 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
     meshes: list[pygltflib.Mesh] = []
     nodes: list[pygltflib.Node] = []
     used_instancing = False
+    extensions_used: set[str] = set()
+    variants = _VariantRegistry()
 
     def _emit_mesh(prims: list[Primitive]) -> int:
         gltf_prims: list[pygltflib.Primitive] = []
@@ -115,14 +120,24 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
                                     _COMPONENT_UINT, _TYPE_SCALAR, _TARGET_ELEMENT_ARRAY, with_minmax=False)
             # COLOR_0 is wind data — neutralize base colour on the tint stream (COLOR_1).
             has_tint = prim.tint is not None and prim.tint.shape[0] == prim.positions.shape[0]
-            mat_idx = _add_material(prim.material, buffer_data, buffer_views,
-                                    materials, textures, images, samplers,
-                                    neutralize_base_color=has_tint)
-            gltf_prims.append(pygltflib.Primitive(
+
+            def _add_mat(material, *, neutralize=has_tint):
+                return _add_material(material, buffer_data, buffer_views,
+                                     materials, textures, images, samplers,
+                                     neutralize_base_color=neutralize,
+                                     extensions_used=extensions_used)
+
+            mat_idx = _add_mat(prim.material)
+            gltf_prim = pygltflib.Primitive(
                 attributes=attributes,
                 indices=idx_acc,
                 material=mat_idx,
-            ))
+            )
+            # Season variants keep their own base colour → never neutralized.
+            emit_primitive_variants(prim, gltf_prim, variants,
+                                    lambda m, _a=_add_mat: _a(m, neutralize=False),
+                                    extensions_used)
+            gltf_prims.append(gltf_prim)
         meshes.append(pygltflib.Mesh(primitives=gltf_prims))
         return len(meshes) - 1
 
@@ -196,6 +211,7 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
     }
 
     gltf.asset = pygltflib.Asset(version="2.0", generator="palubicki", extras=extras or None)
+    set_document_variants(gltf, variants, extensions_used)
     gltf.meshes = meshes
     gltf.nodes = nodes
     gltf.scenes = [pygltflib.Scene(nodes=list(range(len(nodes))))]
@@ -207,7 +223,9 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
     gltf.images = images
     gltf.samplers = samplers
     if used_instancing:
-        gltf.extensionsUsed = [_GPU_INSTANCING, _INSTANCE_FEATURES]
+        extensions_used.update((_GPU_INSTANCING, _INSTANCE_FEATURES))
+    if extensions_used:
+        gltf.extensionsUsed = sorted(extensions_used)
     gltf.buffers = [pygltflib.Buffer(byteLength=len(buffer_data))]
     gltf.set_binary_blob(bytes(buffer_data))
     gltf.save_binary(str(output_path))
@@ -286,8 +304,22 @@ def _localized_primitives(mesh: Mesh, anchor: np.ndarray) -> list[Primitive]:
             pivot=local_pivot,
             wind_tier=prim.wind_tier,
             tangents=prim.tangents,
+            # Season variants are position-independent (material swaps) — carry them
+            # through so KHR_materials_variants survives the forest path. Without
+            # this they default to None and emit_primitive_variants silently no-ops.
+            material_variants=prim.material_variants,
         ))
     return out
+
+
+def _variant_sig(prim: Primitive) -> tuple:
+    """Signature of a primitive's season-variant material set (empty when none).
+    Folded into the bucket key so two geometrically-identical trees with different
+    variants never collapse into one shared mesh (which would flatten one's seasons)."""
+    mv = getattr(prim, "material_variants", None)
+    if not mv:
+        return ()
+    return tuple((name, _material_sig(mat)) for name, mat in mv)
 
 
 def _material_sig(mat: Material) -> tuple:
@@ -306,10 +338,11 @@ def _material_sig(mat: Material) -> tuple:
 
 def _bucket_key(prims: list[Primitive]) -> tuple:
     """Cheap hashable signature: a fast reject before the per-vertex comparison.
-    Trees that differ in primitive count, vertex/index counts, or materials can
-    never be the same geometry, so they land in different buckets."""
+    Trees that differ in primitive count, vertex/index counts, materials, or
+    season-variant sets can never share a mesh, so they land in different buckets."""
     return tuple(
-        (int(p.positions.shape[0]), int(p.indices.shape[0]), _material_sig(p.material))
+        (int(p.positions.shape[0]), int(p.indices.shape[0]),
+         _material_sig(p.material), _variant_sig(p))
         for p in prims
     )
 

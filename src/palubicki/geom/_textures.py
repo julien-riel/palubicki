@@ -6,7 +6,9 @@ import math
 import random
 from collections.abc import Callable
 
+import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 
 def default_leaf_png(size: int = 128) -> bytes:
@@ -189,6 +191,164 @@ def birch_leaf_png(size: int = 128) -> bytes:
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
+
+
+# ---------- HEIGHT FIELDS (P2 normal/ORM source) ----------
+#
+# Clean grayscale relief fields (NOT lit albedo) per species, the source
+# geom/maps.py bakes into tangent-space normal + cavity-AO maps. Ridges high
+# (→1), furrows low (→0). Seeded with a "_height" label so they draw
+# independently of the albedo generators (no shared RNG stream → adding these
+# never perturbs the existing base-colour textures). Each is Gaussian-blurred so
+# the Sobel pass yields smooth normals instead of stair-stepped line edges.
+
+
+def _l_to_field(img: Image.Image, sigma: float) -> np.ndarray:
+    """8-bit 'L' image → blurred float32 height field in [0, 1]."""
+    a = np.asarray(img, dtype=np.float32) / 255.0
+    if sigma > 0:
+        # wrap horizontally (bark tiles in u) for a seamless furrow normal.
+        a = ndimage.gaussian_filter(a, sigma=sigma, mode=("nearest", "wrap"))
+    lo, hi = float(a.min()), float(a.max())
+    if hi - lo > 1e-6:
+        a = (a - lo) / (hi - lo)
+    return a
+
+
+def oak_bark_height(size: int = 256) -> np.ndarray:
+    """Deep vertical fissures over rounded ridges (mirrors oak_bark_png's relief)."""
+    img = Image.new("L", (size, size), 150)
+    draw = ImageDraw.Draw(img)
+    rng = _seeded_rng("oak_bark_height")
+    for _ in range(110):  # rounded ridge bumps (raised)
+        x, y = rng.randint(0, size), rng.randint(0, size)
+        r = rng.randint(10, 30)
+        draw.ellipse((x - r, y - r, x + r, y + r), fill=rng.randint(170, 215))
+    for _ in range(14):  # sinuous vertical furrows (recessed grooves)
+        x0 = rng.randint(0, size)
+        amp = rng.uniform(2.0, 6.0)
+        phase = rng.uniform(0, math.tau)
+        width = rng.randint(3, 6)
+        for tile_dx in (0, size):
+            pts = [(x0 + tile_dx + amp * math.sin(phase + y * 0.05), y)
+                   for y in range(0, size + 1, 4)]
+            draw.line(pts, fill=20, width=width)
+    return _l_to_field(img, sigma=2.5)
+
+
+def pine_bark_height(size: int = 256) -> np.ndarray:
+    """Raised irregular plates separated by recessed boundary grooves."""
+    img = Image.new("L", (size, size), 70)  # boundary / groove level
+    draw = ImageDraw.Draw(img)
+    rng = _seeded_rng("pine_bark_height")
+    for _ in range(40):
+        cx, cy = rng.randint(0, size), rng.randint(0, size)
+        n_verts = rng.randint(5, 8)
+        radius = rng.randint(15, 35)
+        pts = []
+        for i in range(n_verts):
+            angle = 2 * math.pi * i / n_verts + rng.uniform(-0.3, 0.3)
+            r = radius * rng.uniform(0.7, 1.2)
+            pts.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+        shade = rng.randint(180, 235)  # plate top (raised)
+        draw.polygon(pts, fill=shade, outline=40)
+        if cx < radius:
+            draw.polygon([(p[0] + size, p[1]) for p in pts], fill=shade, outline=40)
+        elif cx > size - radius:
+            draw.polygon([(p[0] - size, p[1]) for p in pts], fill=shade, outline=40)
+    return _l_to_field(img, sigma=2.0)
+
+
+def birch_bark_height(size: int = 256) -> np.ndarray:
+    """Mostly smooth (birch bark is flat) with shallow horizontal lenticel grooves."""
+    img = Image.new("L", (size, size), 200)
+    draw = ImageDraw.Draw(img)
+    rng = _seeded_rng("birch_bark_height")
+    for _ in range(8):  # lenticel stripes (slightly recessed)
+        y = rng.randint(0, size - 1)
+        h = rng.randint(2, 7)
+        draw.rectangle((0, y, size, y + h), fill=rng.randint(70, 120))
+    for _ in range(12):  # "eyes" (recessed)
+        cx, cy = rng.randint(0, size), rng.randint(0, size)
+        w, h = rng.randint(6, 18), rng.randint(2, 6)
+        draw.ellipse((cx - w, cy - h, cx + w, cy + h), fill=60)
+    return _l_to_field(img, sigma=1.5)
+
+
+_BARK_HEIGHT_FNS: dict[str, Callable[..., np.ndarray]] = {
+    "oak_bark": oak_bark_height,
+    "pine_bark": pine_bark_height,
+    "birch_bark": birch_bark_height,
+}
+
+
+def bark_height_for(texture_name: str | None, size: int = 256) -> np.ndarray | None:
+    """Height field matching a ``proc:<name>`` bark texture, else None.
+
+    Returns ``None`` for authored/file bark (no clean height to synthesise) so the
+    caller can fall back to a flat normal — never baking relief from a lit photo
+    (design §6.3)."""
+    if not texture_name:
+        return None
+    name = texture_name[5:] if texture_name.startswith("proc:") else texture_name
+    fn = _BARK_HEIGHT_FNS.get(name)
+    return fn(size) if fn is not None else None
+
+
+# ---------- LEAF VEIN / MIDRIB SOURCE (P2 translucency + leaf normal) ----------
+
+
+def leaf_vein_mask(
+    size: int = 128,
+    *,
+    shape: str = "ovate",
+    vein_pairs: int = 6,
+) -> np.ndarray:
+    """Lamina/vein source field in [0, 1]: 1 over thin lamina, →0 on the opaque
+    midrib / secondary veins / petiole base.
+
+    UV-aligned with :func:`palubicki.geom.leaf_blade.build_blade` (``tex_u`` runs
+    across the blade with the midrib at ``u=0`` → column ``0.5``; ``tex_v`` runs
+    base→tip). geom/maps.py turns this into the back-light alpha mask AND (via
+    ``1 - mask``) a subtle vein normal map. ``palmate`` radiates veins from the
+    base; every other shape uses a pinnate herringbone off the midrib.
+    """
+    img = Image.new("L", (size, size), 255)  # white lamina
+    draw = ImageDraw.Draw(img)
+    cx = size * 0.5
+    midrib = max(2, int(size * 0.035))
+
+    if shape == "palmate":
+        base = (cx, size * 0.5)
+        for k in range(5):
+            ang = math.radians(-90 + (k - 2) * 32.0)  # fan upward from centre
+            tip = (base[0] + size * 0.55 * math.sin(ang),
+                   base[1] - size * 0.55 * math.cos(ang))
+            draw.line([base, tip], fill=45, width=max(2, midrib - 1))
+    else:
+        # Midrib: tapered wedge, thick at the base (tex_v≈0, top row) → thin at tip.
+        top, bot = int(size * 0.04), int(size * 0.96)
+        draw.polygon(
+            [(cx - midrib, top), (cx + midrib, top),
+             (cx + max(1, midrib // 3), bot), (cx - max(1, midrib // 3), bot)],
+            fill=45,
+        )
+        # Secondary veins: herringbone, alternating up the midrib toward the margin.
+        for i in range(1, vein_pairs + 1):
+            t = i / (vein_pairs + 1)
+            y = top + (bot - top) * t
+            reach = size * 0.42 * (1.0 - 0.5 * t)
+            rise = size * 0.10
+            draw.line([(cx, y), (cx + reach, y - rise)], fill=80, width=2)
+            draw.line([(cx, y), (cx - reach, y - rise)], fill=80, width=2)
+
+    # Petiole base: opaque wedge at the attachment end (tex_v≈0 → top).
+    draw.polygon([(cx - midrib * 1.6, 0), (cx + midrib * 1.6, 0),
+                  (cx, int(size * 0.10))], fill=30)
+
+    a = np.asarray(img, dtype=np.float32) / 255.0
+    a = ndimage.gaussian_filter(a, sigma=1.0, mode="nearest")
+    return a
 
 
 # ---------- REGISTRY ----------

@@ -90,6 +90,9 @@ geom:
   leaf_splay_deg: 30.0
   foliage_depth: 4
   leaf_autumn_color: [0.85, 0.25, 0.10]  # fiery red-orange
+  # Hero blade (P2): folded midrib + gentle recurve across the palmate lobes.
+  leaf_blade_fold_deg: 12.0
+  leaf_blade_curl: 0.12
   leaf_sun_shade_k: 0.6
   petiole_length_ratio: 0.4
   petiole_radius_ratio: 0.02

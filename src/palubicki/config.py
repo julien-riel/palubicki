@@ -317,6 +317,33 @@ class GeomConfig:
     # to read as autumn foliage; only takes effect when leaf_phenology drives
     # leaves into SENESCENT.
     leaf_autumn_color: tuple[float, float, float] | None = None
+    # --- Photoreal master (#73 / export pipeline P2) ---
+    # Emit the PBR map set (tangent-space normal + packed ORM + cuticle specular +
+    # leaf back-light) on the bark/leaf materials. Geometry-neutral (no vertex
+    # change), so the canonical master is photoreal by default; target profiles
+    # (P3) strip what a given engine can't read. Maps are baked from the clean
+    # procedural sources in _textures.py (never a lit photo).
+    enable_pbr_maps: bool = field(default=True, metadata={"ui": {"label": "PBR maps"}})
+    # Bark normal-map bump depth (mirrors normalTexture.scale at runtime); only
+    # emitted for proc bark, where a clean height field exists.
+    bark_normal_strength: float = field(default=1.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    # Leaf vein/midrib normal-map depth.
+    leaf_normal_strength: float = field(default=0.6, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    # Leaf back-light strength (KHR_materials_diffuse_transmission factor; the
+    # extension is forward-looking metadata in 2026). 0 = no transmission emitted.
+    leaf_translucency: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Cuticle / dielectric specular (KHR_materials_specular). 0 = omit.
+    bark_specular: float = field(default=0.2, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    leaf_specular: float = field(default=0.35, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Geometric hero blade (geom/leaf_blade3d.py): midrib crease half-angle (deg)
+    # + longitudinal recurve depth (fraction of blade length). 0/0 = flat alpha
+    # card (legacy, byte-identical). Broadleaf-only (flat needles stay planar).
+    leaf_blade_fold_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 80.0, "step": 1.0}})
+    leaf_blade_curl: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}})
+    # Seasons: emit KHR_materials_variants ("summer"/"autumn") on the leaf
+    # material, swapping base colour. Needs leaf_autumn_color; use *instead of*
+    # the COLOR_1 phenology tint, not alongside it.
+    leaf_season_variants: bool = field(default=False, metadata={"ui": {"label": "Season variants"}})
     # --- Compound leaves (#6) ---
     leaf_kind: Literal["simple", "pinnate", "palmate", "bipinnate"] = field(
         default="simple", metadata={"ui": {"label": "Leaf kind"}}
@@ -633,6 +660,21 @@ class Config:
             raise ConfigError(
                 "geom.leaf_autumn_color must be 3 floats in [0, 1], "
                 f"got {g.leaf_autumn_color}"
+            )
+        for fname in ("bark_normal_strength", "leaf_normal_strength",
+                      "bark_specular", "leaf_specular", "leaf_blade_curl"):
+            v = getattr(g, fname)
+            if v < 0:
+                raise ConfigError(f"geom.{fname} must be >= 0, got {v}")
+        if not (0.0 <= g.leaf_translucency <= 1.0):
+            raise ConfigError(f"geom.leaf_translucency must be in [0, 1], got {g.leaf_translucency}")
+        if not (0.0 <= g.leaf_blade_fold_deg <= 80.0):
+            raise ConfigError(
+                f"geom.leaf_blade_fold_deg must be in [0, 80], got {g.leaf_blade_fold_deg}"
+            )
+        if g.leaf_season_variants and g.leaf_autumn_color is None:
+            raise ConfigError(
+                "geom.leaf_season_variants=True requires geom.leaf_autumn_color to be set"
             )
         if g.leaf_shape not in ("linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate"):
             raise ConfigError(
