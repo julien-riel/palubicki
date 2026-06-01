@@ -142,8 +142,9 @@ def resolve_leaflet_blade(geom) -> tuple[str, str, float]:
 def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
     """A capped-less cylinder between 3D points p0->p1, radius0 at p0 and
     radius1 at p1 (radius0==radius1 = constant). Returns
-    (positions(2R,3), normals(2R,3), uvs(2R,2), indices(6R,)) with indices
-    offset by base_index."""
+    (positions(2R,3), normals(2R,3), uvs(2R,2), tangents(2R,4), indices(6R,)) with
+    indices offset by base_index. The tangent is the ring's azimuthal direction
+    (handedness +1) so the stem carries a valid TANGENT alongside the trunk."""
     # Function-local import to avoid a leaves<->compound_leaf import cycle.
     from palubicki.geom.leaves import _basis_perpendicular_to
 
@@ -153,7 +154,8 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
     length = float(np.linalg.norm(axis))
     if length < 1e-12:
         z = np.zeros((0, 3), np.float32)
-        return z, z, np.zeros((0, 2), np.float32), np.zeros((0,), np.uint32)
+        return (z, z, np.zeros((0, 2), np.float32),
+                np.zeros((0, 4), np.float32), np.zeros((0,), np.uint32))
     axis = axis / length
     right, forward = _basis_perpendicular_to(axis)
     ang = np.linspace(0.0, 2.0 * np.pi, ring_sides, endpoint=False)
@@ -161,11 +163,18 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
         np.cos(ang)[:, None] * right[None, :]
         + np.sin(ang)[:, None] * forward[None, :]
     )  # (R, 3) unit
+    azi = (
+        -np.sin(ang)[:, None] * right[None, :]
+        + np.cos(ang)[:, None] * forward[None, :]
+    )  # (R, 3) azimuthal tangent
     nrm = ring.astype(np.float32)
     bottom = p0[None, :] + radius0 * ring
     top = p1[None, :] + radius1 * ring
     positions = np.concatenate([bottom, top]).astype(np.float32)
     normals = np.concatenate([nrm, nrm])
+    tangents = np.empty((2 * ring_sides, 4), np.float32)
+    tangents[:, :3] = np.concatenate([azi, azi]).astype(np.float32)
+    tangents[:, 3] = 1.0
     uvs = np.zeros((2 * ring_sides, 2), np.float32)
     idx: list[int] = []
     for k in range(ring_sides):
@@ -175,7 +184,7 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
         dd = ring_sides + (k + 1) % ring_sides
         idx += [a, c, b, b, c, dd]
     indices = np.asarray(idx, dtype=np.uint32) + np.uint32(base_index)
-    return positions, normals, uvs, indices
+    return positions, normals, uvs, tangents, indices
 
 
 def build_rachis_primitive(
@@ -191,6 +200,12 @@ def build_rachis_primitive(
         leaf_basis,
         selected_leaves,
     )
+    from palubicki.geom.wind import (
+        LEAF_STIFFNESS,
+        axis_frames,
+        leaf_phase,
+    )
+    from palubicki.geom.wind import tier as wind_tier_of
 
     empty = Primitive(
         positions=np.zeros((0, 3), np.float32),
@@ -219,7 +234,10 @@ def build_rachis_primitive(
     )
     splay_rad = math.radians(splay_deg)
     droop_rad = math.radians(droop_deg)
-    pos_chunks, nrm_chunks, uv_chunks, idx_chunks = [], [], [], []
+    origin = np.asarray(tree.root.position, dtype=np.float64)  # tree-relative phase
+    frames = axis_frames(tree)  # branch-base pivot + axis tier (rides the branch swing)
+    pos_chunks, nrm_chunks, uv_chunks, tan_chunks, idx_chunks = [], [], [], [], []
+    wind_chunks, pivot_chunks, tier_chunks = [], [], []
     cursor = 0
     for leaf, stem_dir, source_iod, render_pos in records:
         eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
@@ -227,22 +245,35 @@ def build_rachis_primitive(
             stem_dir, leaf.azimuth, splay_rad, droop_rad
         )
         center = np.asarray(render_pos, dtype=np.float64)
+        # Stems are tier-2 detail riding with their branch: same per-leaf phase, low
+        # stiffness, pivot at the branch base (so they swing with the branch) — but
+        # leafMask 0 (a stem doesn't flutter along a normal the way a blade does).
+        phase = leaf_phase(render_pos, leaf.azimuth, origin)
+        base, axis_order = frames.get(id(leaf.parent_node), (render_pos, 0))
+        branch_pivot = np.asarray(base, dtype=np.float32)
+        stem_tier = float(wind_tier_of(axis_order))
 
         def lift(uv, _center=center, _u=rot_axis_u, _up=leaf_up, _eff=eff):
             u, v = uv
             return _center + _eff * (u * _u + v * _up)
 
         for s_uv, e_uv, r0, r1 in layout.rachis_segments:
-            p, nn, uv, ix = _emit_cylinder(
+            p, nn, uv, tan, ix = _emit_cylinder(
                 lift(s_uv), lift(e_uv), r0 * eff, r1 * eff, ring_sides, cursor
             )
             if p.shape[0] == 0:
                 continue
+            nv = p.shape[0]
             pos_chunks.append(p)
             nrm_chunks.append(nn)
             uv_chunks.append(uv)
+            tan_chunks.append(tan)
             idx_chunks.append(ix)
-            cursor += p.shape[0]
+            wind_chunks.append(np.tile(
+                np.array([phase, LEAF_STIFFNESS, 0.0], np.float32), (nv, 1)))
+            pivot_chunks.append(np.tile(branch_pivot, (nv, 1)))
+            tier_chunks.append(np.full((nv,), stem_tier, np.float32))
+            cursor += nv
     if not pos_chunks:
         return empty
     return Primitive(
@@ -251,4 +282,8 @@ def build_rachis_primitive(
         uvs=np.concatenate(uv_chunks),
         indices=np.concatenate(idx_chunks),
         material=material,
+        wind=np.concatenate(wind_chunks),
+        pivot=np.concatenate(pivot_chunks),
+        wind_tier=np.concatenate(tier_chunks),
+        tangents=np.concatenate(tan_chunks),
     )

@@ -114,7 +114,11 @@ def test_render_glb_produces_image(tmp_path):
 
 # ---------- vertex color roundtrip ----------
 
-def _tinted_tri_mesh():
+def _color0_tri_mesh():
+    # The visible per-vertex color of a generic glb rides COLOR_0, which is what
+    # trimesh surfaces (as visual "color") and what render/io reads back into
+    # Primitive.tint. In palubicki's own exports COLOR_0 carries wind, so we drive
+    # the COLOR_0 stream here via the wind field.
     from palubicki.geom.mesh import Material, Mesh, Primitive
     mat = Material(name="bark", base_color=(0.3, 0.2, 0.1, 1.0), metallic=0.0, roughness=1.0,
                    base_color_texture_png=None, alpha_mode="OPAQUE", alpha_cutoff=0.5,
@@ -125,18 +129,18 @@ def _tinted_tri_mesh():
         uvs=np.zeros((4, 2), np.float32),
         indices=np.array([0, 1, 2, 1, 3, 2], np.uint32),
         material=mat,
-        colors=np.array([[0.8, 0.7, 0.6]] * 4, np.float32),
+        wind=np.array([[0.8, 0.7, 0.6]] * 4, np.float32),
     )
     return Mesh(primitives=[prim])
 
 
-def test_glb_roundtrip_preserves_vertex_colors(tmp_path):
+def test_glb_roundtrip_reads_color0_vertex_data(tmp_path):
     from palubicki.export.gltf import write_glb
     from palubicki.render.io import _glb_to_mesh
     out = tmp_path / "tinted.glb"
-    write_glb(_tinted_tri_mesh(), out, asset_meta={"seed": 1})
+    write_glb(_color0_tri_mesh(), out, asset_meta={"seed": 1})
     mesh = _glb_to_mesh(out)
-    cols = mesh.primitives[0].colors
+    cols = mesh.primitives[0].tint
     assert cols is not None
-    # tint recovered (allow trimesh's 8-bit color quantization)
+    # COLOR_0 recovered (allow trimesh's 8-bit color quantization)
     np.testing.assert_allclose(cols.mean(axis=0), [0.8, 0.7, 0.6], atol=0.02)

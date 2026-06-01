@@ -17,6 +17,7 @@ class ExportError(RuntimeError):
 
 _COMPONENT_FLOAT = pygltflib.FLOAT
 _COMPONENT_UINT = pygltflib.UNSIGNED_INT
+_TYPE_VEC4 = pygltflib.VEC4
 _TYPE_VEC3 = pygltflib.VEC3
 _TYPE_VEC2 = pygltflib.VEC2
 _TYPE_SCALAR = pygltflib.SCALAR
@@ -63,6 +64,65 @@ def _add_accessor(
         kwargs["max"] = array.max(axis=0).tolist()
     accessors.append(pygltflib.Accessor(**kwargs))
     return len(accessors) - 1
+
+
+def _add_primitive_attributes(
+    prim,
+    buffer_data: bytearray,
+    buffer_views: list,
+    accessors: list,
+) -> pygltflib.Attributes:
+    """Build the glTF ``Attributes`` for one mesh primitive, data-driven.
+
+    POSITION / NORMAL / TEXCOORD_0 are always emitted; the optional wind/look
+    channels follow the P1 portable contract (geom/wind.py) — only emitted when
+    present on the ``Primitive``:
+
+        TANGENT    VEC4  (xyz + MikkTSpace handedness)
+        COLOR_0    VEC3  (phase, stiffness, leafMask)        ← prim.wind
+        COLOR_1    VEC3  tint (autumn / bark age)            ← prim.tint
+        TEXCOORD_1 VEC2  (pivot.x, pivot.y)                  ┐ prim.pivot, split
+        TEXCOORD_2 VEC2  (pivot.z, wind_tier)                ┘ (TEXCOORD is VEC2-only)
+
+    Custom semantics (``COLOR_1`` / ``TEXCOORD_2``) are set via ``setattr`` —
+    pygltflib's ``Attributes`` round-trips arbitrary attribute names.
+    """
+    v = prim.positions.shape[0]
+    attrs = pygltflib.Attributes()
+    attrs.POSITION = _add_accessor(buffer_data, buffer_views, accessors, prim.positions,
+                                   _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=True)
+    attrs.NORMAL = _add_accessor(buffer_data, buffer_views, accessors, prim.normals,
+                                 _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
+    attrs.TEXCOORD_0 = _add_accessor(buffer_data, buffer_views, accessors, prim.uvs,
+                                     _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+
+    def _ok(arr) -> bool:
+        return arr is not None and arr.shape[0] == v
+
+    if _ok(prim.tangents):
+        attrs.TANGENT = _add_accessor(buffer_data, buffer_views, accessors,
+                                      np.ascontiguousarray(prim.tangents, dtype=np.float32),
+                                      _COMPONENT_FLOAT, _TYPE_VEC4, _TARGET_ARRAY, with_minmax=False)
+    if _ok(prim.wind):
+        attrs.COLOR_0 = _add_accessor(buffer_data, buffer_views, accessors,
+                                      np.ascontiguousarray(prim.wind, dtype=np.float32),
+                                      _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
+    if _ok(prim.tint):
+        attrs.COLOR_1 = _add_accessor(buffer_data, buffer_views, accessors,
+                                      np.ascontiguousarray(prim.tint, dtype=np.float32),
+                                      _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
+    if _ok(prim.pivot):
+        pivot = np.ascontiguousarray(prim.pivot, dtype=np.float32)
+        attrs.TEXCOORD_1 = _add_accessor(buffer_data, buffer_views, accessors,
+                                         np.ascontiguousarray(pivot[:, :2], dtype=np.float32),
+                                         _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+        tier = (prim.wind_tier if (prim.wind_tier is not None and prim.wind_tier.shape[0] == v)
+                else np.zeros(v, dtype=np.float32))
+        t2 = np.ascontiguousarray(
+            np.column_stack([pivot[:, 2], np.asarray(tier, dtype=np.float32)]), dtype=np.float32)
+        attrs.TEXCOORD_2 = _add_accessor(buffer_data, buffer_views, accessors, t2,
+                                         _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
+    return attrs
 
 
 def _add_material(

@@ -160,6 +160,7 @@ function attachActions() {
   document.getElementById("export-yaml-btn").addEventListener("click", exportYaml);
   document.getElementById("toggle-leaves-btn").addEventListener("click", toggleLeaves);
   document.getElementById("toggle-wireframe-btn").addEventListener("click", toggleWireframe);
+  document.getElementById("toggle-wind-btn").addEventListener("click", toggleWind);
 
   const debugToggle = document.getElementById("debug-capture-toggle");
   debugToggle.addEventListener("change", () => {
@@ -228,6 +229,13 @@ function toggleLeaves() {
   });
 }
 
+function toggleWind() {
+  viewer.windOn = !viewer.windOn;
+  viewer.wind.uGustStrength.value = viewer.windOn ? 1.0 : 0.0;
+  document.getElementById("toggle-wind-btn").textContent =
+    "Wind: " + (viewer.windOn ? "on" : "off");
+}
+
 let wireframe = false;
 function toggleWireframe() {
   wireframe = !wireframe;
@@ -265,7 +273,11 @@ function initViewer() {
   const debugRoot = new THREE.Group();
   scene.add(debugRoot);
 
-  viewer = { scene, camera, renderer, controls, treeRoot, debugRoot, debugLayers: {} };
+  const wind = WindFX.createUniforms();
+  const clock = new THREE.Clock();
+
+  viewer = { scene, camera, renderer, controls, treeRoot, debugRoot, debugLayers: {},
+             wind, clock, windOn: true };
 
   window.addEventListener("resize", () => {
     resizeRenderer(renderer);
@@ -275,6 +287,7 @@ function initViewer() {
 
   function animate() {
     requestAnimationFrame(animate);
+    WindFX.tick(wind, clock.getDelta());
     controls.update();
     renderer.render(scene, camera);
   }
@@ -326,6 +339,12 @@ function replaceTree(arrayBuffer) {
     loader.parse(arrayBuffer, "", (gltf) => {
       disposeChildren(viewer.treeRoot);
       viewer.treeRoot.add(gltf.scene);
+      // Size the global-sway term to the tree, then bind the reference wind shader.
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      if (!box.isEmpty()) {
+        viewer.wind.uTreeHeight.value = Math.max(0.5, box.getSize(new THREE.Vector3()).y);
+      }
+      WindFX.apply(gltf.scene, viewer.wind);
       fitCameraToObject(viewer.camera, viewer.controls, gltf.scene);
       resolve();
     }, (err) => {

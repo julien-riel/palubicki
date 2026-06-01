@@ -48,14 +48,13 @@ import pygltflib
 from palubicki.export._glb_common import (
     _COMPONENT_FLOAT,
     _COMPONENT_UINT,
-    _TARGET_ARRAY,
     _TARGET_ELEMENT_ARRAY,
     _TYPE_SCALAR,
-    _TYPE_VEC2,
     _TYPE_VEC3,
     ExportError,
     _add_accessor,
     _add_material,
+    _add_primitive_attributes,
 )
 from palubicki.geom.mesh import Material, Mesh, Primitive
 
@@ -111,24 +110,16 @@ def write_glb_forest(forest, cfg, output_path: Path, *, asset_meta: dict) -> Non
     def _emit_mesh(prims: list[Primitive]) -> int:
         gltf_prims: list[pygltflib.Primitive] = []
         for prim in prims:
-            pos_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.positions,
-                                    _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=True)
-            nor_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.normals,
-                                    _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
-            uv_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.uvs,
-                                   _COMPONENT_FLOAT, _TYPE_VEC2, _TARGET_ARRAY, with_minmax=False)
-            col_acc = None
-            if prim.colors is not None and prim.colors.shape[0] == prim.positions.shape[0]:
-                col_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.colors,
-                                        _COMPONENT_FLOAT, _TYPE_VEC3, _TARGET_ARRAY, with_minmax=False)
+            attributes = _add_primitive_attributes(prim, buffer_data, buffer_views, accessors)
             idx_acc = _add_accessor(buffer_data, buffer_views, accessors, prim.indices,
                                     _COMPONENT_UINT, _TYPE_SCALAR, _TARGET_ELEMENT_ARRAY, with_minmax=False)
+            # COLOR_0 is wind data — neutralize base colour on the tint stream (COLOR_1).
+            has_tint = prim.tint is not None and prim.tint.shape[0] == prim.positions.shape[0]
             mat_idx = _add_material(prim.material, buffer_data, buffer_views,
                                     materials, textures, images, samplers,
-                                    neutralize_base_color=col_acc is not None)
+                                    neutralize_base_color=has_tint)
             gltf_prims.append(pygltflib.Primitive(
-                attributes=pygltflib.Attributes(POSITION=pos_acc, NORMAL=nor_acc,
-                                                TEXCOORD_0=uv_acc, COLOR_0=col_acc),
+                attributes=attributes,
                 indices=idx_acc,
                 material=mat_idx,
             ))
@@ -269,20 +260,32 @@ def _cluster_forest(forest, cfg) -> list[_Cluster]:
 
 def _localized_primitives(mesh: Mesh, anchor: np.ndarray) -> list[Primitive]:
     """Return the mesh's non-empty primitives with positions shifted so the tree's
-    collar anchor lands at the local origin. Other attributes are shared by
-    reference (read-only); positions are a fresh array (``sim/`` untouched)."""
+    collar anchor lands at the local origin. The wind ``pivot`` is also a position,
+    so it is shifted by the same anchor (keeping vertex - pivot intact under the
+    per-instance transform); directions/scalars (normals, tangents, wind, tint,
+    wind_tier) are shared by reference (read-only). ``sim/`` is untouched —
+    positions/pivot are fresh arrays."""
     out: list[Primitive] = []
     for prim in mesh.primitives:
-        if prim.positions.shape[0] == 0:
+        # Skip degenerate primitives (no verts, or verts but no triangles) — a
+        # 0-count accessor is invalid glTF and a triangle-less prim renders nothing.
+        if prim.positions.shape[0] == 0 or prim.indices.shape[0] == 0:
             continue
         local_pos = (prim.positions.astype(np.float64) - anchor).astype(np.float32)
+        local_pivot = None
+        if prim.pivot is not None:
+            local_pivot = (prim.pivot.astype(np.float64) - anchor).astype(np.float32)
         out.append(Primitive(
             positions=local_pos,
             normals=prim.normals,
             uvs=prim.uvs,
             indices=prim.indices,
             material=prim.material,
-            colors=prim.colors,
+            tint=prim.tint,
+            wind=prim.wind,
+            pivot=local_pivot,
+            wind_tier=prim.wind_tier,
+            tangents=prim.tangents,
         ))
     return out
 
@@ -327,10 +330,15 @@ def _geom_close(a: list[Primitive], b: list[Primitive]) -> bool:
             return False
         if not np.allclose(pa.uvs, pb.uvs, rtol=0.0, atol=_GEOM_ATOL):
             return False
-        if (pa.colors is None) != (pb.colors is None):
-            return False
-        if pa.colors is not None and not np.allclose(pa.colors, pb.colors, rtol=0.0, atol=_GEOM_ATOL):
-            return False
+        # Wind/look attributes are derived deterministically from the geometry, so
+        # matching positions implies matching wind — but compare them anyway so a
+        # shared mesh can never silently flatten differing per-vertex streams.
+        for attr in ("tint", "wind", "pivot", "wind_tier", "tangents"):
+            va, vb = getattr(pa, attr), getattr(pb, attr)
+            if (va is None) != (vb is None):
+                return False
+            if va is not None and not np.allclose(va, vb, rtol=0.0, atol=_GEOM_ATOL):
+                return False
     return True
 
 

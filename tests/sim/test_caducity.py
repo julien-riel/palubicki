@@ -156,19 +156,19 @@ def test_autumn_color_tints_only_senescent_leaves():
     tree = _leafy_tree(n_leaves=1)
     autumn = (0.9, 0.4, 0.1)
 
-    # All ACTIVE + autumn set -> no COLOR_0 (nothing senescing yet).
+    # All ACTIVE + autumn set -> no tint (COLOR_1) yet (nothing senescing).
     prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=autumn)
-    assert prim.colors is None
+    assert prim.tint is None
 
-    # Senescing leaf -> COLOR_0 present; its verts carry the autumn tint.
+    # Senescing leaf -> tint (COLOR_1) present; its verts carry the autumn colour.
     tree.root.leaves[0].state = LeafState.SENESCENT
     prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=autumn)
-    assert prim.colors is not None
-    assert np.allclose(prim.colors[0], autumn)
+    assert prim.tint is not None
+    assert np.allclose(prim.tint[0], autumn)
 
-    # No autumn_color -> never emit COLOR_0 even when senescing.
+    # No autumn_color -> never emit a tint stream even when senescing.
     prim = blp(tree, leaf_size=0.1, material=mat, foliage_depth=1, autumn_color=None)
-    assert prim.colors is None
+    assert prim.tint is None
 
 
 def test_marcescent_retains_senescent_through_winter_drops_in_spring():
