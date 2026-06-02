@@ -349,6 +349,22 @@ def test_root_only_tree_returns_zeros():
     assert m["trunk_base_diameter"] == pytest.approx(0.0)
     assert m["crown_radius"] == pytest.approx(0.0)
     assert m["total_leaf_area"] == pytest.approx(0.0)
+    # foliage_area_density guards against the zero-crown divide (#7).
+    assert m["foliage_area_density"] == pytest.approx(0.0)
+
+
+def test_foliage_area_density_formula_and_guard():
+    """foliage_area_density = total_leaf_area / (pi * crown_radius^2), with a
+    zero-radius guard (#7). Derived from total_leaf_area, so it inherits fascicle
+    multiplicity for free (a 5-needle bundle -> ~5x total_leaf_area -> ~5x density)."""
+    from palubicki.sim.diagnostics import _foliage_area_density
+
+    assert _foliage_area_density(2.0, 12.0) == pytest.approx(12.0 / (math.pi * 4.0))
+    assert _foliage_area_density(0.0, 5.0) == 0.0      # zero crown -> guarded, no ZeroDivision
+    # linear in total_leaf_area at fixed crown -> 5x area gives 5x density
+    d1 = _foliage_area_density(2.0, 3.0)
+    d5 = _foliage_area_density(2.0, 15.0)
+    assert d5 == pytest.approx(5.0 * d1)
 
 
 @pytest.mark.slow
@@ -875,6 +891,32 @@ def test_leader_deviation_within_species_bound(species):
     assert not math.isnan(dev), f"{species}: leader_deviation_deg is NaN"
     lo, hi = bound
     assert lo <= dev <= hi, f"{species}: leader_deviation_deg={dev:.1f} outside {bound}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("species", ["pine", "fir"])
+def test_conifer_height_and_trunk_within_band(species):
+    """#7 guard: coupling real needle area into the LAI grid forced an apical-
+    dominance re-calibration (raised lambda_apical). That silently pushed pine
+    tree_height OVER and trunk_base_diameter UNDER their literature bands until
+    shoot_extension_max / pipe_exponent were re-tuned — neither was guarded by any
+    simulated-tree test. This pins both for the conifers at design density (seed 0)
+    so the calibration can't drift back out of band unnoticed."""
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.diagnostics import MetricRanges
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species=species)
+    m = compute_metrics(simulate(cfg), cfg=cfg)
+    ranges = MetricRanges.from_species(species)
+    for key, band in (("tree_height", ranges.tree_height),
+                      ("trunk_base_diameter", ranges.trunk_base_diameter)):
+        assert band is not None, f"{species}: no {key} band"
+        lo, hi = band
+        assert lo <= m[key] <= hi, f"{species}: {key}={m[key]:.4f} outside {band}"
 
 
 @pytest.mark.slow

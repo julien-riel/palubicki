@@ -75,6 +75,28 @@ def compute_effective_leaf_size(
     return leaf_size
 
 
+def fascicle_offsets(count: int, spread_deg: float) -> list[tuple[float, float]]:
+    """Per-member ``(azimuth_offset, extra_splay_rad)`` for a needle fascicle (#7).
+
+    A fascicle is the bundle of 2–5 needles a pine seats at one position. Each
+    member is distributed ``2π/count`` apart in azimuth around the shared bundle
+    axis and tilted off it by ``spread_deg`` (added on top of the base
+    ``leaf_splay_deg``), giving the symmetric V/star a real pine bundle shows.
+
+    ``count <= 1`` returns ``[(0.0, 0.0)]`` — the single no-op member — and the
+    callers special-case ``offset == 0.0`` so the legacy single-needle lift is
+    reproduced byte-for-byte (every broadleaf species, and conifers before opting
+    in, stay identical). Shared by :func:`build_leaves_primitive` (geometry) and
+    :func:`leaf_area_records` (occluding area) so the ``.glb`` and the light grid
+    cannot disagree about fascicle multiplicity.
+    """
+    if count <= 1:
+        return [(0.0, 0.0)]
+    extra_splay = math.radians(spread_deg)
+    step = 2.0 * math.pi / count
+    return [(m * step, extra_splay) for m in range(count)]
+
+
 def build_leaves_primitive(
     tree: Tree,
     *,
@@ -95,6 +117,8 @@ def build_leaves_primitive(
     autumn_color: tuple[float, float, float] | None = None,
     blade_fold_deg: float = 0.0,
     blade_curl: float = 0.0,
+    fascicle_count: int = 1,
+    fascicle_spread_deg: float = 0.0,
 ) -> Primitive:
     """Triangulate every selected (apex-proximal, ACTIVE) leaf on the tree.
 
@@ -154,6 +178,12 @@ def build_leaves_primitive(
     blade_i_count = blade_idx.shape[0]
     n_planes = 2 if leaf_shape == "linear" else 1
 
+    # #7: fascicle members. Needle-only — broadleaves keep fasc_count == 1 (a single
+    # no-op member) so their geometry stays byte-identical. Each conifer needle
+    # position then emits fasc_count needles fanned around the shared bundle axis.
+    fasc_count = fascicle_count if leaf_shape == "linear" else 1
+    members = fascicle_offsets(fasc_count, fascicle_spread_deg)
+
     # Hero blade (P2, geom/leaf_blade3d.py): displace the flat outline into a folded,
     # recurved blade with smooth per-vertex normals + tangents. Opt-in (fold/curl > 0)
     # and broadleaf-only — flat needles (n_planes == 2) keep the legacy plane, and
@@ -169,27 +199,29 @@ def build_leaves_primitive(
 
     verts_per_leaf = n_planes * blade_v_count * leaflets_per_leaf
     idx_per_leaf = n_planes * blade_i_count * leaflets_per_leaf
-    n = len(records)
-    positions = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
-    normals = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
-    uvs = np.empty((n * verts_per_leaf, 2), dtype=np.float32)
-    indices = np.empty((n * idx_per_leaf,), dtype=np.uint32)
+    # One blade-group per (record × fascicle member): vert/index count grows
+    # strictly linearly with fascicle_count.
+    n_groups = len(records) * fasc_count
+    positions = np.empty((n_groups * verts_per_leaf, 3), dtype=np.float32)
+    normals = np.empty((n_groups * verts_per_leaf, 3), dtype=np.float32)
+    uvs = np.empty((n_groups * verts_per_leaf, 2), dtype=np.float32)
+    indices = np.empty((n_groups * idx_per_leaf,), dtype=np.uint32)
 
     # Wind contract (geom/wind.py): leafMask = 1 (flutter), near-zero stiffness
     # (always flexible), per-leaf phase so the canopy shimmers out of step. pivot +
     # wind_tier come from the leaf's branch axis (so foliage rides that branch's
     # swing and a trunk-apex leaf stays tier 0); TANGENT is the blade frame's U axis.
-    wind = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
-    pivot = np.empty((n * verts_per_leaf, 3), dtype=np.float32)
-    wind_tier = np.empty((n * verts_per_leaf,), dtype=np.float32)
-    tangents = np.empty((n * verts_per_leaf, 4), dtype=np.float32)
+    wind = np.empty((n_groups * verts_per_leaf, 3), dtype=np.float32)
+    pivot = np.empty((n_groups * verts_per_leaf, 3), dtype=np.float32)
+    wind_tier = np.empty((n_groups * verts_per_leaf,), dtype=np.float32)
+    tangents = np.empty((n_groups * verts_per_leaf, 4), dtype=np.float32)
 
     # Autumn tint (#61): per-vertex COLOR_1 (tint) only when a SENESCENT leaf is
     # present and a tint is configured. Otherwise tint stays None — byte-identical
     # to the pre-caducity output (all-ACTIVE / phenology-off case).
     senescing = any(leaf.state is LeafState.SENESCENT for leaf, *_ in records)
     want_colors = autumn_color is not None and senescing
-    colors = np.empty((n * verts_per_leaf, 3), dtype=np.float32) if want_colors else None
+    colors = np.empty((n_groups * verts_per_leaf, 3), dtype=np.float32) if want_colors else None
     autumn = np.asarray(autumn_color, dtype=np.float32) if want_colors else None
 
     splay_rad = math.radians(splay_deg)
@@ -200,31 +232,41 @@ def build_leaves_primitive(
     frames = axis_frames(tree)
     for i, (leaf, stem_dir, source_iod, render_pos) in enumerate(records):
         eff_size = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
-        v_start = i * verts_per_leaf
-        i_start = i * idx_per_leaf
-        _lift_compound_leaf(
-            render_pos, stem_dir, leaf.azimuth, eff_size, splay_rad, n_planes,
-            leaflets, blade_pos_unit, blade_uv, blade_idx,
-            positions[v_start : v_start + verts_per_leaf],
-            normals[v_start : v_start + verts_per_leaf],
-            uvs[v_start : v_start + verts_per_leaf],
-            indices[i_start : i_start + idx_per_leaf],
-            v_start, droop_rad,
-            tangents[v_start : v_start + verts_per_leaf],
-            blade_norm_local, blade_tan_local,
-        )
-        wind[v_start : v_start + verts_per_leaf] = (
-            leaf_phase(render_pos, leaf.azimuth, origin), LEAF_STIFFNESS, 1.0
-        )
+        # All members of a bundle ride the same branch -> share one phase / pivot /
+        # tier (computed once per record). leafMask 1: every needle flutters.
+        phase = leaf_phase(render_pos, leaf.azimuth, origin)
         branch_pivot, axis_order = frames.get(id(leaf.parent_node), (render_pos, 0))
-        pivot[v_start : v_start + verts_per_leaf] = np.asarray(branch_pivot, dtype=np.float32)
-        wind_tier[v_start : v_start + verts_per_leaf] = float(wind_tier_of(axis_order))
-        if want_colors:
-            # SENESCENT -> autumn tint; ACTIVE -> neutral white (COLOR_1 multiply
-            # is a no-op, so green leaves render unchanged).
-            colors[v_start : v_start + verts_per_leaf] = (
-                autumn if leaf.state is LeafState.SENESCENT else 1.0
+        bp = np.asarray(branch_pivot, dtype=np.float32)
+        tier = float(wind_tier_of(axis_order))
+        for m, (az_off, extra_splay) in enumerate(members):
+            # offset == 0.0 -> pass the original untouched. fasc_count == 1 returns
+            # (0.0, 0.0) so it reproduces the legacy lift byte-for-byte; in a multi-
+            # member bundle the m == 0 member keeps the legacy AZIMUTH but, like every
+            # member, receives the bundle's extra_splay (the whole tuft splays).
+            az = leaf.azimuth if az_off == 0.0 else leaf.azimuth + az_off
+            sp = splay_rad if extra_splay == 0.0 else splay_rad + extra_splay
+            v_start = (i * fasc_count + m) * verts_per_leaf
+            i_start = (i * fasc_count + m) * idx_per_leaf
+            _lift_compound_leaf(
+                render_pos, stem_dir, az, eff_size, sp, n_planes,
+                leaflets, blade_pos_unit, blade_uv, blade_idx,
+                positions[v_start : v_start + verts_per_leaf],
+                normals[v_start : v_start + verts_per_leaf],
+                uvs[v_start : v_start + verts_per_leaf],
+                indices[i_start : i_start + idx_per_leaf],
+                v_start, droop_rad,
+                tangents[v_start : v_start + verts_per_leaf],
+                blade_norm_local, blade_tan_local,
             )
+            wind[v_start : v_start + verts_per_leaf] = (phase, LEAF_STIFFNESS, 1.0)
+            pivot[v_start : v_start + verts_per_leaf] = bp
+            wind_tier[v_start : v_start + verts_per_leaf] = tier
+            if want_colors:
+                # SENESCENT -> autumn tint; ACTIVE -> neutral white (COLOR_1 multiply
+                # is a no-op, so green leaves render unchanged).
+                colors[v_start : v_start + verts_per_leaf] = (
+                    autumn if leaf.state is LeafState.SENESCENT else 1.0
+                )
     return Primitive(
         positions=positions, normals=normals, uvs=uvs, indices=indices,
         material=material, tint=colors, wind=wind, pivot=pivot,
@@ -384,14 +426,28 @@ def leaf_area_records(
     splay_rad = math.radians(g.leaf_splay_deg)
     n_planes = 2 if b_shape == "linear" else 1
     plane_b_factor = 1.0 if n_planes == 2 else 0.0
-    pair_area = unit_blade_area * (math.cos(splay_rad) + plane_b_factor)
     leaflet_scale_sq_sum = sum(scale * scale for (_uv, _a, scale) in layout.leaflets)
-    unit_area = pair_area * leaflet_scale_sq_sum
+
+    # #7: one area record per (position × fascicle member), mirroring
+    # build_leaves_primitive exactly — each member's extra splay shears its plane-A
+    # blade by cos(splay + extra). Needle-only; broadleaves get the single no-op
+    # member, so the per-record area (and the total_leaf_area species pins) are
+    # bit-for-bit unchanged. A 5-needle pine fascicle deposits 5× the needle area
+    # into its cell, so the conifer LAI grid now reflects real fascicle multiplicity.
+    fasc_count = g.fascicle_count if b_shape == "linear" else 1
+    member_unit_area: list[float] = []
+    for _az, extra_splay in fascicle_offsets(fasc_count, g.fascicle_spread_deg):
+        sp = splay_rad if extra_splay == 0.0 else splay_rad + extra_splay
+        member_unit_area.append(
+            unit_blade_area * (math.cos(sp) + plane_b_factor) * leaflet_scale_sq_sum
+        )
 
     out: list[tuple[np.ndarray, float]] = []
     for _leaf, _stem_dir, source_iod, pos in records:
         eff = compute_effective_leaf_size(source_iod, g.leaf_size, g.leaf_sun_shade_k)
-        out.append((pos, unit_area * eff * eff))
+        e2 = eff * eff
+        for unit_area in member_unit_area:
+            out.append((pos, unit_area * e2))
     return out
 
 

@@ -82,6 +82,45 @@ def test_config_rejects_zero_r_tip(tmp_path):
         )
 
 
+# --- #7: fascicle field validation ---
+
+def test_config_rejects_fascicle_count_zero(tmp_path):
+    with pytest.raises(ConfigError, match="fascicle_count"):
+        _make_config(geom=GeomConfig(fascicle_count=0), output=tmp_path / "out.glb")
+
+
+def test_config_rejects_fascicle_spread_out_of_range(tmp_path):
+    with pytest.raises(ConfigError, match="fascicle_spread_deg"):
+        _make_config(geom=GeomConfig(fascicle_spread_deg=91.0), output=tmp_path / "out.glb")
+
+
+def test_config_rejects_negative_fascicle_sheath_length_ratio(tmp_path):
+    with pytest.raises(ConfigError, match="fascicle_sheath_length_ratio"):
+        _make_config(geom=GeomConfig(fascicle_sheath_length_ratio=-0.1),
+                     output=tmp_path / "out.glb")
+
+
+def test_config_rejects_bad_fascicle_sheath_color(tmp_path):
+    with pytest.raises(ConfigError, match="fascicle_sheath_color"):  # wrong length
+        _make_config(geom=GeomConfig(fascicle_sheath_color=(0.1, 0.2)),
+                     output=tmp_path / "out.glb")
+    with pytest.raises(ConfigError, match="fascicle_sheath_color"):  # out of [0, 1]
+        _make_config(geom=GeomConfig(fascicle_sheath_color=(0.1, 0.2, 1.5)),
+                     output=tmp_path / "out.glb")
+
+
+def test_config_rejects_fascicle_on_non_needle(tmp_path):
+    # fascicle_count > 1 is a conifer needle feature: simple + linear only. This
+    # guard also closes the latent mesh<->area needle-count divergence for a
+    # compound leaf whose leaflet_shape differs in linearity (#7 review).
+    with pytest.raises(ConfigError, match="fascicle_count > 1 requires"):
+        _make_config(geom=GeomConfig(fascicle_count=2, leaf_shape="ovate"),
+                     output=tmp_path / "out.glb")
+    with pytest.raises(ConfigError, match="fascicle_count > 1 requires"):
+        _make_config(geom=GeomConfig(fascicle_count=2, leaf_kind="pinnate",
+                                     leaf_shape="linear"), output=tmp_path / "out.glb")
+
+
 def test_light_config_defaults():
     from palubicki.config import LightConfig
     c = LightConfig()
@@ -91,7 +130,7 @@ def test_light_config_defaults():
     assert c.grid_resolution == (64, 64, 64)
     assert c.k_absorption == 0.5
     assert c.leaf_area_scale == 1.0
-    assert c.leaf_area == 0.04
+    assert c.needle_area_scale == 1.0
     assert c.internode_area_scale == 1.0
     assert c.n_rays == 16
     assert c.light_direction == (0.0, 1.0, 0.0)

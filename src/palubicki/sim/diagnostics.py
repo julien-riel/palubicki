@@ -476,6 +476,19 @@ def _total_leaf_area(tree: Tree, cfg: Config) -> float:
     return float(sum(area for _pos, area in leaf_area_records(tree, cfg.geom)))
 
 
+def _foliage_area_density(crown_radius: float, total_leaf_area: float) -> float:
+    """Rendered foliage area per unit crown ground area — an LAI-like density.
+
+    Derived from ``total_leaf_area`` (the shared ``leaf_area_records`` source), so
+    it automatically reflects fascicle multiplicity (#7): a 5-needle pine bundle
+    deposits 5× the needle area, lifting the density ~5×. Mirrors the ``.glb`` and
+    the light grid's LAI deposit, giving a single readback for "did the fascicles
+    actually thicken the canopy" without re-deriving area.
+    """
+    ground = math.pi * crown_radius * crown_radius
+    return total_leaf_area / ground if ground > 1e-9 else 0.0
+
+
 # ── Public entry point ────────────────────────────────────────────────────
 
 def compute_metrics(
@@ -516,9 +529,12 @@ def compute_metrics(
     out["main_axis_continuation_rate"] = _main_axis_continuation_rate(tree.root)
     out["leader_deviation_deg"] = _leader_deviation_deg(tree.root)
     if cfg is not None:
-        out["total_leaf_area"] = _total_leaf_area(tree, cfg)
+        tla = _total_leaf_area(tree, cfg)
+        out["total_leaf_area"] = tla
+        out["foliage_area_density"] = _foliage_area_density(crown_radius, tla)
     else:
         out["total_leaf_area"] = 0.0
+        out["foliage_area_density"] = 0.0
     return out
 
 
@@ -534,6 +550,7 @@ _SCALAR_KEYS = (
     "main_axis_continuation_rate",
     "leader_deviation_deg",
     "total_leaf_area",
+    "foliage_area_density",
     "internode_length_proximal_mean",
     "internode_length_distal_mean",
 )
@@ -751,7 +768,7 @@ def format_report(
     lines.append("Architecture")
     for k in ("tree_height", "trunk_base_diameter", "crown_radius",
               "main_axis_continuation_rate", "leader_deviation_deg",
-              "total_leaf_area",
+              "total_leaf_area", "foliage_area_density",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))

@@ -71,6 +71,12 @@ shedding:
 light:
   enabled: true
   k_absorption: 0.65
+  # #7: couple real per-needle area into the LAI grid (replaces the legacy
+  # terminal-bud scalar). Same 0.5 proxy correction as pine. Balsam fir bears
+  # single 2-ranked needles (no fascicle), so fascicle_count stays 1 and only the
+  # light coupling changes here; its already-strong dominance (lambda_apical 0.88)
+  # keeps the leader (continuation 1.0, leader_deviation 7deg at seed 0).
+  needle_area_scale: 0.5
 sag:
   enabled: false
 geom:

@@ -7,7 +7,7 @@ import numpy as np
 
 from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig
 from palubicki.sim.radii import compute_radii
-from palubicki.sim.tree import BudState, Tree
+from palubicki.sim.tree import Tree
 
 
 def _envelope_aabb(env: EnvelopeConfig) -> tuple[np.ndarray, np.ndarray]:
@@ -86,8 +86,9 @@ class LightGrid:
     ) -> None:
         """Full rebuild. Zero LAI, optionally recompute radii, then inject leaves + internodes.
 
-        Broadleaf occlusion is the real per-leaf blade area from ``geom`` (#62);
-        conifers keep the legacy terminal-bud scalar (see :meth:`_inject_tree`).
+        Foliage occlusion is the real per-leaf/needle blade area from ``geom``
+        (broadleaves via ``light.leaf_area_scale`` #62, conifers via
+        ``light.needle_area_scale`` #7); see :meth:`_inject_tree`.
         ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
         light grid's occlusion diameters match the vigor-seeded rendered geometry (#37).
         """
@@ -119,8 +120,9 @@ class LightGrid:
         """Full rebuild for a forest. Zero LAI → inject leaves+internodes per tree →
         apply obstacle mask (lai[mask] = LAI_OPAQUE).
 
-        Broadleaf occlusion is the real per-leaf blade area from ``geom`` (#62);
-        conifers keep the legacy terminal-bud scalar (see :meth:`_inject_tree`).
+        Foliage occlusion is the real per-leaf/needle blade area from ``geom``
+        (broadleaves via ``light.leaf_area_scale`` #62, conifers via
+        ``light.needle_area_scale`` #7); see :meth:`_inject_tree`.
         ``vigor_ref``/``vigor_diameter_gain`` are forwarded to ``compute_radii`` so the
         light grid's occlusion diameters match the vigor-seeded rendered geometry (#37)."""
         from palubicki.sim.obstacles import LAI_OPAQUE
@@ -374,51 +376,38 @@ class LightGrid:
     ) -> None:
         """Deposit one tree's internode + foliage occlusion into the LAI grid.
 
-        Foliage takes one of two paths, gated on foliage type (#62):
+        Foliage uses the *real* per-leaf blade area from
+        :func:`palubicki.geom.leaves.leaf_area_records` — the same per-Leaf area the
+        ``total_leaf_area`` diagnostic and the rendered ``.glb`` use — deposited at
+        each rendered leaf's cell, so self-shading reflects the actual foliage
+        morphology (blade shape/size, compound layout, fascicle multiplicity,
+        sun/shade). The scale is unitless and ``<= 0`` opts the foliage out:
 
-        * **Broadleaves** (``leaf_shape != "linear"``): the *real* per-leaf blade
-          area from :func:`palubicki.geom.leaves.leaf_area_records` — the same
-          per-Leaf area the ``total_leaf_area`` diagnostic and the rendered ``.glb``
-          use — deposited at each rendered leaf's cell, so self-shading reflects the
-          actual foliage morphology (blade shape/size, compound layout, sun/shade).
-          ``light.leaf_area_scale`` is a unitless multiplier; ``<= 0`` opts out.
-        * **Conifers** (``leaf_shape == "linear"``): the legacy ``light.leaf_area``
-          scalar at each terminal bud, interleaved with internode injection in the
-          *same* traversal as before #62 (so the conifer grid is byte-identical to
-          the pre-#62 output). Conifer apical dominance emerges from this canopy-
-          shell deposit; coupling real needle area lands with the conifer foliage
-          rework (#55 spray + #7 fascicles), where spray geometry, fascicles, and
-          light calibration are tuned together.
+        * **Broadleaves** (``leaf_shape != "linear"``): ``light.leaf_area_scale``.
+        * **Conifers** (``leaf_shape == "linear"``): ``light.needle_area_scale``
+          (#7). This replaces the pre-#7 terminal-bud scalar "canopy shell": conifer
+          self-shading is now physical (a 5-needle pine fascicle deposits 5× the
+          needle area into its cell), and conifer apical dominance is re-calibrated
+          against this deposit (``sim.lambda_apical`` / ``sim.vigor_ref`` /
+          ``light.k_absorption``) rather than propped up by a uniform shell — the
+          #62-deferred coupling, landed together with the #7 fascicle geometry.
         """
         is_needle = geom.leaf_shape == "linear"
-        if not is_needle:
-            scale = cfg.leaf_area_scale
-            if scale > 0.0:
-                from palubicki.geom.leaves import leaf_area_records
+        foliage_scale = cfg.needle_area_scale if is_needle else cfg.leaf_area_scale
+        if foliage_scale > 0.0:
+            from palubicki.geom.leaves import leaf_area_records
 
-                for pos, area in leaf_area_records(tree, geom):
-                    cell = self.world_to_cell(pos)
-                    if cell is not None:
-                        self.lai[cell] += area * scale / cell_volume
+            for pos, area in leaf_area_records(tree, geom):
+                cell = self.world_to_cell(pos)
+                if cell is not None:
+                    self.lai[cell] += area * foliage_scale / cell_volume
 
-        needle_lai = (cfg.leaf_area / cell_volume) if (is_needle and cfg.leaf_area > 0.0) else 0.0
         stack = [tree.root]
         while stack:
             node = stack.pop()
             for child_iod in node.children_internodes:
                 stack.append(child_iod.child_node)
                 self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
-            if not needle_lai:
-                continue
-            bud = node.terminal_bud
-            if bud is None or bud.state == BudState.DEAD:
-                continue
-            if node.children_internodes:
-                continue
-            cell = self.world_to_cell(bud.position)
-            if cell is None:
-                continue
-            self.lai[cell] += needle_lai
 
     def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""

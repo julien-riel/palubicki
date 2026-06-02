@@ -307,6 +307,29 @@ class GeomConfig:
     needle_cluster_spacing: float = field(
         default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
     )
+    # #7: conifer needle fascicles — needles bundled 2–5 (pines) and wrapped by a
+    # short basal sheath. fascicle_count == 1 (default) = each needle stands alone,
+    # so every existing species stays byte-identical. > 1 emits fascicle_count
+    # needles from each rendered needle position, distributed 360/N apart in azimuth
+    # and tilted off the shared bundle axis by fascicle_spread_deg. Needle-only
+    # (leaf_shape == "linear"); ignored for broadleaves. A *third*, intra-position
+    # multiplier composing with leaf_cluster_count (#14, phyllotactic seats) and
+    # needle_cluster_spacing (#36, along-shoot) — a node carries
+    # (cluster_count × along-shoot) bundles, each a fascicle_count-needle tuft.
+    fascicle_count: int = field(default=1, metadata={"ui": {"min": 1, "max": 8, "step": 1}})
+    # Basal sheath length as a fraction of needle length (leaf_size): the short
+    # papery ring wrapping the bundle base. 0 = no sheath geometry emitted.
+    fascicle_sheath_length_ratio: float = field(
+        default=0.05, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
+    )
+    # Tilt of each needle off the shared bundle axis (deg). Pines are tight bundles,
+    # so small. Added on top of leaf_splay_deg for each fascicle member.
+    fascicle_spread_deg: float = field(
+        default=8.0, metadata={"ui": {"min": 0.0, "max": 45.0, "step": 1.0}}
+    )
+    # Distinct brown sheath material colour (#7 nice-to-have) so the bundle base
+    # reads as a papery ring against the green needles.
+    fascicle_sheath_color: tuple[float, float, float] = (0.40, 0.28, 0.18)
     leaf_sun_shade_k: float = field(
         default=0.0,
         metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}},
@@ -426,12 +449,14 @@ class LightConfig:
     # blade area deposited into the LAI grid. 1.0 = pure rendered foliage area;
     # >1 thickens the self-shading, 0 disables leaf occlusion.
     leaf_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
-    # Needle/conifer foliage occlusion: legacy scalar LAI (m²) deposited at each
-    # terminal bud (leaf_shape == "linear" species). Conifer apical dominance still
-    # emerges from this canopy-shell deposit; real needle-area coupling lands with
-    # the conifer foliage rework (#55 spray + #7 fascicles). Until then this path
-    # is intentionally decoupled from the rendered needles.
-    leaf_area: float = field(default=0.04, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}})
+    # Needle/conifer foliage occlusion (#7 — picks up the #62-deferred coupling):
+    # unitless multiplier on the *real* per-needle blade area (fascicle multiplicity
+    # included) deposited into the LAI grid — the same leaf_area_records area the
+    # rendered .glb and total_leaf_area use, now shared by conifers too. Replaces the
+    # legacy terminal-bud scalar canopy shell; conifer apical dominance is now
+    # re-calibrated against this physical deposit (lambda_apical / vigor_ref /
+    # k_absorption), not propped up by a uniform shell. 0 disables needle occlusion.
+    needle_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     internode_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     n_rays: int = field(default=16, metadata={"ui": {"min": 4, "max": 64, "step": 4}})
     light_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
@@ -649,6 +674,35 @@ class Config:
             raise ConfigError(
                 f"geom.needle_cluster_spacing must be >= 0, got {g.needle_cluster_spacing}"
             )
+        if g.fascicle_count < 1:
+            raise ConfigError(f"geom.fascicle_count must be >= 1, got {g.fascicle_count}")
+        if g.fascicle_count > 1 and not (g.leaf_kind == "simple" and g.leaf_shape == "linear"):
+            # Fascicles are a conifer needle feature. Restricting >1 to simple linear
+            # leaves keeps the geometry (build_leaves_primitive, gated on leaf_shape)
+            # and the occluding area (leaf_area_records) from ever disagreeing on the
+            # needle count for a compound leaf whose leaflet_shape differs in linearity.
+            raise ConfigError(
+                "geom.fascicle_count > 1 requires leaf_kind='simple' and "
+                "leaf_shape='linear' (fascicles are a conifer needle feature); got "
+                f"fascicle_count={g.fascicle_count}, leaf_kind={g.leaf_kind!r}, "
+                f"leaf_shape={g.leaf_shape!r}"
+            )
+        if g.fascicle_sheath_length_ratio < 0.0:
+            raise ConfigError(
+                "geom.fascicle_sheath_length_ratio must be >= 0, "
+                f"got {g.fascicle_sheath_length_ratio}"
+            )
+        if not (0.0 <= g.fascicle_spread_deg <= 90.0):
+            raise ConfigError(
+                f"geom.fascicle_spread_deg must be in [0, 90], got {g.fascicle_spread_deg}"
+            )
+        if len(g.fascicle_sheath_color) != 3 or not all(
+            0.0 <= c <= 1.0 for c in g.fascicle_sheath_color
+        ):
+            raise ConfigError(
+                "geom.fascicle_sheath_color must be 3 floats in [0, 1], "
+                f"got {g.fascicle_sheath_color}"
+            )
         if not (0.0 <= g.leaf_sun_shade_k <= 2.0):
             raise ConfigError(
                 f"geom.leaf_sun_shade_k must be in [0, 2], got {g.leaf_sun_shade_k}"
@@ -769,8 +823,8 @@ class Config:
             raise ConfigError(f"light.k_absorption must be >= 0, got {light.k_absorption}")
         if light.leaf_area_scale < 0:
             raise ConfigError(f"light.leaf_area_scale must be >= 0, got {light.leaf_area_scale}")
-        if light.leaf_area < 0:
-            raise ConfigError(f"light.leaf_area must be >= 0, got {light.leaf_area}")
+        if light.needle_area_scale < 0:
+            raise ConfigError(f"light.needle_area_scale must be >= 0, got {light.needle_area_scale}")
         if light.internode_area_scale < 0:
             raise ConfigError(f"light.internode_area_scale must be >= 0, got {light.internode_area_scale}")
         if any(r <= 0 for r in light.grid_resolution):

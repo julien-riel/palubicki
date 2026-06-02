@@ -13,13 +13,21 @@ envelope:
   rz: 4.4
   marker_count: 18000
 sim:
-  shoot_extension_max: 0.70
+  # #7: lowered 0.70 -> 0.55 to pull the leader back into the age-30 height band
+  # [12,18m]. The #7 light coupling + stronger apical dominance (below) drive the
+  # leader harder; without this it raced to the envelope-cone ceiling (~19m, OOB).
+  shoot_extension_max: 0.55
   vigor_ref: 20.0
   vigor_dormancy: 0.3
   vigor_smoothing: 0.7
   vigor_diameter_gain: 0.16
   internode_length_jitter: 0.10
-  lambda_apical: 0.65
+  # #7: raised 0.65 -> 0.82. Coupling real needle area into the LAI grid
+  # (light.needle_area_scale) retired the uniform terminal-bud "canopy shell" that
+  # propped up the leader; with real self-shading distributed along the shoot,
+  # apical dominance must be stronger to keep the excurrent white-pine spire
+  # (continuation ~0.97, leader_deviation ~11deg, robust across seeds).
+  lambda_apical: 0.82
   alpha_basipetal: 2.5
   max_simulation_years: 30
   elongation:
@@ -73,11 +81,20 @@ shedding:
 light:
   enabled: true
   k_absorption: 0.65
+  # #7: couple real per-needle area (fascicle multiplicity included) into the LAI
+  # grid instead of the legacy terminal-bud scalar. 0.5 corrects for the flat-quad
+  # needle being a ~100x inflated visual proxy of a real <1mm needle; the leader is
+  # held by apical dominance (lambda_apical), not by under-depositing area.
+  needle_area_scale: 0.5
 sag:
   enabled: false
 geom:
   ring_sides: 8
-  pipe_exponent: 3.18
+  # #7: lowered 3.18 -> 2.90 to restore trunk girth. The stronger apical dominance
+  # makes the tree more monopodial (fewer lateral branches feeding the trunk's pipe
+  # area), thinning it ~17% (0.21 -> 0.17m, below the [0.18,0.35] band); a lower
+  # pipe exponent recovers ~0.22m. (vigor_diameter_gain saturates and doesn't move it.)
+  pipe_exponent: 2.90
   r_tip: 0.007
   bark_color: [0.45, 0.25, 0.18]
   bark_texture: "proc:pine_bark"
@@ -88,7 +105,11 @@ geom:
   leaf_margin: entire
   leaf_margin_depth: 0.0
   leaf_margin_count: 0
-  leaf_cluster_count: 3
+  # #7: white pine bears 5 needles per fascicle. The fascicle replaces the loose
+  # per-position tuft, so leaf_cluster_count drops to 1 — each along-shoot position
+  # (needle_cluster_spacing) now carries one 5-needle bundle, not 3 scattered needles.
+  leaf_cluster_count: 1
+  fascicle_count: 5
   leaf_splay_deg: 25
   foliage_depth: 4
   needle_cluster_spacing: 0.08
