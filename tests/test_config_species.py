@@ -63,7 +63,17 @@ def test_load_preset_pine(tmp_path):
                       output=tmp_path / "x.glb", species="pine")
     assert cfg.envelope.shape == "cone"
     assert cfg.phyllotaxy.mode == "whorled"
-    assert cfg.geom.leaf_cluster_count == 3
+    # #7: white pine bears 5 needles per fascicle; the fascicle replaces the loose
+    # per-position tuft, so leaf_cluster_count dropped 3 -> 1. Real needle area is
+    # coupled into the LAI grid (needle_area_scale) and the leader held by a raised
+    # lambda_apical.
+    assert cfg.geom.leaf_cluster_count == 1
+    assert cfg.geom.fascicle_count == 5
+    assert cfg.light.needle_area_scale == pytest.approx(0.5)
+    # #7 re-calibration (held the leader without over-driving height/trunk):
+    assert cfg.sim.lambda_apical == pytest.approx(0.82)
+    assert cfg.sim.shoot_extension_max == pytest.approx(0.55)
+    assert cfg.geom.pipe_exponent == pytest.approx(2.90)
 
 
 def test_load_preset_birch(tmp_path):
@@ -107,7 +117,7 @@ def test_deep_merge_preserves_sibling_sections(tmp_path):
                       output=tmp_path / "x.glb", species="pine")
     assert cfg.envelope.shape == "cone"
     assert cfg.phyllotaxy.mode == "whorled"
-    assert cfg.geom.leaf_cluster_count == 3
+    assert cfg.geom.leaf_cluster_count == 1  # #7: pine fascicle replaces the loose tuft
     assert cfg.tropism.w_orthotropy_main == pytest.approx(0.3)
 
 

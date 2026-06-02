@@ -235,6 +235,113 @@ def test_linear_shape_keeps_cross_blade():
     assert prim.indices.shape == (24,)
 
 
+# ── #7: needle fascicles ───────────────────────────────────────────────────
+
+def test_fascicle_count_one_matches_default():
+    """fascicle_count=1 is byte-identical to omitting the fascicle params, for
+    linear needles — the default no-op the broadleaf goldens rely on."""
+    tree = _tree_with_n_terminal_buds(3)
+    p_default = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                       leaf_shape="linear")
+    p_one = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                   leaf_shape="linear",
+                                   fascicle_count=1, fascicle_spread_deg=8.0)
+    np.testing.assert_array_equal(p_default.positions, p_one.positions)
+    np.testing.assert_array_equal(p_default.normals, p_one.normals)
+    np.testing.assert_array_equal(p_default.indices, p_one.indices)
+
+
+def test_fascicle_count_multiplies_needle_verts():
+    """Vert/index count grows strictly linearly with fascicle_count: each needle
+    position emits fascicle_count cross-blade needles (10 verts / 24 idx each).
+    1 bud × 1 leaf × N needles × 10 = 10·N verts. (Acceptance criterion #7-c.)"""
+    tree = _tree_with_n_terminal_buds(1)
+    base = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                  leaf_shape="linear", fascicle_count=1)
+    base_v = base.positions.shape[0]
+    assert base_v == 10
+    for fc in (2, 3, 5):
+        prim = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                      leaf_shape="linear", fascicle_count=fc,
+                                      fascicle_spread_deg=8.0)
+        assert prim.positions.shape == (fc * base_v, 3)
+        assert prim.indices.shape == (fc * base.indices.shape[0],)
+        assert int(prim.indices.max()) < prim.positions.shape[0]
+
+
+def test_fascicle_ignored_for_broadleaf():
+    """Fascicles are needle-only (leaf_shape=='linear'). A broadleaf with
+    fascicle_count>1 is byte-identical to fascicle_count=1 — so oak/birch/maple
+    goldens cannot move (acceptance criterion #7-b)."""
+    tree = _tree_with_n_terminal_buds(3)
+    p1 = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                                leaf_shape="ovate", fascicle_count=1)
+    p5 = build_leaves_primitive(tree, leaf_size=0.1, material=_mat(),
+                                leaf_shape="ovate", fascicle_count=5,
+                                fascicle_spread_deg=8.0)
+    np.testing.assert_array_equal(p1.positions, p5.positions)
+    np.testing.assert_array_equal(p1.indices, p5.indices)
+
+
+def test_fascicle_members_fan_apart():
+    """A 2-needle fascicle emits two *distinct* needles (different azimuth +
+    splay), not two coincident blades — i.e. the bundle actually reads as paired."""
+    tree = _tree_with_n_terminal_buds(1)
+    prim = build_leaves_primitive(tree, leaf_size=0.06, material=_mat(),
+                                  leaf_shape="linear", fascicle_count=2,
+                                  fascicle_spread_deg=8.0)
+    needle_a = prim.positions[:10]
+    needle_b = prim.positions[10:20]
+    assert not np.allclose(needle_a, needle_b)
+
+
+def test_fascicle_area_records_mirror_mesh():
+    """leaf_area_records emits fascicle_count area records per position, exactly
+    mirroring the mesh — the geometry↔light↔diagnostic single-source invariant.
+    Confirms the .glb needle count and the occluding-area count stay in lockstep."""
+    from palubicki.config import GeomConfig
+    from palubicki.geom.leaves import leaf_area_records
+
+    tree = _tree_with_n_terminal_buds(1)
+    g1 = GeomConfig(leaf_shape="linear", fascicle_count=1)
+    g5 = GeomConfig(leaf_shape="linear", fascicle_count=5)
+    recs1 = leaf_area_records(tree, g1)
+    recs5 = leaf_area_records(tree, g5)
+    assert len(recs5) == 5 * len(recs1)
+
+    # mesh agrees: verts_per_leaf (linear) = 10, so vert count == 10 × records.
+    prim5 = build_leaves_primitive(tree, leaf_size=g5.leaf_size, material=_mat(),
+                                   leaf_shape="linear", fascicle_count=5,
+                                   fascicle_spread_deg=g5.fascicle_spread_deg)
+    assert prim5.positions.shape[0] == 10 * len(recs5)
+
+
+def test_sheath_one_ring_per_bundle_not_per_needle():
+    """build_sheath_primitive emits ONE tapered ring per needle BUNDLE
+    (selected_leaves position), NOT one per needle — the fascicle_count needles
+    fan from the shared wrapped base. ring_sides=5 -> 2*5=10 verts per sheath."""
+    from palubicki.geom.compound_leaf import build_sheath_primitive
+    tree = _tree_with_n_terminal_buds(3)   # 3 bundles, 1 leaf each, no along-shoot fan
+    sheath = build_sheath_primitive(
+        tree, material=_mat(), leaf_size=0.06, foliage_depth=1,
+        needle_cluster_spacing=0.0, sheath_length_ratio=0.05, ring_sides=5,
+    )
+    assert sheath.positions.shape[0] == 3 * 2 * 5            # one 10-vert ring per bundle
+    assert int(sheath.indices.max()) < sheath.positions.shape[0]  # cursor offsetting holds
+    # Rigid sheath rides the branch swing but does not flutter like a blade: leafMask 0.
+    assert np.all(sheath.wind[:, 2] == 0.0)
+
+
+def test_sheath_empty_when_disabled():
+    """sheath_length_ratio <= 0 -> empty primitive (no geometry emitted)."""
+    from palubicki.geom.compound_leaf import build_sheath_primitive
+    tree = _tree_with_n_terminal_buds(3)
+    empty = build_sheath_primitive(tree, material=_mat(), leaf_size=0.06,
+                                   foliage_depth=1, sheath_length_ratio=0.0)
+    assert empty.positions.shape[0] == 0
+    assert empty.indices.shape[0] == 0
+
+
 def test_leaves_follow_sag_offset_at_apex():
     """When the apex node has a downward sag_offset, leaves should be emitted
     at the bent position, not the raw position."""

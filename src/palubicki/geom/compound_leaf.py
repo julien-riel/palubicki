@@ -287,3 +287,100 @@ def build_rachis_primitive(
         wind_tier=np.concatenate(tier_chunks),
         tangents=np.concatenate(tan_chunks),
     )
+
+
+# Fascicle sheath proportions (#7): radii as fractions of the sheath length, so
+# the basal collar reads as a stubby papery ring (wider at the shoot, tapering
+# toward the needle base) rather than a bead or a spike.
+_SHEATH_BASE_R_FRAC = 0.30
+_SHEATH_TIP_R_FRAC = 0.16
+
+
+def build_sheath_primitive(
+    tree, *, material, leaf_size, foliage_depth, needle_cluster_spacing=0.0,
+    sun_shade_k=0.0, splay_deg=0.0, droop_deg=0.0, sheath_length_ratio=0.05,
+    ring_sides=5,
+):
+    """One short tapered sheath frustum per rendered needle bundle (#7 fascicles).
+
+    Reuses the #5 tapered-stem primitive (:func:`_emit_cylinder`): a frustum from
+    each :func:`selected_leaves` render position along the bundle axis (``leaf_up``
+    at the seat azimuth/splay), of length ``sheath_length_ratio * leaf_size`` (× the
+    sun/shade ``eff``), tapering toward the needle base. ONE sheath per *bundle*
+    (one per ``selected_leaves`` position — NOT per needle), so the fascicle_count
+    needles fan from the wrapped base. Carries the stem wind contract (leafMask 0:
+    the rigid sheath rides its branch's swing but does not flutter like a blade).
+    Empty primitive when ``sheath_length_ratio <= 0``.
+    """
+    # Function-local import to avoid a leaves<->compound_leaf import cycle.
+    from palubicki.geom.leaves import (
+        compute_effective_leaf_size,
+        leaf_basis,
+        selected_leaves,
+    )
+    from palubicki.geom.wind import LEAF_STIFFNESS, axis_frames, leaf_phase
+    from palubicki.geom.wind import tier as wind_tier_of
+
+    empty = Primitive(
+        positions=np.zeros((0, 3), np.float32),
+        normals=np.zeros((0, 3), np.float32),
+        uvs=np.zeros((0, 2), np.float32),
+        indices=np.zeros((0,), np.uint32),
+        material=material,
+    )
+    if sheath_length_ratio <= 0.0:
+        return empty
+    records = selected_leaves(
+        tree, foliage_depth=foliage_depth,
+        needle_cluster_spacing=needle_cluster_spacing,
+    )
+    if not records:
+        return empty
+    splay_rad = math.radians(splay_deg)
+    droop_rad = math.radians(droop_deg)
+    origin = np.asarray(tree.root.position, dtype=np.float64)  # tree-relative phase
+    frames = axis_frames(tree)  # branch-base pivot + axis tier (rides the branch swing)
+    pos_chunks, nrm_chunks, uv_chunks, tan_chunks, idx_chunks = [], [], [], [], []
+    wind_chunks, pivot_chunks, tier_chunks = [], [], []
+    cursor = 0
+    for leaf, stem_dir, source_iod, render_pos in records:
+        eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
+        # leaf_up (the shared bundle axis the needles splay around) is the sheath axis.
+        _rot_u, leaf_up, _rot_w = leaf_basis(stem_dir, leaf.azimuth, splay_rad, droop_rad)
+        center = np.asarray(render_pos, dtype=np.float64)
+        sheath_len = eff * sheath_length_ratio
+        p1 = center + sheath_len * leaf_up
+        p, nn, uv, tan, ix = _emit_cylinder(
+            center, p1, _SHEATH_BASE_R_FRAC * sheath_len, _SHEATH_TIP_R_FRAC * sheath_len,
+            ring_sides, cursor,
+        )
+        if p.shape[0] == 0:
+            continue
+        nv = p.shape[0]
+        # Stem wind contract: rides the branch (same per-leaf phase / branch pivot /
+        # tier) but leafMask 0 — a sheath does not flutter like a blade.
+        phase = leaf_phase(render_pos, leaf.azimuth, origin)
+        base, axis_order = frames.get(id(leaf.parent_node), (render_pos, 0))
+        pos_chunks.append(p)
+        nrm_chunks.append(nn)
+        uv_chunks.append(uv)
+        tan_chunks.append(tan)
+        idx_chunks.append(ix)
+        wind_chunks.append(np.tile(
+            np.array([phase, LEAF_STIFFNESS, 0.0], np.float32), (nv, 1)))
+        pivot_chunks.append(np.tile(np.asarray(base, dtype=np.float32), (nv, 1)))
+        tier_chunks.append(np.full((nv,), float(wind_tier_of(axis_order)), np.float32))
+        cursor += nv
+    if not pos_chunks:
+        return empty
+    return Primitive(
+        positions=np.concatenate(pos_chunks),
+        normals=np.concatenate(nrm_chunks),
+        uvs=np.concatenate(uv_chunks),
+        indices=np.concatenate(idx_chunks),
+        material=material,
+        wind=np.concatenate(wind_chunks),
+        pivot=np.concatenate(pivot_chunks),
+        wind_tier=np.concatenate(tier_chunks),
+        tangents=np.concatenate(tan_chunks),
+    )

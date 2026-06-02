@@ -42,11 +42,13 @@ aérienne**, avec un bon compromis réalisme / vitesse. Les grandes absences
      `geom/leaves.py:leaf_area_records` — même source que le diagnostic
      `total_leaf_area` et le `.glb`. `light.leaf_area_scale` = multiplicateur.
      L'auto-ombrage des feuillus reflète maintenant la morphologie paramétrée.
-     **Conifères** : encore sur le scalaire `light.leaf_area` par bourgeon terminal
-     — leur dominance apicale *émerge* de ce dépôt « coquille de canopée », et le
-     coupler aux vraies aiguilles le casse (le leader du pin s'effondre). Reporté à
-     #55 (éventail) + #7 (fascicules), où géométrie d'aiguilles et calibration
-     lumière se règlent ensemble.
+     **Conifères** : couplés (#7) via le *même* `leaf_area_records` (multiplicité de
+     fascicule incluse) × `light.needle_area_scale` ; le scalaire `light.leaf_area`
+     par bourgeon terminal (l'ancienne « coquille de canopée ») est **retiré**.
+     Coupler les vraies aiguilles cassait le leader (la coquille uniforme le
+     soutenait), donc la dominance apicale est **re-calibrée** sur ce dépôt physique
+     (`lambda_apical` pin relevé) — géométrie d'aiguilles et calibration lumière
+     réglées ensemble, comme #55 (éventail) l'avait préparé pour la forme.
    - Aucune règle d'âge branchée : `Leaf.birth_time` / `LeafState`
      (`ACTIVE→SENESCENT→ABSCISSED`) existent mais la transition n'arrive jamais.
      Pas de caducité, pas de marcescence. L'infra est là, le fil est débranché.

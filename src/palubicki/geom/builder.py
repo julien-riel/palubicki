@@ -12,7 +12,11 @@ from palubicki.geom._textures import (
     leaf_vein_mask,
 )
 from palubicki.geom.bark_blend import BarkBlendStops
-from palubicki.geom.compound_leaf import build_rachis_primitive, resolve_leaflet_blade
+from palubicki.geom.compound_leaf import (
+    build_rachis_primitive,
+    build_sheath_primitive,
+    resolve_leaflet_blade,
+)
 from palubicki.geom.leaves import build_leaves_primitive
 from palubicki.geom.mesh import Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
@@ -117,6 +121,8 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             autumn_color=g.leaf_autumn_color,
             blade_fold_deg=g.leaf_blade_fold_deg,
             blade_curl=g.leaf_blade_curl,
+            fascicle_count=g.fascicle_count,
+            fascicle_spread_deg=g.fascicle_spread_deg,
         )
         if g.leaf_season_variants and g.leaf_autumn_color is not None:
             # KHR_materials_variants: discrete season swap (summer = the green
@@ -153,6 +159,40 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         )
         if stem_prim.positions.shape[0] > 0:
             primitives.append(stem_prim)
+
+        # #7: fascicle sheaths — the short brown papery rings wrapping each conifer
+        # needle bundle. Needle-only and gated on an actual bundle (fascicle_count > 1)
+        # with non-zero sheath length; a distinct brown material reads against the
+        # green needles. Empty-guarded like the stem primitive.
+        if (
+            g.leaf_shape == "linear"
+            and g.fascicle_count > 1
+            and g.fascicle_sheath_length_ratio > 0.0
+        ):
+            sheath_mat = Material(
+                name="fascicle_sheath",
+                base_color=(*g.fascicle_sheath_color, 1.0),
+                metallic=0.0,
+                roughness=0.9,
+                base_color_texture_png=None,
+                alpha_mode="OPAQUE",
+                alpha_cutoff=0.5,
+                double_sided=False,
+            )
+            sheath_prim = build_sheath_primitive(
+                tree,
+                material=sheath_mat,
+                leaf_size=g.leaf_size,
+                foliage_depth=g.foliage_depth,
+                needle_cluster_spacing=g.needle_cluster_spacing,
+                sun_shade_k=g.leaf_sun_shade_k,
+                splay_deg=g.leaf_splay_deg,
+                droop_deg=g.petiole_droop_deg,
+                sheath_length_ratio=g.fascicle_sheath_length_ratio,
+                ring_sides=max(3, g.petiole_sides),
+            )
+            if sheath_prim.positions.shape[0] > 0:
+                primitives.append(sheath_prim)
 
     return Mesh(primitives=primitives)
 

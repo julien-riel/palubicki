@@ -223,30 +223,56 @@ def test_blade_morphology_changes_lai_deposit():
     assert lai_large > 2.0 * lai_small
 
 
-def test_needle_path_uses_legacy_terminal_scalar():
-    """Conifers (leaf_shape == 'linear') keep the legacy light.leaf_area scalar at
-    the terminal bud — decoupled from blade size — pending the conifer foliage
-    rework (#55/#7). Verified by: the deposit equals leaf_area/cell_volume and is
-    insensitive to leaf_size, unlike the broadleaf real-area path."""
-    cfg = LightConfig(
-        grid_origin=(0.0, 0.0, 0.0),
-        grid_size=(10.0, 10.0, 10.0),
-        grid_resolution=(10, 10, 10),
-        leaf_area=0.04,
-        internode_area_scale=0.0,
-    )
+def test_needle_path_uses_real_needle_area():
+    """#7: conifers (leaf_shape == 'linear') now deposit the *real* per-needle blade
+    area (leaf_area_records — the same area the .glb and total_leaf_area use), scaled
+    by light.needle_area_scale. This replaces the legacy terminal-bud scalar canopy
+    shell, so — unlike the old scalar — the deposit IS sensitive to leaf_size, and
+    needle_area_scale is a linear multiplier (0 opts out)."""
+    base = {"grid_origin": (0.0, 0.0, 0.0), "grid_size": (10.0, 10.0, 10.0),
+            "grid_resolution": (10, 10, 10), "internode_area_scale": 0.0}
     tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
 
-    grid = LightGrid.from_config(cfg, EnvelopeConfig())
-    grid.rebuild_from_tree(tree, cfg, geom=GeomConfig(leaf_shape="linear", leaf_size=0.05))
-    lai_small = grid.lai[5, 7, 1]
+    small = GeomConfig(leaf_shape="linear", leaf_size=0.05)
+    big = GeomConfig(leaf_shape="linear", leaf_size=0.20)
 
-    grid.rebuild_from_tree(tree, cfg, geom=GeomConfig(leaf_shape="linear", leaf_size=0.20))
-    lai_big = grid.lai[5, 7, 1]
+    g_small = LightGrid.from_config(LightConfig(**base, needle_area_scale=1.0), EnvelopeConfig())
+    g_small.rebuild_from_tree(tree, LightConfig(**base, needle_area_scale=1.0), geom=small)
+    g_big = LightGrid.from_config(LightConfig(**base, needle_area_scale=1.0), EnvelopeConfig())
+    g_big.rebuild_from_tree(tree, LightConfig(**base, needle_area_scale=1.0), geom=big)
 
-    # cell_volume == 1.0 → scalar deposit is exactly leaf_area, regardless of leaf_size.
-    assert lai_small == pytest.approx(0.04)
-    assert lai_big == pytest.approx(0.04)
+    # cell_volume == 1.0 → grid sum == total deposited needle area, and it now tracks
+    # leaf_size (bigger needles occlude more) instead of a fixed scalar.
+    assert g_small.lai.sum() == pytest.approx(_leaf_area_at(tree, small))
+    assert g_big.lai.sum() == pytest.approx(_leaf_area_at(tree, big))
+    assert g_big.lai.sum() > g_small.lai.sum()
+
+    # needle_area_scale multiplies linearly; 0 opts out of needle occlusion.
+    g3 = LightGrid.from_config(LightConfig(**base, needle_area_scale=3.0), EnvelopeConfig())
+    g3.rebuild_from_tree(tree, LightConfig(**base, needle_area_scale=3.0), geom=small)
+    g0 = LightGrid.from_config(LightConfig(**base, needle_area_scale=0.0), EnvelopeConfig())
+    g0.rebuild_from_tree(tree, LightConfig(**base, needle_area_scale=0.0), geom=small)
+    assert g3.lai.sum() == pytest.approx(3.0 * g_small.lai.sum())
+    assert g0.lai.sum() == pytest.approx(0.0)
+
+
+def test_needle_fascicle_multiplicity_thickens_lai():
+    """#7: a fascicle deposits fascicle_count needles' area into its cell, so the LAI
+    grid reflects fascicle multiplicity — a 5-needle bundle self-shades ~5× a lone
+    needle (slightly sub-linear: the intra-bundle splay shears each member's
+    projected area). This is the geometry↔light↔diagnostic single-source invariant."""
+    base = {"grid_origin": (0.0, 0.0, 0.0), "grid_size": (10.0, 10.0, 10.0),
+            "grid_resolution": (10, 10, 10), "internode_area_scale": 0.0,
+            "needle_area_scale": 1.0}
+    tree = _make_tree_with_terminal_at(np.array([5.5, 7.5, 1.5]))
+
+    g1 = LightGrid.from_config(LightConfig(**base), EnvelopeConfig())
+    g1.rebuild_from_tree(tree, LightConfig(**base), geom=GeomConfig(leaf_shape="linear", fascicle_count=1))
+    g5 = LightGrid.from_config(LightConfig(**base), EnvelopeConfig())
+    g5.rebuild_from_tree(tree, LightConfig(**base), geom=GeomConfig(leaf_shape="linear", fascicle_count=5))
+
+    ratio = g5.lai.sum() / g1.lai.sum()
+    assert 4.0 < ratio < 5.0
 
 
 def test_leaf_area_scale_multiplies_deposit():
