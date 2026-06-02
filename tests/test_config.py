@@ -693,6 +693,7 @@ def test_sim_config_time_defaults():
     assert s.dt_years == 1.0
     assert s.max_simulation_years == 30.0
     assert s.annual_growth_period == (0.0, 1.0)
+    assert s.growth_period_shoulder == 0.0
     assert s.num_iterations == 30
 
 
@@ -724,6 +725,35 @@ def test_annual_growth_period_parsed_from_yaml(tmp_path):
     p.write_text("sim:\n  annual_growth_period: [0.25, 0.55]\n")
     cfg = load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
     assert cfg.sim.annual_growth_period == (0.25, 0.55)
+
+
+def test_growth_period_shoulder_negative_rejected(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    p = tmp_path / "bad.yaml"
+    p.write_text("sim:\n  growth_period_shoulder: -0.1\n")
+    with pytest.raises(ConfigError, match="growth_period_shoulder"):
+        load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+
+
+def test_growth_period_shoulder_overlapping_plateau_rejected(tmp_path):
+    from palubicki.config import ConfigError, load_config
+    p = tmp_path / "bad.yaml"
+    # window width 0.4, two shoulders of 0.25 (=0.5) would erase the plateau.
+    p.write_text(
+        "sim:\n  annual_growth_period: [0.3, 0.7]\n  growth_period_shoulder: 0.25\n"
+    )
+    with pytest.raises(ConfigError, match="growth_period_shoulder"):
+        load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+
+
+def test_growth_period_shoulder_valid_parsed(tmp_path):
+    from palubicki.config import load_config
+    p = tmp_path / "ok.yaml"
+    p.write_text(
+        "sim:\n  annual_growth_period: [0.2, 0.85]\n  growth_period_shoulder: 0.1\n"
+    )
+    cfg = load_config(yaml_path=p, cli_overrides={}, output=tmp_path / "o.glb")
+    assert cfg.sim.growth_period_shoulder == 0.1
 
 
 def test_simconfig_has_vigor_fields_with_defaults():

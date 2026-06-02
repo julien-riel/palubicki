@@ -40,13 +40,14 @@ def _leafy_tree(*, birth_time=0.0, n_leaves=1):
     return Tree(root=root, active_buds=[bud])
 
 
-def _cfg(*, deciduous, lifespan=2.0, senescence=0.1, window=(0.0, 0.5)):
+def _cfg(*, deciduous, lifespan=2.0, senescence=0.1, window=(0.0, 0.5), shoulder=0.0):
     return SimpleNamespace(sim=SimpleNamespace(
         leaf_phenology=LeafPhenologyConfig(
             enabled=True, deciduous=deciduous,
             leaf_lifespan_years=lifespan, senescence_duration_years=senescence,
         ),
         annual_growth_period=window,
+        growth_period_shoulder=shoulder,
     ))
 
 
@@ -102,6 +103,28 @@ def test_deciduous_regrows_next_window():
     tree.root.leaves.append(new_leaf)
     advance_leaf_states(forest, cfg, t=1.0)
     assert new_leaf.state is LeafState.ACTIVE
+
+
+def test_deciduous_shoulder_sheds_at_activity_zero_not_plateau_edge():
+    """#65: with a growth_period_shoulder, the shared dormancy-entry boundary is
+    activity == 0 (the window edge), NOT the plateau edge. A leaf stays ACTIVE
+    through the entire falling shoulder and senesces only once the window fully
+    closes — the same point at which the simulator stops emitting growth."""
+    tree = _leafy_tree(birth_time=0.0)
+    forest = SimpleNamespace(trees=[tree])
+    cfg = _cfg(deciduous=True, lifespan=10.0, senescence=0.1,
+               window=(0.2, 0.8), shoulder=0.1)
+    leaf = tree.root.leaves[0]
+
+    # Falling shoulder (f=0.75 in [0.7, 0.8)): activity > 0 => still in season,
+    # leaf stays ACTIVE even though new growth is tapering.
+    advance_leaf_states(forest, cfg, t=0.75)
+    assert leaf.state is LeafState.ACTIVE
+
+    # Window closed (f=0.85 >= hi): activity == 0 => dormancy entry => senesce.
+    advance_leaf_states(forest, cfg, t=0.85)
+    assert leaf.state is LeafState.SENESCENT
+    assert leaf.senescence_time == 0.85
 
 
 def test_evergreen_persists_across_year_boundary():

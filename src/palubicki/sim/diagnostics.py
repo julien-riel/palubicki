@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from palubicki.sim.clock import phenology_activity
 from palubicki.sim.tree import BudState, Internode, Node, Tree
 from palubicki.sim.tropisms import spray_plane_normal_from_direction
 
@@ -535,7 +536,40 @@ def compute_metrics(
     else:
         out["total_leaf_area"] = 0.0
         out["foliage_area_density"] = 0.0
+    mean_act, shoulder_frac = _phenology_metrics(internodes, cfg)
+    out["mean_growth_activity"] = mean_act
+    out["shoulder_internode_fraction"] = shoulder_frac
     return out
+
+
+def _phenology_metrics(
+    internodes: list[Internode], cfg: Config | None
+) -> tuple[float, float]:
+    """Graded-phenology summary (#65), read from the ACTUAL emitted internodes so
+    it mirrors the exported .glb (the activity scalar scales each internode's
+    length, so these reflect the geometry, not just the config).
+
+    * ``mean_growth_activity`` — mean seasonal multiplier the tree's internodes
+      were emitted under (1.0 = no tapering; < 1.0 = some growth in the bud-break
+      / growth-cessation shoulders).
+    * ``shoulder_internode_fraction`` — share of internodes born in a shoulder
+      (activity < 1.0).
+
+    Both default to the no-gating values (1.0 / 0.0) when ``cfg`` or the internode
+    list is absent — identical to what the default full-year, shoulder-0 preset
+    produces, so the metric is well-defined everywhere.
+    """
+    if cfg is None or not internodes:
+        return 1.0, 0.0
+    lo, hi = cfg.sim.annual_growth_period
+    sh = cfg.sim.growth_period_shoulder
+    acts = [
+        phenology_activity(iod.birth_time - math.floor(iod.birth_time), lo, hi, sh)
+        for iod in internodes
+    ]
+    mean_act = sum(acts) / len(acts)
+    shoulder_frac = sum(1 for a in acts if a < 1.0) / len(acts)
+    return mean_act, shoulder_frac
 
 
 # ── Multi-seed aggregation ────────────────────────────────────────────────
@@ -553,6 +587,8 @@ _SCALAR_KEYS = (
     "foliage_area_density",
     "internode_length_proximal_mean",
     "internode_length_distal_mean",
+    "mean_growth_activity",
+    "shoulder_internode_fraction",
 )
 
 _HISTOGRAM_KEYS = (
@@ -773,6 +809,13 @@ def format_report(
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))
         lines.append(f"  {k:24s} {_fmt_scalar(val):28s} {flag}".rstrip())
+    lines.append("")
+
+    # Phenology (#65): graded seasonal activity read off the emitted internodes.
+    # No literature bounds (mechanism metric), so no ✓/✗ flag.
+    lines.append("Phenology")
+    for k in ("mean_growth_activity", "shoulder_internode_fraction"):
+        lines.append(f"  {k:24s} {_fmt_scalar(metrics.get(k))}".rstrip())
     lines.append("")
 
     lines.append("Strahler / Horton")

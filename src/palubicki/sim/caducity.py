@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 
+from palubicki.sim.clock import phenology_activity
 from palubicki.sim.tree import LeafState
 
 
@@ -30,9 +31,15 @@ def advance_leaf_states(forest, cfg, t: float) -> None:
     if not ph.enabled:
         return
 
+    # Shared dormancy-entry trigger (#65): senescence keys off the SAME graded
+    # phenology boundary the simulator uses to gate growth, so the growth-stop
+    # and leaf-shed boundaries can never drift. activity > 0 <=> in the (possibly
+    # shouldered) growth window; with growth_period_shoulder == 0 this is exactly
+    # the legacy ``lo <= year_fraction < hi`` step.
     lo, hi = cfg.sim.annual_growth_period
     year_fraction = t - math.floor(t)
-    in_growth_window = lo <= year_fraction < hi
+    activity = phenology_activity(year_fraction, lo, hi, cfg.sim.growth_period_shoulder)
+    in_growth_window = activity > 0.0
     seasonal_shed = ph.deciduous and not in_growth_window
     marcescent = ph.deciduous and ph.marcescent
 
