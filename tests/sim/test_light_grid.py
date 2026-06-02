@@ -93,12 +93,12 @@ def test_from_config_autofit_ellipsoid():
     """When origin/size are None, fit to envelope AABB with sky margin.
        AABB: [-2,2] × [-3,3] × [-2,2] → extent (4, 6, 4)
        origin = aabb_min - 0.1 * extent = (-2.4, -3.6, -2.4)
-       size = (1.2*4, 1.4*6, 1.2*4) = (4.8, 8.4, 4.8)"""
+       size = (1.2*4, 1.6*6, 1.2*4) = (4.8, 9.6, 4.8)  (50% sky margin above, #FIX G)"""
     cfg = LightConfig(grid_origin=None, grid_size=None, grid_resolution=(16, 16, 16))
     env = EnvelopeConfig(shape="ellipsoid", rx=2.0, ry=3.0, rz=2.0, center=(0.0, 0.0, 0.0))
     grid = LightGrid.from_config(cfg, env)
     np.testing.assert_allclose(grid.origin, [-2.4, -3.6, -2.4], atol=1e-9)
-    np.testing.assert_allclose(grid.cell_size * np.array(cfg.grid_resolution), [4.8, 8.4, 4.8], atol=1e-9)
+    np.testing.assert_allclose(grid.cell_size * np.array(cfg.grid_resolution), [4.8, 9.6, 4.8], atol=1e-9)
 
 
 def test_from_config_autofit_half_ellipsoid_starts_at_y_zero():
@@ -421,7 +421,12 @@ def test_sample_transmission_empty_grid_returns_one():
 
 
 def test_sample_transmission_uniform_lai():
-    """Uniform LAI L → T(p, dir) = exp(-k * L * dist_in_grid)."""
+    """Uniform LAI L → T(p, dir) = exp(-k * L * dist_in_grid).
+
+    The apex self-shading fix (#1) excludes the ray's ORIGIN voxel from the
+    optical-depth sum, so a ray starting INSIDE the grid attenuates over (N-1)
+    cells, not N. Here a bottom-edge start at (5, 0.001, 5) in a 10-cell column
+    sees 9 of the 10 unit cells (its own cell (·,0,·) is skipped)."""
     cfg = LightConfig(
         grid_origin=(0.0, 0.0, 0.0),
         grid_size=(10.0, 10.0, 10.0),
@@ -430,10 +435,10 @@ def test_sample_transmission_uniform_lai():
     grid = LightGrid.from_config(cfg, EnvelopeConfig())
     L = 2.0
     grid.lai.fill(L)
-    # Ray from (5, 0.001, 5) going up: travels ~10 units inside grid.
+    # Ray from (5, 0.001, 5) going up: 10 unit cells, minus the skipped origin cell.
     k = 0.5
     T = grid.sample_transmission(np.array([5.0, 0.001, 5.0]), np.array([0.0, 1.0, 0.0]), k=k)
-    expected = np.exp(-k * L * 10.0)
+    expected = np.exp(-k * L * 9.0)
     assert pytest.approx(expected, rel=1e-2) == T
 
 
@@ -478,9 +483,10 @@ def test_sample_hemisphere_open_sky_returns_full_light():
         seed=42,
     )
     assert lf == pytest.approx(1.0, rel=1e-4)
-    # Gradient = normalize(Σ T_k · d_k) ; with all T_k=1 and cosine-weighted dirs,
-    # the sum is biased toward the light direction (y axis = up).
-    np.testing.assert_allclose(grad, [0.0, 1.0, 0.0], atol=0.2)
+    # Centered gradient = normalize(Σ (T_k - mean) · d_k); under open sky every
+    # T_k = 1 so the centered weights are all zero → gradient is the zero vector
+    # (no spurious pull toward the light direction). (#FIX D)
+    np.testing.assert_allclose(grad, [0.0, 0.0, 0.0], atol=1e-9)
 
 
 def test_sample_hemisphere_dense_uniform_layer_attenuates():

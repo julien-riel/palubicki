@@ -90,3 +90,99 @@ aérienne**, avec un bon compromis réalisme / vitesse. Les grandes absences
 - Un vrai **budget carbone**. C'est la bonne façon de réparer l'angle mort #1,
   mais ça refonde le moteur — à réserver pour passer de « plausible » à
   « physiologique ».
+
+## Pipeline lumière — limites connues & correctifs de l'audit 2026
+
+Un audit de la chaîne lumière (perception → phototropisme → mortalité d'ombrage
+→ phyllotaxie) a produit un lot de correctifs ciblés et, tout aussi
+important, a **assumé explicitement** certaines limites comme des choix de
+modèle plutôt que des bugs. Les champs de config cités vivent dans
+[`config.py`](../../src/palubicki/config.py) sous `LightConfig`.
+
+### Correctifs appliqués (ce PR)
+
+| Réf. | Correctif (une ligne) |
+| --- | --- |
+| #1 | Exclusion de l'auto-ombrage de l'apex : le bourgeon n'occulte plus sa propre cellule lors de la perception. |
+| A | Résolution de grille **scale-aware** : `voxel_edge_m` (0.04 m) dérive le nombre de voxels par axe `clamp(ceil(size/voxel_edge_m), 8, 192)` au lieu d'une résolution fixe. |
+| B | Bouton `wood_extinction_scale` (défaut 1.0) qui multiplie la LAD du bois (internodes) au dépôt. |
+| D | Gradient de lumière **centré** (différences centrées, pas décalées) pour la direction phototrope. |
+| E | Phototropisme : plus de **repli sur UP** quand le gradient est nul ; on conserve la direction courante. |
+| H | Décussé/verticillé : le terme spiral `divergence*node` n'est plus ajouté (le mode est défini par le seul basculement 90°/π·k), donc le défaut `divergence=137.5` ne corrompt plus la structure. |
+| I | Mortalité d'ombrage des **bourgeons dormants** : un bourgeon DORMANT (tissu vivant, ré-évalué chaque itération) accumule l'ombre et meurt comme un ACTIF ; RESERVE/DEAD restent épargnés, le compteur se réinitialise quand le bourgeon est éclairé. |
+| #2/#3 | Réserves phyllotaxiques : azimut par-mode partagé (opposé aux latéraux en décussé/verticillé/distique) **+** angle d'insertion indexé par `axis_order` (au lieu de `[0]`). |
+
+### Limites assumées (documentées, **non** modifiées dans le code)
+
+Ces points ne sont **pas** des correctifs : ce sont des décisions de modèle,
+notées ici pour qu'on ne les reprenne pas pour des oublis.
+
+- **C — la lumière est une irradiance d'hémisphère cosine-pondérée autour du
+  vecteur ciel.** La perception estime l'irradiance diffuse reçue par une
+  facette tournée vers le haut ; **l'orientation du bourgeon est volontairement
+  ignorée**. C'est l'estimateur d'irradiance diffuse physiquement correct, pas
+  un bug : un bourgeon ne « regarde » pas une direction privilégiée, il intègre
+  le ciel visible.
+
+- **B — le bois partage le coefficient d'extinction `k` du feuillage.** Le bois
+  est modélisé comme un milieu turbide de même `k_absorption` que la lame
+  foliaire ; or de vraies branches ne sont quasi opaques qu'au tronc.
+  `wood_extinction_scale` (défaut **1.0**) permet de relever l'opacité du bois,
+  mais la monter par défaut **composerait** l'auto-ombrage et **décalibrerait**
+  les espèces — le défaut reste donc 1.0.
+
+- **F-résiduel — `light_factor` injecte encore la qualité « nombre de marqueurs »
+  dans VIGUEUR et SHEDDING.** Seul le **seuil sympodial** voit désormais une
+  qualité *marqueurs seuls*. Séparer entièrement les deux monnaies (lumière vs
+  marqueurs) dans la vigueur/abscission est **reporté** pour ne pas déstabiliser
+  la calibration (c'est l'angle mort #1 ci-dessus, qui demande un budget carbone).
+
+- **A-rationale — les constantes de calibration lumière sont liées à la taille
+  physique de cellule.** `k_absorption`, `leaf_area_scale` et `needle_area_scale`
+  supposent une taille de voxel donnée ; avec `voxel_edge_m` fixe, elles
+  **transfèrent** désormais d'une taille d'enveloppe à l'autre (c'était l'objet
+  du correctif A). Un re-réglage reste nécessaire **si** `voxel_edge_m` change.
+
+- **#4 (tenté puis ABANDONNÉ) — diagnostic de divergence spray-aware.** L'idée
+  était de mesurer les latéraux d'ordre 2+ dans le repère spray (gaucher) où ils
+  sont posés, pour corriger le miroir 222,5° → 137,5°. Mais le diagnostic
+  reconstruisait le normal spray depuis la **tangente** sans vérifier
+  `spray_plane_enabled` ni le `spray_plane_normal` réel du bourgeon : dès que le
+  tronc dévie de la verticale (déviation du leader ~10-15°), la mesure basculait
+  dans le repère spray **même pour l'ordre-1**, miroitant la `divergence_angle`
+  ordre-1 (oak 142 → 198, hors la bande 130-145) — métrique pourtant bandée.
+  Reverté ; le miroir d'ordre-2+ (non bandé, cosmétique) reste un quirk connu du
+  diagnostic.
+
+### Dérive de calibration (vs baseline, FIX #4 reverté)
+
+Les correctifs comportementaux (#1, A, D, E, F, H, I) déplacent le champ lumineux
+et la croissance. Mesuré sur seeds 0/1/2, le bilan des métriques **hors-bande
+littérature** passe de **11 → 8** — une **amélioration nette**, pas une
+régression :
+
+| Espèce | Baseline | Post-correctifs | Détail des hors-bande restants |
+| --- | --- | --- | --- |
+| oak   | 1 | 1 | `insertion_angle` ordre-1 (27,7° / 30-65) |
+| birch | 1 | **0** | — (`crown_radius` rentré en bande) |
+| maple | 4 | **2** | `insertion_angle` (18,0°) ; `divergence` décussé (178° / 80-100) |
+| ash   | 2 | 2 | `insertion_angle` (17,1°) ; `divergence` décussé (174,8° / 130-145) |
+| fir   | 1 | 1 | `insertion_angle` (19,4°) |
+| pine  | 2 | 2 | `insertion_angle` (20,3°) ; `divergence` verticillé (93,1° / 130-145) |
+
+Les métriques de **croissance** (`tree_height`, `trunk_base_diameter`,
+`crown_radius`, `bif_ratio`) sont désormais **toutes en bande** sur les 6
+espèces. Les 8 hors-bande restants sont **tous pré-existants** et relèvent de
+**deux bugs de diagnostic** (≠ scope de ce PR, voir issue de suivi) :
+
+1. **`insertion_angle_deg_vs_parent` dilué.** Le diagnostic moyenne l'angle de
+   *chaque* internode vs son prédécesseur ; pour un axe d'ordre-1, seul le 1ᵉʳ
+   internode mesure la vraie insertion (vs tronc) — les suivants mesurent la
+   courbure intra-branche. Sur oak/seed-0 : **29** internodes d'insertion
+   (vraie insertion **75,7°**) noyés dans **265** internodes de courbure
+   (**20,2°**) → moyenne **25,6°**, sous la bande 30-65 quelle que soit la
+   calibration. Systématique (5/6 espèces).
+2. **`divergence_angle_deg` ordre-1 pour décussé/verticillé.** La bande de type
+   « angle d'or » (130-145) ne correspond pas à la divergence structurelle du
+   décussé (~90/180°) ni du verticillé (pine ~72-93°). Question de **bande mal
+   typée par mode**, pas de réglage.

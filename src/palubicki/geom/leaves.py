@@ -371,7 +371,11 @@ def selected_leaves(
 def leaf_area_records(
     tree: Tree, g: GeomConfig
 ) -> list[tuple[np.ndarray, float]]:
-    """(render_position, projected blade-group area) for every rendered leaf.
+    """(render_position, one-sided occluding blade-group area) for every rendered leaf.
+
+    The area is the full one-sided rendered blade area, deposited and ray-marched
+    isotropically (no per-ray projection / G-function) — a deliberate PoC
+    simplification, internally consistent with the rendered ``.glb``.
 
     Single source of truth for the area a leaf occludes — consumed by both the
     self-shading LAI deposit (``sim/light.py``) and the ``total_leaf_area``

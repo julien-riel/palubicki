@@ -52,9 +52,18 @@ def _base_cfg(**overrides) -> Config:
 
 def test_light_enabled_reduces_internode_count():
     """Light absorption (k=0.3, leaf_area_scale=37) sheds shaded branches, producing fewer
-    internodes than a tree grown without light shadowing."""
-    tree_off = simulate(_base_cfg(light=LightConfig(enabled=False)))
-    tree_on = simulate(_base_cfg(light=LightConfig(enabled=True, k_absorption=0.3, leaf_area_scale=37.0)))
+    internodes than a tree grown without light shadowing.
+
+    Phototropism is disabled here (w_phototropism=0) to isolate the shade-SUPPRESSION
+    channel. With the corrected centered light gradient (#FIX D), phototropism under
+    real light fills lateral gaps better than the no-light +Y fallback, which can RAISE
+    internode count — so net density is not a clean suppression signal when photo is on.
+    The directional light effects (centroid raise, canopy carving) are covered separately."""
+    no_photo = TropismConfig(w_phototropism=0.0)
+    tree_off = simulate(_base_cfg(tropism=no_photo, light=LightConfig(enabled=False)))
+    tree_on = simulate(_base_cfg(
+        tropism=no_photo, light=LightConfig(enabled=True, k_absorption=0.3, leaf_area_scale=37.0)
+    ))
     assert len(tree_on.all_internodes) < len(tree_off.all_internodes)
 
 

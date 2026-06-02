@@ -194,7 +194,9 @@ def _thin_overlaps(markers: np.ndarray, per_tree_cfgs: list, seed: int) -> np.nd
 
 def forest_light_bounds(envelopes: list[EnvelopeConfig], obstacles: list) -> tuple[np.ndarray, np.ndarray]:
     """Auto-fit AABB(union envelopes + obstacles) + V2-style sky margin
-    (10% pad in x/z below/above, 10% below + 30% above in y)."""
+    (10% pad in x/z below/above, 10% below + 50% above in y). The top y-margin
+    is generous so overshooting leaders still fall inside the grid AABB (#FIX G);
+    it must match _autofit_bounds in light.py."""
     mins = []
     maxs = []
     for env in envelopes:
@@ -209,6 +211,6 @@ def forest_light_bounds(envelopes: list[EnvelopeConfig], obstacles: list) -> tup
     aabb_max = np.max(np.stack(maxs), axis=0)
     extent = aabb_max - aabb_min
     origin = aabb_min - 0.1 * extent
-    margin_top = np.array([0.1 * extent[0], 0.3 * extent[1], 0.1 * extent[2]])
+    margin_top = np.array([0.1 * extent[0], 0.5 * extent[1], 0.1 * extent[2]])
     size = (aabb_max + margin_top) - origin
     return origin, size

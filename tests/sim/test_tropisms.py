@@ -111,7 +111,11 @@ def test_growth_direction_falls_back_to_photo_direction_when_no_gradient():
     np.testing.assert_allclose(d, [0.0, 1.0, 0.0], atol=1e-9)
 
 
-def test_growth_direction_zero_gradient_falls_back_to_photo_direction():
+def test_growth_direction_zero_gradient_contributes_no_phototropism():
+    """FIX E: a present-but-uniform light gradient (norm ~0) must contribute ZERO
+    phototropism, NOT fall back to cfg.photo_direction (which would smuggle a
+    spurious +Y/orthotropic pull under w_phototropism). With every other weight
+    zeroed, the blend is empty and the direction holds at current_direction."""
     from palubicki.config import TropismConfig
     from palubicki.sim.tropisms import growth_direction
     cfg = TropismConfig(w_perception=0.0, w_orthotropy_main=0.0, w_phototropism=1.0, w_direction_inertia=0.0,
@@ -123,7 +127,7 @@ def test_growth_direction_zero_gradient_falls_back_to_photo_direction():
         is_main_axis=True,
         light_gradient=np.zeros(3),
     )
-    np.testing.assert_allclose(d, [0.0, 1.0, 0.0], atol=1e-9)
+    np.testing.assert_allclose(d, [1.0, 0.0, 0.0], atol=1e-9)
 
 
 def test_growth_direction_minimal_kwargs():

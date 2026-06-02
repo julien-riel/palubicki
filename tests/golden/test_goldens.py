@@ -175,7 +175,11 @@ def test_golden_forest_v3(tmp_path):
     # space_competition.py): leaders survive, changing node positions forest-wide.
     # Re-pinned for #62: broadleaf self-shading now uses real per-leaf blade area
     # (default GeomConfig is ovate), shifting shade-mortality and forest geometry.
-    EXPECTED = "7e5f20b0783bc4b5ccaccfb5eafc8cb2afac7f8fdac592b03e83121a5e93accf"
+    # Re-pinned for the light-pipeline audit fixes: voxel-edge-derived grid
+    # resolution (LightConfig.voxel_edge_m / per-axis clamp) plus wood-extinction
+    # scaling change the light field every step, so shade-mortality and the whole
+    # forest geometry shift deterministically. New hash confirmed stable across runs.
+    EXPECTED = "86522b014cdcad472306612c52a9ca346551c3826affee6d0017287742a5a5f5"
     if EXPECTED is not None:
         assert digest == EXPECTED, f"V3 forest hash drifted: {digest}"
     print(f"V3 forest golden hash: {digest}")
