@@ -50,20 +50,34 @@ les nouveaux modes orthogonaux pour la fin.
 > (GDD), fenêtres wrap-around et sénescence graduée dans la rampe descendante différés
 > (pas de plomberie température ; `dt` annuel ne résout pas le sous-annuel).
 
-### Driver saisonnier + réponses à l'ombre
+> **#63 (évitement d'ombre à l'initiation) — livré.** À l'émission, chaque latéral
+> ne débourre ACTIF qu'avec la probabilité `1 − strength·(1 − light_factor)`
+> (`sim/shade_avoidance.py::lateral_break_probability`, lue sur le bourgeon-mère via
+> le champ lumineux #62/#7) ; sinon il démarre **RESERVE** (`dormant_reserve_buds`) :
+> l'investissement latéral est **retenu** à l'ombre au lieu d'être seulement élagué
+> après coup (`shade_mortality` reste, complémentaire — l'un retient, l'autre élague
+> les survivants). Les latéraux retenus sont réactivables par la **réitération
+> existante** (`activate_reserves_on_shed`, sur élagage d'une branche ombragée) —
+> aucune nouvelle boucle lumière→réactivation (différée avec le re-flush #61).
+> `sim.shade_avoidance.strength` ∈ [0,1] = fraction retenue à l'ombre pleine ; **off
+> par défaut** (`enabled=False`) / `strength=0` / plein soleil ⇒ aucun tirage RNG,
+> évolution **byte-identique** (goldens inchangés, zéro re-pin). Compose avec #3 à
+> des étages distincts (le biais de position pondère la *vigueur* des latéraux
+> débourrés ; #63 décide le *débourrement* — pas de double comptage). Diagnostic
+> `lateral_reserve_fraction` (lu sur le graphe de bourgeons → reflète le `.glb`).
+> **Latent dans les presets** (comme #65) : prouvé par un test d'intégration semé
+> (chêne auto-ombragé, `dormant_reserve_count=0` + `shade_mortality` off pour isoler
+> l'initiation), pas par un preset expédié.
 
-1. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
-   latéraux à l'ombre (pas seulement élaguer après — `shade_mortality` reste).
-   Réutilise la machinerie de pondération de qualité (#3). Réagit au champ
-   lumineux **corrigé par #62 (feuillus ; conifères via #7, livré)**. Levier
-   d'initiation bon marché ; compose avec #56.
-2. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
+### Mémoire mécanique (intégrée dans le temps)
+
+1. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
    raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
    statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
 
 ### Changement de moteur profond
 
-3. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
+2. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
    backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
    fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
    prescrite par l'enveloppe `cone`. Compose avec #62 (lumière feuillus correcte)
@@ -72,21 +86,21 @@ les nouveaux modes orthogonaux pour la fin.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-4. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+3. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
    déterminées). Lit le driver saisonnier **#65 (livré)** via une fenêtre de
    floraison propre passée au **même** `clock.phenology_activity` (aucune nouvelle
    math de rampe). Débloque forbs, fruits, et un 2ᵉ déclencheur sympodial propre.
-5. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+4. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-6. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+5. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-7. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+6. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
     reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
     (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
     look**). Sous-tickets P0…P5 indépendants, un PR chacun.

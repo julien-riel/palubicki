@@ -78,6 +78,7 @@ class SimConfig:
     )
     sympodial: SympodialConfig = field(default_factory=lambda: SympodialConfig())
     shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
+    shade_avoidance: ShadeAvoidanceConfig = field(default_factory=lambda: ShadeAvoidanceConfig())
     elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
     bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
     leaf_phenology: LeafPhenologyConfig = field(default_factory=lambda: LeafPhenologyConfig())
@@ -97,6 +98,32 @@ class ShadeMortalityConfig:
     )
     n_consecutive_steps: int = field(
         default=3, metadata={"ui": {"min": 1, "max": 10, "step": 1}}
+    )
+
+
+@dataclass(frozen=True)
+class ShadeAvoidanceConfig:
+    """Shade-avoidance at bud initiation (#63).
+
+    At emission, each lateral bud breaks ACTIVE only with probability
+    ``shade_avoidance.lateral_break_probability(light_factor, strength)``; the rest
+    start RESERVE (kept in ``dormant_reserve_buds``, retained and reactivatable via
+    reiteration when a shaded branch is later shed). So the crown *withholds*
+    lateral investment in shaded zones at initiation, instead of only culling
+    laterals after the fact (``shade_mortality``) — the two are complementary
+    (this withholds; that prunes).
+
+    ``strength`` in [0, 1] is the fraction of laterals withheld at full shade
+    (light_factor = 0); it ramps linearly to 0 withheld in full sun.
+
+    Disabled (``enabled=False``, the default) — or ``strength == 0``, or a fully
+    lit bud — leaves every lateral ACTIVE and draws NO RNG at emission, so the
+    evolution stays byte-identical to the legacy path (presence-gated; shipped
+    presets unchanged).
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    strength: float = field(
+        default=0.6, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}}
     )
 
 
@@ -589,6 +616,15 @@ class Config:
         if sm.enabled and not self.light.enabled:
             raise ConfigError(
                 "sim.shade_mortality.enabled=True requires light.enabled=True"
+            )
+        sa = s.shade_avoidance
+        if not (0.0 <= sa.strength <= 1.0):
+            raise ConfigError(
+                f"sim.shade_avoidance.strength must be in [0, 1], got {sa.strength}"
+            )
+        if sa.enabled and not self.light.enabled:
+            raise ConfigError(
+                "sim.shade_avoidance.enabled=True requires light.enabled=True"
             )
         e = self.sim.elongation
         if e.tau_years <= 0:
