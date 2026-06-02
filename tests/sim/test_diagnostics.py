@@ -970,3 +970,77 @@ def test_total_leaf_area_matches_pre_refactor_pin():
                           output=Path("t.glb"), species=sp)
         m = compute_metrics(simulate(cfg), cfg=cfg)
         assert m["total_leaf_area"] == pytest.approx(expected, rel=1e-6), sp
+
+
+# --- graded phenology metrics (#65) -----------------------------------------
+
+def test_phenology_metrics_from_internode_birth_times(tmp_path):
+    """mean_growth_activity / shoulder_internode_fraction are read off the actual
+    internode birth times (so they mirror the .glb): window (0.2, 0.8) + shoulder
+    0.2 gives activity 1.0 at f=0.5 (plateau) and 0.25 at f=0.25 / f=0.75."""
+    from palubicki.config import load_config
+    cfg = load_config(
+        yaml_path=None,
+        cli_overrides={
+            "sim.annual_growth_period": [0.2, 0.8],
+            "sim.growth_period_shoulder": 0.2,
+        },
+        output=tmp_path / "o.glb",
+    )
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    n1 = Node(position=np.array([0.0, 1.0, 0.0]))
+    n2 = Node(position=np.array([0.0, 2.0, 0.0]))
+    n3 = Node(position=np.array([0.0, 3.0, 0.0]))
+    tree = Tree(root=root)
+    i1 = _link(root, n1); i1.birth_time = 0.5    # plateau -> activity 1.0
+    i2 = _link(n1, n2);   i2.birth_time = 0.25   # rising shoulder -> 0.25
+    i3 = _link(n2, n3);   i3.birth_time = 0.75   # falling shoulder -> 0.25
+    tree.all_internodes.extend([i1, i2, i3])
+
+    m = compute_metrics(tree, cfg=cfg)
+    assert m["mean_growth_activity"] == pytest.approx((1.0 + 0.25 + 0.25) / 3)
+    assert m["shoulder_internode_fraction"] == pytest.approx(2 / 3)
+
+
+def test_phenology_metrics_default_no_gating():
+    """No cfg (and the shipped shoulder-0 default) => no tapering: activity 1.0,
+    shoulder fraction 0.0."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    n1 = Node(position=np.array([0.0, 1.0, 0.0]))
+    tree = Tree(root=root)
+    tree.all_internodes.append(_link(root, n1))
+    m = compute_metrics(tree)
+    assert m["mean_growth_activity"] == 1.0
+    assert m["shoulder_internode_fraction"] == 0.0
+
+
+def test_format_report_includes_phenology_section():
+    from palubicki.sim.diagnostics import format_report
+    metrics = {"mean_growth_activity": 0.83, "shoulder_internode_fraction": 0.4}
+    out = format_report(metrics, seeds=[0])
+    assert "Phenology" in out
+    assert "mean_growth_activity" in out
+    assert "shoulder_internode_fraction" in out
+
+
+def test_phenology_metrics_aggregate_multi_seed():
+    """The new scalars flow through multi-seed aggregation (mean/stddev/per_seed)."""
+    def chain(birth_times):
+        root = Node(position=np.array([0.0, 0.0, 0.0]))
+        tree = Tree(root=root)
+        prev = root
+        for k, bt in enumerate(birth_times, start=1):
+            nxt = Node(position=np.array([0.0, float(k), 0.0]))
+            iod = _link(prev, nxt)
+            iod.birth_time = bt
+            tree.all_internodes.append(iod)
+            prev = nxt
+        return tree
+
+    # No cfg => no-gating defaults (1.0) for every tree; the point is that the
+    # scalar flows through aggregation into mean/stddev/per_seed.
+    m = compute_metrics([chain([0.1, 0.5]), chain([0.9])])
+    agg = m["mean_growth_activity"]
+    assert agg["per_seed"] == [pytest.approx(1.0), pytest.approx(1.0)]
+    assert agg["mean"] == pytest.approx(1.0)
+    assert m["shoulder_internode_fraction"]["per_seed"] == [0.0, 0.0]

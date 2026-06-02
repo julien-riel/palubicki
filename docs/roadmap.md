@@ -33,27 +33,37 @@ les nouveaux modes orthogonaux pour la fin.
 > `out_of_plane_deviation_deg` (fir ordre-2 ~24°→12°). Le couplage lumière conifère
 > (reporté de #62) a été livré séparément dans #7 (fascicules + re-calibration).
 
+> **#65 (phénologie graduée — rampe saisonnière) — livré.** L'interrupteur binaire
+> `annual_growth_period` devient un **trapèze d'activité `[0,1]`**
+> (`sim/clock.py::phenology_activity`) : rampes `sim.growth_period_shoulder` au
+> débourrement et à la cessation, plateau à 1.0. `shoulder=0` (défaut de **tous** les
+> presets) reste **byte-identique** à la porte binaire — goldens inchangés, zéro
+> re-pin. L'activité multiplie la longueur d'entre-nœud émise (multiplicateur **final**,
+> après saturation + jitter, donc identité IEEE à `activity=1.0`) ; **source unique
+> partagée** lue par la croissance, la sénescence #61 (même seuil d'entrée en dormance
+> `activity==0`, jamais de dérive) et, à venir, la floraison #11. Diagnostics
+> `mean_growth_activity` / `shoulder_internode_fraction` (lus sur les entre-nœuds
+> réels → reflètent le `.glb`). **Latent dans les presets** : la croissance étant
+> *par-itération* (pas par-an), démontrer la rampe exige `dt<1`, qui re-calibrerait
+> birch ; la fonctionnalité est donc prouvée par un test d'intégration **semé**
+> (`dt=0.25`, `shoulder>0`, 5 graines) plutôt que par un preset expédié. Degrés-jours
+> (GDD), fenêtres wrap-around et sénescence graduée dans la rampe descendante différés
+> (pas de plomberie température ; `dt` annuel ne résout pas le sous-annuel).
+
 ### Driver saisonnier + réponses à l'ombre
 
-1. **#65 — phénologie graduée** · remplacer l'interrupteur binaire
-   `annual_growth_period` par une rampe (courbe `year_fraction` en MVP,
-   degrés-jours en *nice-to-have*). Généralise la fenêtre de #10 ; **la floraison
-   (#11) lira le même driver**, donc le poser avant d'empiler le saisonnier.
-   **Coordonne avec #61 (livré)** : la caducité saisonnière lit déjà la fenêtre
-   binaire `annual_growth_period` ; #65 doit reprendre le *même* déclencheur de
-   sénescence (entrée en dormance) quand il transforme la porte binaire en rampe.
-2. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
+1. **#63 — évitement d'ombre à l'initiation** · réduire l'**émission** de
    latéraux à l'ombre (pas seulement élaguer après — `shade_mortality` reste).
    Réutilise la machinerie de pondération de qualité (#3). Réagit au champ
    lumineux **corrigé par #62 (feuillus ; conifères via #7, livré)**. Levier
    d'initiation bon marché ; compose avec #56.
-3. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
+2. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
    raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
    statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
 
 ### Changement de moteur profond
 
-4. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
+3. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
    backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
    fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
    prescrite par l'enveloppe `cone`. Compose avec #62 (lumière feuillus correcte)
@@ -62,20 +72,21 @@ les nouveaux modes orthogonaux pour la fin.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-5. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+4. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
-   déterminées). Lit le driver saisonnier (#65). Débloque forbs, fruits, et un
-   2ᵉ déclencheur sympodial propre.
-6. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+   déterminées). Lit le driver saisonnier **#65 (livré)** via une fenêtre de
+   floraison propre passée au **même** `clock.phenology_activity` (aucune nouvelle
+   math de rampe). Débloque forbs, fruits, et un 2ᵉ déclencheur sympodial propre.
+5. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-7. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+6. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-8. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+7. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
     reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
     (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
     look**). Sous-tickets P0…P5 indépendants, un PR chacun.

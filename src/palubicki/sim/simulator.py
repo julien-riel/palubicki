@@ -75,14 +75,19 @@ def simulate_forest(cfg: Config, collector: DebugCollector | None = None) -> For
         clock.t = iteration * cfg.sim.dt_years
         if not any(t.active_buds for t in forest.trees):
             break
-        if not clock.in_window(*cfg.sim.annual_growth_period):
+        activity = clock.activity(
+            *cfg.sim.annual_growth_period, cfg.sim.growth_period_shoulder
+        )
+        if activity <= 0.0:
             # Dormant season: age existing structure, emit nothing. Does NOT
             # count toward the no-growth early-stop (that is for saturation).
+            # With growth_period_shoulder == 0 this is byte-identical to the
+            # legacy ``not clock.in_window(...)`` gate (#65).
             _apply_temporal_dynamics(forest, cfg, clock.t)
             if collector is not None:
                 collector.capture_frame(forest, clock.t)
             continue
-        nodes_created = _iteration_step(forest, cfg, iteration, clock.t, state, t0)
+        nodes_created = _iteration_step(forest, cfg, iteration, clock.t, state, t0, activity)
         if collector is not None:
             collector.capture_frame(forest, clock.t)
         if nodes_created == 0:
@@ -186,8 +191,12 @@ def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -
     return quality
 
 
-def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState, t0: float) -> int:
+def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState, t0: float, activity: float = 1.0) -> int:
     """One simulation step on the whole forest. Returns total nodes created.
+
+    ``activity`` in (0, 1] is the graded seasonal multiplier (#65); it scales the
+    emitted internode length so shoots taper near the window edges. Defaults to
+    1.0 (full growth) so a mis-threaded call can never silently zero growth.
 
     For backward-compat: when len(trees)==1 and obstacles==[], this must produce
     bit-exactly the same evolution as V2's simulate() loop body."""
@@ -209,7 +218,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
     nodes_created_this_step = 0
     for tree in forest.trees:
         created, positions = _grow_tree(
-            tree, forest, cfg, iteration, t, state, res, light_info, quality
+            tree, forest, cfg, iteration, t, state, res, light_info, quality, activity
         )
         nodes_created_this_step += created
         new_node_positions.extend(positions)
@@ -234,7 +243,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
 
 def _grow_tree(
     tree: Tree, forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState,
-    res, light_info, quality: dict,
+    res, light_info, quality: dict, activity: float = 1.0,
 ) -> tuple[int, list[np.ndarray]]:
     """Grow one tree by one iteration. Returns (nodes_created, new_positions).
 
@@ -298,7 +307,7 @@ def _grow_tree(
             new_active.append(bud)
             continue
 
-        target = _internode_target(bud, v_b, cfg, iteration, t, state)
+        target = _internode_target(bud, v_b, cfg, iteration, t, state, activity)
         new_pos = bud.position + d * target
 
         if forest.obstacles:
@@ -322,11 +331,17 @@ def _grow_tree(
     return nodes_created, new_positions
 
 
-def _internode_target(cur: Bud, v_b: float, cfg: Config, iteration: int, t: float, state: _SimState) -> float:
+def _internode_target(cur: Bud, v_b: float, cfg: Config, iteration: int, t: float, state: _SimState, activity: float = 1.0) -> float:
     """Saturating shoot-extension length for the new internode, optionally jittered.
 
     The jitter RNG is salted by (seed, _ILEN_SALT, iteration, node_index) so the
-    draw is reproducible and independent of perception/light ordering."""
+    draw is reproducible and independent of perception/light ordering.
+
+    ``activity`` in (0, 1] is the graded seasonal multiplier (#65), applied LAST —
+    after the saturating curve and the jitter draw — so it scales the final
+    emitted length without perturbing the vigor->length response or the RNG
+    stream. At activity == 1.0 the multiply is the IEEE-exact identity, so default
+    presets stay byte-identical."""
     base_length = shoot_extension(v_b, cfg.sim.shoot_extension_max, cfg.sim.vigor_ref)
     if cfg.sim.internode_length_jitter > 0:
         # iteration is the integer loop index, used only for RNG seeding (not biological time).
@@ -334,7 +349,7 @@ def _internode_target(cur: Bud, v_b: float, cfg: Config, iteration: int, t: floa
         rng = np.random.default_rng(ss.generate_state(1)[0])
         factor = max(0.5, min(1.5, rng.normal(1.0, cfg.sim.internode_length_jitter)))
         base_length *= factor
-    return base_length
+    return base_length * activity
 
 
 def _lateral_spray_normal(

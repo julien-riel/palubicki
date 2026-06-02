@@ -55,6 +55,16 @@ class SimConfig:
     # active. Default spans the whole year => no seasonal gating. Only bites
     # when dt_years < 1.0 (sub-annual steps). Not exposed in UI (vec2).
     annual_growth_period: tuple[float, float] = (0.0, 1.0)
+    # Graded phenology (#65): half-open ramp width (fraction of the year) applied
+    # to BOTH ends of annual_growth_period, turning the binary gate into a
+    # symmetric trapezoid (linear bud-break ramp / plateau / growth-cessation
+    # ramp). 0.0 (default) => the trapezoid degenerates to today's crisp [lo, hi)
+    # step => byte-identical evolution. The activity scalar scales emitted
+    # internode length; growth/senescence/flowering all read it via
+    # sim.clock.phenology_activity. Editor-tunable.
+    growth_period_shoulder: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.01}}
+    )
     # Fix #1: if dot(v_perc, current_direction) < cos_min_perception, the bud
     # is sitting at the envelope boundary (markers only behind/below). It goes
     # DORMANT instead of folding back. -0.2 ≈ allow 100° before bending; raise
@@ -233,8 +243,13 @@ class LeafPhenologyConfig:
       * **dormant-window entry** (deciduous only) — the leaf senesces as soon as
         ``year_fraction`` leaves ``sim.annual_growth_period``. This only bites
         when ``dt_years < 1.0`` carries the clock into the dormant window, same
-        as the growth gate it complements (coordinate the window definition with
-        #65 when graded phenology lands).
+        as the growth gate it complements. Since #65 (graded phenology) this
+        boundary is the SHARED dormancy-entry trigger: caducity senesces when
+        ``sim.clock.phenology_activity(...) == 0``, the exact same point at which
+        the simulator stops emitting growth, so the two never drift. With
+        ``growth_period_shoulder > 0`` new growth tapers through the falling
+        shoulder while existing foliage stays active until activity hits 0
+        (graded leaf senescence within the shoulder is deferred — see #65).
 
     A senesced leaf abscises ``senescence_duration_years`` later — a brief window
     where the leaf is off the ``ACTIVE`` roster but still on the node, the hook
@@ -609,6 +624,20 @@ class Config:
             raise ConfigError(
                 f"sim.annual_growth_period must satisfy 0.0 <= lo < hi <= 1.0, "
                 f"got {s.annual_growth_period}"
+            )
+        sh = s.growth_period_shoulder
+        if sh < 0.0:
+            raise ConfigError(
+                f"sim.growth_period_shoulder must be >= 0.0, got {sh}"
+            )
+        # Two shoulders must fit inside the window or they would erase the
+        # plateau (and overlap into a non-monotone ramp). lo < hi is guaranteed
+        # above, so hi - lo > 0.
+        if 2.0 * sh > (hi - lo):
+            raise ConfigError(
+                f"sim.growth_period_shoulder * 2 ({2.0 * sh}) must be <= the "
+                f"annual_growth_period width ({hi - lo}); shoulders would erase "
+                f"the plateau"
             )
 
         t = self.tropism
