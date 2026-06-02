@@ -992,9 +992,12 @@ def test_phenology_metrics_from_internode_birth_times(tmp_path):
     n2 = Node(position=np.array([0.0, 2.0, 0.0]))
     n3 = Node(position=np.array([0.0, 3.0, 0.0]))
     tree = Tree(root=root)
-    i1 = _link(root, n1); i1.birth_time = 0.5    # plateau -> activity 1.0
-    i2 = _link(n1, n2);   i2.birth_time = 0.25   # rising shoulder -> 0.25
-    i3 = _link(n2, n3);   i3.birth_time = 0.75   # falling shoulder -> 0.25
+    i1 = _link(root, n1)
+    i1.birth_time = 0.5     # plateau -> activity 1.0
+    i2 = _link(n1, n2)
+    i2.birth_time = 0.25    # rising shoulder -> activity 0.25
+    i3 = _link(n2, n3)
+    i3.birth_time = 0.75    # falling shoulder -> activity 0.25
     tree.all_internodes.extend([i1, i2, i3])
 
     m = compute_metrics(tree, cfg=cfg)
