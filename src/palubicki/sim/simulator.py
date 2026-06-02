@@ -24,6 +24,7 @@ from palubicki.sim.phyllotaxy import (
 )
 from palubicki.sim.radii import update_diameters_incremental
 from palubicki.sim.sag import apply_sag
+from palubicki.sim.shade_avoidance import lateral_break_probability
 from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
 from palubicki.sim.space_competition import perceive
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _ILEN_SALT = int.from_bytes(b"ilen", "big")
+_SHADE_SALT = int.from_bytes(b"shav", "big")
 
 
 class _SimState:
@@ -428,6 +430,28 @@ def _emit_node(
         spray_plane_normal=axis_normal,
     )
     state.node_index += 1
+    # Shade-avoidance at initiation (#63): in shade, a lateral breaks ACTIVE only
+    # with probability p_break = lateral_break_probability(lf, strength); otherwise
+    # it starts RESERVE (kept in dormant_reserve_buds, reactivatable via reiteration
+    # when a shaded branch is later shed). ``lf`` is the EMITTING bud's light factor
+    # — the new laterals have no light of their own until the next perception pass.
+    # Disabled / strength 0 / full sun => p_break == 1.0: no RNG is drawn and every
+    # lateral breaks ACTIVE, byte-identical to the legacy path. The draw is salted
+    # by the global emission ordinal (state.node_index, unique per node) under a
+    # private salt, so it never perturbs the phyllotaxy / internode-length streams.
+    sa = cfg.sim.shade_avoidance
+    p_break = (
+        lateral_break_probability(lf, sa.strength)
+        if (sa.enabled and light_info is not None) else 1.0
+    )
+    sa_rng = (
+        np.random.default_rng(
+            np.random.SeedSequence(
+                [cfg.seed, _SHADE_SALT, state.node_index]
+            ).generate_state(1)[0]
+        )
+        if p_break < 1.0 else None
+    )
     # Laterals each begin a NEW axis → their phyllotactic ordinal restarts at 0
     # (the Bud default), so each branch axis advances divergence from its own base.
     for ld in lateral_dirs:
@@ -436,7 +460,11 @@ def _emit_node(
             axis_order=cur.axis_order + 1, parent_node=new_node,
             spray_plane_normal=_lateral_spray_normal(spray_on, axis_normal, ld),
         )
-        new_node.lateral_buds.append(lat)
+        if sa_rng is not None and sa_rng.random() >= p_break:
+            lat.state = BudState.RESERVE
+            new_node.dormant_reserve_buds.append(lat)
+        else:
+            new_node.lateral_buds.append(lat)
 
     # Phase 2B: emit RESERVE buds (not added to active_buds).
     if cfg.phyllotaxy.dormant_reserve_count > 0:

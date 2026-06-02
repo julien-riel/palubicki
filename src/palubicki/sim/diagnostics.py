@@ -435,6 +435,27 @@ def _sympodial_fork_count(nodes: list[Node]) -> int:
     return sum(1 for n in nodes if n.sympodial_fork)
 
 
+def _lateral_reserve_fraction(nodes: list[Node]) -> float:
+    """Share of lateral-position buds held in RESERVE rather than broken ACTIVE.
+
+    Readback for shade-avoidance at initiation (#63): counts ``lateral_buds`` (the
+    laterals that broke, on the active track) against ``dormant_reserve_buds`` (the
+    withheld ones) across every node, so it reflects the bud graph that produced
+    the .glb. Terminal buds are excluded (apical continuation is never a lateral).
+
+    0.0 when every lateral broke — the shipped default (no shade-avoidance and no
+    standing dormant reserves). Rises as shade-avoidance withholds laterals in
+    shade (or as ``phyllotaxy.dormant_reserve_count`` seeds standing reserves).
+    Returns 0.0 for a tree with no lateral-position buds.
+    """
+    active = reserve = 0
+    for n in nodes:
+        active += len(n.lateral_buds)
+        reserve += len(n.dormant_reserve_buds)
+    total = active + reserve
+    return reserve / total if total else 0.0
+
+
 # ── Architecture ──────────────────────────────────────────────────────────
 
 def _height_and_crown(nodes: list[Node]) -> tuple[float, float]:
@@ -524,6 +545,7 @@ def compute_metrics(
     out.update(_internode_length_metrics(internodes, axis_orders))
     out["sympodial_fork_count"] = _sympodial_fork_count(nodes)
     out["bud_state_histogram"] = _bud_state_histogram(nodes)
+    out["lateral_reserve_fraction"] = _lateral_reserve_fraction(nodes)
     out["tree_height"] = height
     out["trunk_base_diameter"] = _trunk_base_diameter(tree.root)
     out["crown_radius"] = crown_radius
@@ -578,6 +600,7 @@ _SCALAR_KEYS = (
     "strahler_order_max",
     "horton_bifurcation_ratio_mean",
     "sympodial_fork_count",
+    "lateral_reserve_fraction",
     "tree_height",
     "trunk_base_diameter",
     "crown_radius",
@@ -861,6 +884,10 @@ def format_report(
 
     lines.append("Counts")
     lines.append(f"  sympodial_forks          {_fmt_scalar(metrics.get('sympodial_fork_count'))}")
+    if "lateral_reserve_fraction" in metrics:
+        lines.append(
+            f"  lateral_reserve_fraction {_fmt_scalar(metrics.get('lateral_reserve_fraction'))}"
+        )
     bh = metrics.get("bud_state_histogram") or {}
     if bh:
         if multi:
