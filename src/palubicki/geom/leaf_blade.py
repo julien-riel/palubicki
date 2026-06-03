@@ -197,51 +197,63 @@ def _outline_cordate(L: float, W: float, n: int = 20) -> tuple[np.ndarray, np.nd
 
 
 def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.ndarray, np.ndarray]:
-    """5 radial lobes from center (0, 0.4*L).
+    """5 lobes fanning UPWARD from the petiole attachment at the base (0, 0).
 
-    Each lobe has a peak at angle theta_k and an inter-lobe valley at the
-    midpoint between adjacent peaks. Boundary is sampled around the polar
-    contour at samples_per_lobe samples per lobe (lobe edge from valley → peak
-    → valley = 2 segments) plus extra detail at peaks.
+    The blade origin (0, 0) is lifted onto the petiole tip (geom/leaves.py), so the
+    lamina must reach it. The prior design radiated 5 lobes over a full 360° from a
+    center at (0, 0.4*L), which left (0, 0) in the basal notch between the two
+    downward lobes — the petiole tip dangled in empty space and the leaf read as
+    detached. Here the lobes fan over an upward ~150° arc from a low center, the two
+    outer lobes sweep back down to (0, 0), and the central lobe is longest —
+    matching the palmate venation baked in geom/_textures.leaf_vein_mask. Per-lobe
+    reach is capped to the [-W/2, W/2] x [0, L] box so the UV stays on-atlas.
     """
     n_lobes = 5
-    cx, cy = 0.0, 0.4 * L
-    anchor = np.array([cx, cy], dtype=np.float64)
-    R_peak = 0.5 * max(L, W)
-    R_valley = 0.3 * R_peak
-    # Lobe peak angles (radians); CCW around the center starting at pi/2 (straight up).
-    # IMPORTANT: theta_next_peak intentionally does NOT modulo by n_lobes — the
-    # last lobe's valley needs to be at theta+2pi/5, not wrap back to pi/2.
-    boundary_pts = []
+    cx, cy = 0.0, 0.08 * L
+    up = np.pi * 0.5                       # +v, toward the tip
+    fan_half = np.radians(74.0)            # half of the ~150° upward fan
+    half_w, top_v = 0.49 * W, 0.97 * L
+
+    def reach(theta: float) -> float:
+        """Max radius from (cx, cy) at ``theta`` before leaving the UV box."""
+        c, s = np.cos(theta), np.sin(theta)
+        lims = []
+        if abs(c) > 1e-6:
+            lims.append(half_w / abs(c))
+        if s > 1e-6:
+            lims.append((top_v - cy) / s)
+        return float(min(lims)) if lims else (top_v - cy)
+
+    peak_angles = [(up - fan_half) + (2.0 * fan_half) * (k / (n_lobes - 1))
+                   for k in range(n_lobes)]
+
+    def peak_R(k: int) -> float:
+        # Central lobe fills ~0.97 of its reach; outer lobes shorter → rounded fan.
+        f = k / (n_lobes - 1)
+        return (0.72 + 0.25 * np.sin(np.pi * f)) * reach(peak_angles[k])
+
+    def pt(theta: float, R: float) -> np.ndarray:
+        return np.array([cx + R * np.cos(theta), cy + R * np.sin(theta)])
+
+    boundary_pts = [np.array([0.0, 0.0])]   # petiole attachment at the base
     for k in range(n_lobes):
-        theta_peak = np.pi * 0.5 + k * (2.0 * np.pi / n_lobes)
-        theta_next_peak = np.pi * 0.5 + (k + 1) * (2.0 * np.pi / n_lobes)
-        # Emit the peak itself.
-        peak = np.array([cx + R_peak * np.cos(theta_peak),
-                         cy + R_peak * np.sin(theta_peak)])
-        boundary_pts.append(peak)
-        # Walk from peak to inter-lobe valley with intermediate samples.
-        theta_valley = (theta_peak + theta_next_peak) * 0.5
-        for s in range(1, samples_per_lobe):
-            t = s / samples_per_lobe
-            theta = theta_peak + t * (theta_valley - theta_peak)
-            R = R_peak + t * (R_valley - R_peak)
-            boundary_pts.append(np.array([cx + R * np.cos(theta),
-                                          cy + R * np.sin(theta)]))
-        # Emit the valley.
-        boundary_pts.append(np.array([cx + R_valley * np.cos(theta_valley),
-                                      cy + R_valley * np.sin(theta_valley)]))
-        # Walk from valley to the NEXT peak with intermediate samples.
-        for s in range(1, samples_per_lobe):
-            t = s / samples_per_lobe
-            theta = theta_valley + t * (theta_next_peak - theta_valley)
-            R = R_valley + t * (R_peak - R_valley)
-            boundary_pts.append(np.array([cx + R * np.cos(theta),
-                                          cy + R * np.sin(theta)]))
+        th, Rk = peak_angles[k], peak_R(k)
+        boundary_pts.append(pt(th, Rk))
+        if k < n_lobes - 1:                  # inter-lobe sinus + walk to next peak
+            th2, Rk2 = peak_angles[k + 1], peak_R(k + 1)
+            thv, Rv = 0.5 * (th + th2), 0.55 * min(peak_R(k), Rk2)
+            for s in range(1, samples_per_lobe):
+                t = s / samples_per_lobe
+                boundary_pts.append(pt(th + t * (thv - th), Rk + t * (Rv - Rk)))
+            boundary_pts.append(pt(thv, Rv))
+            for s in range(1, samples_per_lobe):
+                t = s / samples_per_lobe
+                boundary_pts.append(pt(thv + t * (th2 - thv), Rv + t * (Rk2 - Rv)))
+
     boundary = np.array(boundary_pts, dtype=np.float64)
+    anchor = np.array([cx, cy], dtype=np.float64)   # radiating centre → star-convex
     # Defensive CCW check; reverse if signed area came out negative.
-    x = boundary[:, 0]
-    y = boundary[:, 1]
+    x, y = boundary[:, 0], boundary[:, 1]
     area = 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
     if area < 0:
         boundary = boundary[::-1].copy()
