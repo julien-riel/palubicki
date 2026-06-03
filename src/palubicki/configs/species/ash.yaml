@@ -74,6 +74,9 @@ geom:
   pipe_exponent: 3.30
   r_tip: 0.007
   bark_color: [0.40, 0.36, 0.30]
+  # White ash bark is diamond-furrowed like oak; the proc source unlocks the baked
+  # normal/ORM relief (without a bark_texture the trunk ships flat-normal).
+  bark_texture: "proc:oak_bark"
   # --- Compound leaves (#6): imparipinnate, 7 leaflets + terminal ---
   leaf_kind: pinnate
   leaflet_count: 5

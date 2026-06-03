@@ -70,7 +70,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             name="leaf",
             base_color=(0.4, 0.6, 0.2, 1.0),
             metallic=0.0,
-            roughness=0.85,
+            roughness=g.leaf_roughness,
             base_color_texture_png=leaf_png,
             alpha_mode="MASK",
             alpha_cutoff=0.5,

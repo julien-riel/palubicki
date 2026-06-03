@@ -391,7 +391,7 @@ class GeomConfig:
     enable_pbr_maps: bool = field(default=True, metadata={"ui": {"label": "PBR maps"}})
     # Bark normal-map bump depth (mirrors normalTexture.scale at runtime); only
     # emitted for proc bark, where a clean height field exists.
-    bark_normal_strength: float = field(default=1.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    bark_normal_strength: float = field(default=3.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     # Leaf vein/midrib normal-map depth.
     leaf_normal_strength: float = field(default=0.6, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     # Leaf back-light strength (KHR_materials_diffuse_transmission factor; the
@@ -400,6 +400,11 @@ class GeomConfig:
     # Cuticle / dielectric specular (KHR_materials_specular). 0 = omit.
     bark_specular: float = field(default=0.2, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
     leaf_specular: float = field(default=0.35, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Per-species leaf base roughness (metallic-roughness roughnessFactor). Low =
+    # waxy/glossy cuticle (oak); high = soft/matte (maple). SceneKit-safe: it rides
+    # core PBR roughness, so the look survives even where KHR_materials_specular is
+    # dropped (e.g. Apple Preview). 0.85 = the prior hard-coded leaf default.
+    leaf_roughness: float = field(default=0.85, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
     # Geometric hero blade (geom/leaf_blade3d.py): midrib crease half-angle (deg)
     # + longitudinal recurve depth (fraction of blade length). 0/0 = flat alpha
     # card (legacy, byte-identical). Broadleaf-only (flat needles stay planar).
@@ -426,13 +431,13 @@ class GeomConfig:
         default=0.4, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.1}}
     )
     petiole_radius_ratio: float = field(
-        default=0.02, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}}
+        default=0.03, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}}
     )  # simple-leaf petiole base radius / leaf_size
     petiole_taper: float = field(
         default=0.6, metadata={"ui": {"min": 0.1, "max": 1.0, "step": 0.05}}
     )  # petiole tip radius / base radius
     petiole_sides: int = field(
-        default=4, metadata={"ui": {"min": 3, "max": 12, "step": 1}}
+        default=6, metadata={"ui": {"min": 3, "max": 12, "step": 1}}
     )  # petiole tube cross-section polygon sides
     petiole_droop_deg: float = field(
         default=0.0, metadata={"ui": {"min": 0.0, "max": 90.0, "step": 1.0}}
@@ -795,6 +800,8 @@ class Config:
                 raise ConfigError(f"geom.{fname} must be >= 0, got {v}")
         if not (0.0 <= g.leaf_translucency <= 1.0):
             raise ConfigError(f"geom.leaf_translucency must be in [0, 1], got {g.leaf_translucency}")
+        if not (0.0 <= g.leaf_roughness <= 1.0):
+            raise ConfigError(f"geom.leaf_roughness must be in [0, 1], got {g.leaf_roughness}")
         if not (0.0 <= g.leaf_blade_fold_deg <= 80.0):
             raise ConfigError(
                 f"geom.leaf_blade_fold_deg must be in [0, 80], got {g.leaf_blade_fold_deg}"

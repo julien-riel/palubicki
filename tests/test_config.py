@@ -832,9 +832,10 @@ def test_needle_cluster_spacing_negative_rejected():
 
 def test_geom_config_has_petiole_defaults():
     g = GeomConfig()
-    assert g.petiole_radius_ratio == 0.02
+    # Thicker/rounder petiole so leaves read as attached to the twig (beauty #1).
+    assert g.petiole_radius_ratio == 0.03
     assert g.petiole_taper == 0.6
-    assert g.petiole_sides == 4
+    assert g.petiole_sides == 6
     assert g.petiole_droop_deg == 0.0
     assert g.petiole_color == (0.32, 0.42, 0.18)
 

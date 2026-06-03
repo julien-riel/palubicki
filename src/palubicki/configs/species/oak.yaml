@@ -82,6 +82,9 @@ geom:
   bark_color: [0.32, 0.22, 0.14]
   bark_texture: "proc:oak_bark"
   leaf_texture: "proc:oak_leaf"
+  # Waxy red-oak cuticle: low roughness gives a glossy lamina highlight. Rides core
+  # PBR roughnessFactor, so it reads even in viewers that drop KHR_materials_specular.
+  leaf_roughness: 0.45
   leaf_size: 0.14
   leaf_aspect: 0.7
   leaf_shape: ovate
@@ -98,7 +101,7 @@ geom:
   foliage_depth: 4
   leaf_sun_shade_k: 1.0
   petiole_length_ratio: 0.25
-  petiole_radius_ratio: 0.02
+  petiole_radius_ratio: 0.03  # thicker petiole reads as attached to the twig (#1)
   petiole_taper: 0.6
   petiole_droop_deg: 12.0
   petiole_color: [0.32, 0.42, 0.18]

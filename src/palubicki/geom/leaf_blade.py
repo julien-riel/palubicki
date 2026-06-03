@@ -23,6 +23,14 @@ Margin = Literal["entire", "serrate", "dentate", "lobed"]
 _SHAPES = ("linear", "elliptic", "lanceolate", "ovate", "cordate", "palmate")
 _MARGINS = ("entire", "serrate", "dentate", "lobed")
 
+# Minimum blade half-width at the petiole (fraction of full width W), tapering
+# linearly to 0 at the tip. Without it, the symmetric outlines pinch to a single
+# zero-width basal vertex, so the opaque lamina "starts" off the petiole tip and
+# reads as detached from the tail. The max() floor only fills the basal pinch
+# region (where sin < floor); it never widens the blade past its W/2 envelope
+# and leaves the apex sharp (floor → 0 at the tip).
+_LEAF_BASE_HALF_WIDTH = 0.15
+
 
 def build_blade(
     *,
@@ -101,10 +109,12 @@ def _outline_elliptic(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np.n
     half = max(2, n // 2)
     t_right = np.linspace(0.0, 1.0, half, endpoint=False)
     v_right = t_right * L
-    u_right = (W * 0.5) * np.sin(np.pi * t_right)
+    u_right = np.maximum((W * 0.5) * np.sin(np.pi * t_right),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_right))
     t_left = np.linspace(1.0, 0.0, half, endpoint=False)
     v_left = t_left * L
-    u_left = -(W * 0.5) * np.sin(np.pi * t_left)
+    u_left = -np.maximum((W * 0.5) * np.sin(np.pi * t_left),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_left))
     boundary = np.empty((2 * half, 2), dtype=np.float64)
     boundary[:half, 0] = u_right
     boundary[:half, 1] = v_right
@@ -120,10 +130,12 @@ def _outline_lanceolate(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np
     t_right = np.linspace(0.0, 1.0, half, endpoint=False)
     v_right = t_right * L
     # sin(pi * t^0.7): peak at t = 0.5^(1/0.7) ≈ 0.37, giving widest at v ≈ 0.37L.
-    u_right = (W * 0.5) * np.sin(np.pi * np.power(t_right, 0.7))
+    u_right = np.maximum((W * 0.5) * np.sin(np.pi * np.power(t_right, 0.7)),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_right))
     t_left = np.linspace(1.0, 0.0, half, endpoint=False)
     v_left = t_left * L
-    u_left = -(W * 0.5) * np.sin(np.pi * np.power(t_left, 0.7))
+    u_left = -np.maximum((W * 0.5) * np.sin(np.pi * np.power(t_left, 0.7)),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_left))
     boundary = np.empty((2 * half, 2), dtype=np.float64)
     boundary[:half, 0] = u_right
     boundary[:half, 1] = v_right
@@ -140,10 +152,12 @@ def _outline_ovate(L: float, W: float, n: int = 16) -> tuple[np.ndarray, np.ndar
     v_right = t_right * L
     # sin(pi * t^0.5): peak at t = 0.5^(1/0.5) = 0.25, giving widest at v ≈ 0.25L.
     # Broader at the base than lanceolate (which peaks later at v ≈ 0.37L).
-    u_right = (W * 0.5) * np.sin(np.pi * np.power(t_right, 0.5))
+    u_right = np.maximum((W * 0.5) * np.sin(np.pi * np.power(t_right, 0.5)),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_right))
     t_left = np.linspace(1.0, 0.0, half, endpoint=False)
     v_left = t_left * L
-    u_left = -(W * 0.5) * np.sin(np.pi * np.power(t_left, 0.5))
+    u_left = -np.maximum((W * 0.5) * np.sin(np.pi * np.power(t_left, 0.5)),
+                         W * _LEAF_BASE_HALF_WIDTH * (1.0 - t_left))
     boundary = np.empty((2 * half, 2), dtype=np.float64)
     boundary[:half, 0] = u_right
     boundary[:half, 1] = v_right

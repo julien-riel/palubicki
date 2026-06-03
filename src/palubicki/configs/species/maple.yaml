@@ -80,6 +80,11 @@ geom:
   bark_color: [0.40, 0.28, 0.18]
   bark_texture: "proc:oak_bark"
   leaf_texture: "proc:oak_leaf"
+  # Soft/matte sugar-maple leaf (vs the waxy oak): high roughness, no cuticle
+  # specular, softened vein relief. All SceneKit-safe core PBR (specular omitted).
+  leaf_roughness: 0.95
+  leaf_specular: 0.0
+  leaf_normal_strength: 0.30
   leaf_size: 0.12
   leaf_aspect: 1.0
   leaf_shape: palmate
@@ -95,7 +100,7 @@ geom:
   leaf_blade_curl: 0.12
   leaf_sun_shade_k: 0.6
   petiole_length_ratio: 0.4
-  petiole_radius_ratio: 0.02
+  petiole_radius_ratio: 0.03  # thicker petiole reads as attached to the twig (#1)
   petiole_taper: 0.6
   petiole_droop_deg: 10.0
   petiole_color: [0.33, 0.43, 0.19]
