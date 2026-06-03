@@ -31,8 +31,14 @@ sim:
     n_consecutive_steps: 5
   shade_mortality:
     enabled: true
-    light_threshold: 0.18
+    # #86: 0.18 -> 0.15 — co-relax the culler as shade_avoidance (below) is enabled.
+    light_threshold: 0.15
     n_consecutive_steps: 3
+  # #86: shade-avoidance at initiation. White ash is intermediate-to-tolerant ->
+  # moderate strength; withheld laterals (RESERVE) reactivatable (reactivation_count=1).
+  shade_avoidance:
+    enabled: true
+    strength: 0.40
   # Deciduous (ash turns yellow, sheds early). Shed by the seasonal trigger at
   # sub-annual dt; lifespan is an inert ceiling (see oak.yaml for the rationale).
   leaf_phenology:

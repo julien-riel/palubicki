@@ -35,7 +35,10 @@ def test_reiteration_produces_activations(tmp_path):
     counter["calls"] = 0
     counter["activations"] = 0
 
-    # Run 2: oak preset but force reserves to 0 — expect zero activations.
+    # Run 2: oak preset but force reserves to 0 — expect zero activations. Both
+    # RESERVE sources must be off: dormant_reserve_count=0 AND shade_avoidance
+    # disabled (since #86 the oak preset enables shade-avoidance, which would
+    # otherwise mint withheld-lateral reserves and produce activations).
     with patch.object(shedding_mod, "activate_reserves_on_shed", side_effect=spy):
         cfg = load_config(
             yaml_path=None,
@@ -43,6 +46,7 @@ def test_reiteration_produces_activations(tmp_path):
                 "sim.max_simulation_years": 25,
                 "envelope.marker_count": 3000,
                 "phyllotaxy.dormant_reserve_count": 0,
+                "sim.shade_avoidance.enabled": False,
             },
             output=tmp_path / "oak0.glb", species="oak",
         )

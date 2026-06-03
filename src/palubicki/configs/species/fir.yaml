@@ -31,7 +31,16 @@ sim:
   shade_mortality:
     enabled: true
     light_threshold: 0.12
-    n_consecutive_steps: 4
+    # #86: 4 -> 5 — co-relax the culler as shade_avoidance (below) is enabled, so
+    # the two levers hold net density rather than stacking.
+    n_consecutive_steps: 5
+  # #86: shade-avoidance at initiation. Balsam fir is very shade-tolerant -> high
+  # strength (banks laterals as RESERVE in shade). Paired with reactivation_count
+  # 0 -> 1 (shedding block) so the bank is reactivatable on a light gap — a real
+  # understory bank-and-release, not permanent thinning.
+  shade_avoidance:
+    enabled: true
+    strength: 0.45
   # Evergreen: balsam fir needles are retained across years (no seasonal shed).
   # Needle turnover via the age cap is deferred until a re-leafing model exists
   # (see pine.yaml), so the lifespan is an inert ceiling above the sim horizon.
@@ -67,7 +76,10 @@ shedding:
   quality_threshold: 0.20
   window: 5
   enabled: true
-  reactivation_count: 0
+  # #86: 0 -> 1 so shade_avoidance-withheld RESERVE laterals can wake when a shaded
+  # sibling is shed (bank-and-release). Fir is very shade-tolerant; without this its
+  # withheld reserves would be permanent thinning (no reactivation path).
+  reactivation_count: 1
 light:
   enabled: true
   k_absorption: 0.65

@@ -127,19 +127,39 @@ les nouveaux modes orthogonaux pour la fin.
 > dans la suite lente complète (locale / pré-merge), **pas** dans la matrice GitHub
 > (`-m 'not slow'`) — ~15-45 min dominé par le pin. **Débloque #86.**
 
+> **#86 (activer + calibrer `shade_avoidance` par espèce) — livré.** Le levier de
+> rétention à l'**initiation** (#63, jusqu'ici dormant) est activé avec un `strength`
+> par espèce **gradué sur la tolérance à l'ombre** : tolérantes `maple` 0.55 / `fir` 0.45,
+> intermédiaires `oak`/`ash`/**`pine`** 0.40 / 0.40 / 0.35, pionnière **`birch` désactivée**.
+> Les deux leviers de densité de couronne sont **co-réglés, pas empilés** : à chaque
+> `strength` relevé, le `shade_mortality` de l'espèce est **détendu** (seuil ou pas) pour
+> tenir la densité nette — sinon la rétention retire de l'auto-ombrage, **remonte la
+> lumière** et fait **double-compter** la suppression à l'élagueur (sous-estime couronne /
+> tronc / Horton ; vérifié — l'audit était une prédiction *confirmée*). Deux corrections
+> *réalisme > papier-strict* : (1) **`pine` est intermédiaire** (Niinemets & Valladares
+> ~3.2 ; USDA Silvics « intermediate »), pas « intolérante » comme le libellé du billet —
+> donc au niveau `oak`/`ash`, pas avec `birch` ; (2) **`fir` `reactivation_count` 0→1**
+> pour que ses réserves retenues forment une vraie banque réactivable (sinon pur
+> éclaircissage, à rebours pour la plus tolérante). **`birch` désactivée** : sa canopée est
+> si clairsemée (`total_leaf_area` ~10) qu'un `strength` ≥0.10 remonte la lumière, freine
+> l'élagueur et pousse le `crown_radius` (max-extent chaotique) au-delà du plafond 4.8
+> (4.46→4.90 à 0.10, 5.42 à 0.18) — elle reste le **plancher zéro** du gradient, golden
+> **byte-identique** (pas de re-pin). Critère 3 prouvé par
+> `tests/integration/test_shade_relief_differential.py` : à `strength` fixe et élagueur
+> coupé, `lateral_reserve_fraction` **suit le champ lumineux** (l'initiation lit la lumière,
+> pas l'élagage). La *réactivation* d'une réserve retenue est déjà couverte par le test
+> unitaire #63 ; la vraie boucle lumière→réactivation reste différée (#61 re-flush) —
+> empiriquement les nœuds ombragés qui retiennent une réserve n'ont guère d'enfant à
+> élaguer, donc ces réserves dorment. Garde-fou **#87 vert** (6 espèces, graines {0,1,2},
+> deux mécanismes actifs) ; goldens `oak`/`maple`/`fir`/`pine` re-épinglés (`birch`/`ash`
+> inchangés ; `ash` n'a pas de golden).
+
 L'audit #84 a rendu le **champ lumineux** correct, #83 (livré) a rendu la **mesure**
 correcte, #87 (livré) **verrouille** la justesse botanique en CI — exactement la
 règle « rendre la lumière correcte avant ce qui y réagit » appliquée à la
-calibration. Restent, sur cette piste de calibration :
+calibration. Reste, sur cette piste de calibration :
 
-1. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
-   de couronne (rétention à l'**initiation**), séparé de `shade_mortality`
-   (élagage). Sort du piège de non-identifiabilité (même densité atteignable par
-   parcimonie d'initiation *ou* élagage agressif, indistinguables). **Débloqué par
-   #87** (le garde-fou attrapera les régressions de calibration que ce levier
-   pourrait introduire). Le vrai correctif (budget carbone source→puits) reste #66,
-   fermé `NOT_PLANNED` — ceci est le proxy assumé.
-2. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
+1. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
    la grille voxel + re-pin des goldens + mise-en-bande de la croissance sont déjà
    faits dans #84. Reste à **documenter le contrat** (changer `voxel_edge_m`
    décalibre `k_absorption`/`leaf_area_scale`/`needle_area_scale`) et à **vérifier

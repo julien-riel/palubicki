@@ -38,7 +38,16 @@ sim:
   shade_mortality:
     enabled: true
     light_threshold: 0.12
-    n_consecutive_steps: 4
+    # #86: 4 -> 5 — minimal co-relax as shade_avoidance (below) is enabled.
+    n_consecutive_steps: 5
+  # #86: shade-avoidance at initiation. Eastern white pine is INTERMEDIATE shade-
+  # tolerance (Niinemets & Valladares ~3.2; USDA Silvics) — i.e. with oak/ash, NOT
+  # the issue's "intolerant" framing — so moderate strength. reactivation_count
+  # stays 0 (monopodial self-pruning of shaded laterals), so the withhold is
+  # permanent; nominal 0.35 ~ oak/ash 0.40 in realized effect.
+  shade_avoidance:
+    enabled: true
+    strength: 0.35
   # Evergreen: needles are retained across years (no seasonal shed). Needle
   # turnover via the age cap is deferred until leaves re-flush on old wood (no
   # re-leafing model yet — turning needles over at the default annual dt would
