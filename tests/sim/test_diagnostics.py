@@ -850,129 +850,22 @@ def test_leader_deviation_empty_tree_is_nan():
     assert math.isnan(m["leader_deviation_deg"])
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir"])
-def test_main_axis_continuation_rate_sane_per_species(species):
-    """Acceptance: a healthy (post-fix) preset keeps a recognisable leader.
-    All five presets clear 0.3 for seed 0; the decapitated-conifer bug this
-    metric guards drops to ~0.03. The bound catches harness/sim regressions,
-    not botanical strictness — see configs/literature.yaml for the per-species
-    ✓/✗ bounds."""
-    from pathlib import Path
-
-    from palubicki.config import load_config
-    from palubicki.sim.simulator import simulate
-
-    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
-                      output=Path("tree.glb"), species=species)
-    tree = simulate(cfg)
-    m = compute_metrics(tree, cfg=cfg)
-    rate = m["main_axis_continuation_rate"]
-    assert not math.isnan(rate), f"{species}: main_axis_continuation_rate is NaN"
-    assert rate >= 0.3, f"{species}: main_axis_continuation_rate={rate:.3f} < 0.3"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir"])
-def test_leader_deviation_within_species_bound(species):
-    """Acceptance: every preset's leader stands within its literature
-    leader_deviation_deg band at design density (seed 0). The geometric guard
-    #48 adds — #43's sparse 1000-marker proxy arched the conifer leaders well
-    past these bounds; at the calibrated density they stand upright."""
-    from pathlib import Path
-
-    from palubicki.config import load_config
-    from palubicki.sim.diagnostics import MetricRanges
-    from palubicki.sim.simulator import simulate
-
-    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
-                      output=Path("tree.glb"), species=species)
-    tree = simulate(cfg)
-    m = compute_metrics(tree, cfg=cfg)
-    dev = m["leader_deviation_deg"]
-    bound = MetricRanges.from_species(species).leader_deviation_deg
-    assert bound is not None, f"{species}: no leader_deviation_deg bound"
-    assert not math.isnan(dev), f"{species}: leader_deviation_deg is NaN"
-    lo, hi = bound
-    assert lo <= dev <= hi, f"{species}: leader_deviation_deg={dev:.1f} outside {bound}"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("species", ["pine", "fir"])
-def test_conifer_height_and_trunk_within_band(species):
-    """#7 guard: coupling real needle area into the LAI grid forced an apical-
-    dominance re-calibration (raised lambda_apical). That silently pushed pine
-    tree_height OVER and trunk_base_diameter UNDER their literature bands until
-    shoot_extension_max / pipe_exponent were re-tuned — neither was guarded by any
-    simulated-tree test. This pins both for the conifers at design density (seed 0)
-    so the calibration can't drift back out of band unnoticed."""
-    from pathlib import Path
-
-    from palubicki.config import load_config
-    from palubicki.sim.diagnostics import MetricRanges
-    from palubicki.sim.simulator import simulate
-
-    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
-                      output=Path("tree.glb"), species=species)
-    m = compute_metrics(simulate(cfg), cfg=cfg)
-    ranges = MetricRanges.from_species(species)
-    for key, band in (("tree_height", ranges.tree_height),
-                      ("trunk_base_diameter", ranges.trunk_base_diameter)):
-        assert band is not None, f"{species}: no {key} band"
-        lo, hi = band
-        assert lo <= m[key] <= hi, f"{species}: {key}={m[key]:.4f} outside {band}"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir", "ash"])
-def test_insertion_angle_within_band_per_species(species):
-    """#83 guard: order-1 insertion is now measured ONLY at the founding
-    internode of each axis (the true branch point), not pooled with intra-
-    branch curvature. Pin every preset inside its insertion_angle_deg_vs_parent
-    band at design density (seed 0) so a future calibration drift — or a
-    regression of the first-of-axis gate — surfaces as a red test instead of an
-    untunable-but-green metric (the exact state that let #83 hide)."""
-    from pathlib import Path
-
-    from palubicki.config import load_config
-    from palubicki.sim.diagnostics import MetricRanges
-    from palubicki.sim.simulator import simulate
-
-    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
-                      output=Path("tree.glb"), species=species)
-    m = compute_metrics(simulate(cfg), cfg=cfg)
-    assert 1 in m["insertion_angle_deg_vs_parent"], f"{species}: no order-1 insertion"
-    mean = m["insertion_angle_deg_vs_parent"][1]["mean"]
-    bound = MetricRanges.from_species(species).insertion_angle_deg_vs_parent__order1_mean
-    assert bound is not None, f"{species}: no insertion band"
-    lo, hi = bound
-    assert lo <= mean <= hi, f"{species}: insertion[1]={mean:.1f} outside {bound}"
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir", "ash"])
-def test_divergence_angle_within_species_band(species):
-    """#83 guard: divergence is now measured per phyllotaxy mode (spiral
-    between-node rotation; whorled within-whorl spacing), so the bands are the
-    textbook per-mode angles (spiral ~137.5°, decussate ~90°, whorled ~360/k)
-    instead of one golden-angle band that decussate/whorled species could never
-    satisfy. Pin each preset inside its mode's band at design density (seed 0)
-    so the measurement can't silently drift back to a mode-blind value."""
-    from pathlib import Path
-
-    from palubicki.config import load_config
-    from palubicki.sim.diagnostics import MetricRanges
-    from palubicki.sim.simulator import simulate
-
-    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
-                      output=Path("tree.glb"), species=species)
-    m = compute_metrics(simulate(cfg), cfg=cfg)
-    assert 1 in m["divergence_angle_deg"], f"{species}: no order-1 divergence"
-    mean = m["divergence_angle_deg"][1]["mean"]
-    bound = MetricRanges.from_species(species).divergence_angle_deg__order1_mean
-    assert bound is not None, f"{species}: no divergence band"
-    lo, hi = bound
-    assert lo <= mean <= hi, f"{species}: divergence[1]={mean:.1f} outside {bound}"
+# The per-metric, single-seed botanical guards that used to live here
+# (test_main_axis_continuation_rate_sane_per_species, test_leader_deviation_
+# within_species_bound, test_conifer_height_and_trunk_within_band, test_insertion_
+# angle_within_band_per_species, test_divergence_angle_within_species_band) were
+# consolidated into the multi-seed #87 guardrail at
+# tests/integration/test_botanical_guardrail.py. That sweep checks EVERY bounded
+# metric per species over seeds {0,1,2} in one simulation pass, so it strictly
+# supersedes these (more metrics, multi-seed) while re-simulating each species 3×
+# instead of once-per-metric — fewer slow runs overall (notably pine, ~210-820s a
+# seed). One deliberate loosening: the old continuation guard hard-coded rate>=0.3
+# for every species, but maple's literature band floor is 0.2 (decurrent: the
+# central leader genuinely gives way). The new guard uses the cited 0.2, which
+# still clears the ~0.03 decapitated-leader regression the 0.3 floor targeted, and
+# maple's multi-seed mean (~0.53) sits well above both. The metric-math unit tests
+# for compute_metrics stay here; the bound-resolution engine (check_bounds /
+# gated_fields) is unit-tested in tests/sim/test_metric_ranges.py.
 
 
 @pytest.mark.slow
@@ -1019,13 +912,21 @@ def test_total_leaf_area_matches_pre_refactor_pin():
     Re-pinned for the 2026 light-pipeline audit fixes: apex self-shading exclusion
     (#1) and dormant shade-mortality (I) shift the grown skeleton / leaf count, and
     the corrected light_factor shifts sun/shade leaf sizing — so total_leaf_area
-    moves (oak 665.10→558.94, birch 8.48→9.86, maple 103.57→101.29)."""
+    moves (oak 665.10→558.94, birch 8.48→9.86, maple 103.57→101.29).
+
+    Re-pinned at #87, absorbing two independent shifts. (a) PRE-EXISTING leaf-
+    geometry drift from the tree-beauty / leaf-attachment commits, which changed
+    leaf selection + blade geometry but left this regression pin un-updated — clean
+    main had already moved to oak 588.28, birch 10.22, maple 107.10. (b) #87's oak
+    shedding.quality_threshold 0.15→0.08, which retains more order-1 twigs (lifting
+    the Horton ratio into band) and so adds leaves: oak 588.28→618.76. birch/maple
+    are untouched by #87; their move is purely (a)."""
     from pathlib import Path
 
     from palubicki.config import load_config
     from palubicki.sim.diagnostics import compute_metrics
     from palubicki.sim.simulator import simulate
-    pins = {"oak": 558.94164063, "birch": 9.86478754, "maple": 101.29386159}
+    pins = {"oak": 618.76190056, "birch": 10.21944408, "maple": 107.09605841}
     for sp, expected in pins.items():
         cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
                           output=Path("t.glb"), species=sp)

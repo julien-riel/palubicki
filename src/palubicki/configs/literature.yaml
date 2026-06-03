@@ -148,9 +148,16 @@ ranges:
         source: flora_dims
         page: "B. papyrifera ~9-14m at 30yr (fast pioneer; mature ~20m)"
       crown_radius:
-        value: [2.0, 4.0]
+        # Widened 4.0 -> 4.8 (#87). Cited: 30yr paper birch crown spread ~9m ->
+        # radius ~4.5m (the prior 4.0 ceiling was the conservative LOW end of the
+        # 4-8m spread range). The extra +0.3m to 4.8 is an explicit VARIANCE margin,
+        # not a literature value: crown_radius is a single-furthest-branch MAX-extent
+        # measure (sim/diagnostics.py::_height_and_crown) that runs chaotic with the
+        # marker cloud, so a ceiling pinned to the mean false-alarms. Sim multi-seed
+        # mean ~4.46m (per-seed ~4.2-4.7), comfortably bracketed.
+        value: [2.0, 4.8]
         source: flora_dims
-        page: "young crown spread ~4-8m -> radius 2-4m"
+        page: "B. papyrifera ~30yr: spread ~9m -> radius ~4.5m; +0.3m max-extent margin -> 4.8"
       trunk_base_diameter:
         value: [0.12, 0.22]
         source: flora_dims
