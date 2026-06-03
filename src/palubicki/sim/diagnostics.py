@@ -160,7 +160,15 @@ def _insertion_angle_metrics(
 ) -> dict:
     """For each internode L:
       vs_parent      = angle(L_tangent, L.parent_node.parent_internode_tangent),
-                       skipped if parent_node has no incoming internode.
+                       measured ONLY at the FOUNDING internode of each axis —
+                       the lateral whose incoming parent internode is a strictly
+                       LOWER axis order (the branch point). Continuation
+                       internodes (same order as their parent) measure intra-
+                       branch curvature, not insertion, so they are excluded
+                       (#83): pooling them diluted the order-1 insertion mean
+                       (oak ~29 true insertions @75.7° drowned by ~265 curvature
+                       internodes @20.2° → 25.6°). Intra-branch curvature is
+                       intentionally no longer measured (no band consumes it).
       vs_main_sibling = angle(L_tangent, sibling_tangent) where sibling is the
                        unique child of L.parent_node with is_main_axis=True
                        and not L itself; skipped when no such sibling exists.
@@ -175,7 +183,12 @@ def _insertion_angle_metrics(
         node = L.parent_node
 
         incoming = node.parent_internode
-        if incoming is not None:
+        # First-of-axis gate (#83): keep only the founding lateral internode
+        # of each axis, whose incoming parent is a strictly-lower order (the
+        # true branch-point insertion). Equivalent to `not L.is_main_axis` by
+        # construction of _axis_orders, but the explicit order comparison is
+        # self-documenting and robust to any future axis-order semantics.
+        if incoming is not None and axis_orders[id(incoming)] < order:
             by_parent[order].append(_angle_deg(L_t, _tangent(incoming)))
 
         main_sib: Internode | None = None
@@ -325,36 +338,91 @@ def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return right, up
 
 
+def _lateral_azimuth(lat: Internode, right: np.ndarray, up: np.ndarray) -> float:
+    """Azimuth (deg, [0, 360)) of a lateral's tangent in the (right, up) basis
+    perpendicular to its parent-chain tangent — the same basis the simulator
+    seated the bud in (sim/phyllotaxy.py)."""
+    lat_t = _tangent(lat)
+    return math.degrees(math.atan2(
+        float(np.dot(lat_t, up)),
+        float(np.dot(lat_t, right)),
+    )) % 360.0
+
+
 def _divergence_angle_metrics(
     chains: list[list[Internode]],
     axis_orders: dict[int, int],
+    *,
+    mode: str = "alternate",
 ) -> dict:
-    """Consecutive azimuth deltas (mod 360°) between lateral pairs along
-    each axis chain, measured in the basis perpendicular to the chain
-    tangent. Grouped by the LATERAL's axis_order (not the chain's).
+    """Per-mode order-1 divergence (#83), measured to match the textbook
+    divergence angle of each phyllotaxis mode.
+
+    The previous metric took consecutive azimuth deltas over EVERY lateral
+    collected node-by-node, which interleaved the within-node member spacing
+    with the between-node base rotation — so it read ~178° for decussate and
+    ~93° for whorled instead of the structural 90° / 360-over-k. We split the
+    two quantities and report the one that IS each mode's divergence:
+
+    * ``whorled`` → the WITHIN-whorl nearest-neighbour spacing (min adjacent
+      gap per node ≈ 360/k): the canonical k-merous divergence, taken as the
+      minimum so whorl occupancy (shed members) doesn't leak in. The simulator
+      stacks whorls into vertical ranks with no inter-whorl rotation (#39), so
+      the between-node signal is ~0 and meaningless here.
+    * every other mode → the BETWEEN-node rotation of the per-node base
+      azimuth, recovered from a single representative per node taken modulo the
+      mode's k-fold symmetry ``360/k``. All k co-node members share one base
+      azimuth and sit ``360/k`` apart, so ``az % (360/k)`` is identical for any
+      member — the representative is order-independent. This yields the spiral
+      137.5° (alternate, k=1), the decussate 90° (k=2 → mod 180°) and the
+      distichous 180° (k=1), independent of tropism-driven member ordering.
+
+    ``mode`` comes from the order-1 phyllotaxy config (threaded by
+    ``compute_metrics``). The trunk's order-1 laterals always use the base
+    ``cfg.mode`` (``distichous_on_plagiotropic`` only promotes axis_order > 0),
+    so this is exactly right for the banded order-1 metric; higher orders are
+    informational. Grouped by the LATERAL's axis_order (not the chain's).
     """
     by_order: dict[int, list[float]] = defaultdict(list)
-    for chain in chains:
-        laterals: list[tuple[Internode, Internode]] = []
-        for cur in chain:
-            for c in cur.child_node.children_internodes:
-                if not c.is_main_axis:
-                    laterals.append((cur, c))
-        if len(laterals) < 2:
-            continue
 
+    if mode == "whorled":
+        # Within-whorl spacing: the MINIMUM adjacent gap per node (the nearest-
+        # neighbour spacing ≈ 360/k). The minimum isolates the phyllotactic
+        # spacing from whorl OCCUPANCY — a shed member merges two ~360/k gaps
+        # into one ~2×360/k gap that inflates the mean (→ 360/n_survivors,
+        # flapping 86-100° for pine across seeds) but never lowers the minimum,
+        # which stays ~62° (a touch under the ideal 72° from divergence jitter).
+        for chain in chains:
+            for cur in chain:
+                lats = [c for c in cur.child_node.children_internodes
+                        if not c.is_main_axis]
+                if len(lats) < 2:
+                    continue
+                right, up = _frame_perpendicular_to(_tangent(cur))
+                azs = sorted(_lateral_azimuth(lat, right, up) for lat in lats)
+                gaps = [(azs[(i + 1) % len(azs)] - azs[i]) % 360.0
+                        for i in range(len(azs))]
+                by_order[axis_orders[id(lats[0])]].append(min(gaps))
+        return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
+
+    # Between-node base rotation. ``sym`` is the mode's rotational symmetry:
+    # the k co-node members repeat every 360/k, so the per-node base azimuth is
+    # only defined modulo sym (decussate/opposite k=2 → 180°; the rest k=1 →
+    # 360°). Walking node-by-node keeps consecutive nodes at consecutive axis
+    # ordinals so each delta is one base-azimuth step.
+    k = 2 if mode in ("decussate", "opposite") else 1
+    sym = 360.0 / k
+    for chain in chains:
         prev_az: float | None = None
-        for cur, lat in laterals:
-            T = _tangent(cur)
-            right, up = _frame_perpendicular_to(T)
-            lat_t = _tangent(lat)
-            az = math.degrees(math.atan2(
-                float(np.dot(lat_t, up)),
-                float(np.dot(lat_t, right)),
-            ))
+        for cur in chain:
+            lats = [c for c in cur.child_node.children_internodes
+                    if not c.is_main_axis]
+            if not lats:
+                continue
+            right, up = _frame_perpendicular_to(_tangent(cur))
+            az = _lateral_azimuth(lats[0], right, up) % sym
             if prev_az is not None:
-                diff = (az - prev_az) % 360.0
-                by_order[axis_orders[id(lat)]].append(diff)
+                by_order[axis_orders[id(lats[0])]].append((az - prev_az) % sym)
             prev_az = az
 
     return {"divergence_angle_deg": {k: _stats(v) for k, v in by_order.items()}}
@@ -540,7 +608,10 @@ def compute_metrics(
     out: dict = {}
     out.update(_strahler_metrics(tree.root))
     out.update(_insertion_angle_metrics(internodes, axis_orders))
-    out.update(_divergence_angle_metrics(chains, axis_orders))
+    # Divergence is measured per phyllotaxy mode (#83); the order-1 laterals
+    # always use the base cfg.mode. Without cfg, fall back to spiral.
+    div_mode = cfg.phyllotaxy.mode if cfg is not None else "alternate"
+    out.update(_divergence_angle_metrics(chains, axis_orders, mode=div_mode))
     out.update(_out_of_plane_metrics(chains, axis_orders))
     out.update(_internode_length_metrics(internodes, axis_orders))
     out["sympodial_fork_count"] = _sympodial_fork_count(nodes)

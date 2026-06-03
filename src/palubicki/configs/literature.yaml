@@ -117,11 +117,27 @@ ranges:
       source: abop
       page: "ch. 4 (phyllotaxis, golden angle ~137.5deg)"
     insertion_angle_deg_vs_parent__order1_mean:
-      value: [30.0, 65.0]
+      # Measured at the FOUNDING internode of each order-1 axis (the branch
+      # point), post-tropism (#83). branch_angle_by_order sets the emission
+      # angle (~40-60deg); plagiotropy/gravitropism then lift the measured
+      # first-internode angle to ~52deg (decussate maple/ash) .. ~84deg
+      # (oak/birch/fir/pine). Global band brackets all six presets x seeds
+      # {0,1,2}; per-species tightening is deferred to the #87 CI guard.
+      value: [50.0, 90.0]
       source: honda1971
-      page: "pp. 331-338 (branching-angle parameterisation)"
+      page: "pp. 331-338 (branching-angle parameterisation; sim measured post-tropism)"
 
   species:
+    ash:  # Fraxinus (ash) — decussate (opposite pairs), like maple. #83 adds
+          # the decussate divergence band; the remaining architectural bounds
+          # are inherited from global (per-species tightening deferred to #87).
+      divergence_angle_deg__order1_mean:
+        # Decussate between-node rotation ≈ 90deg (measured ~90-94deg); see the
+        # maple note. ash was previously absent here and silently inherited the
+        # golden-angle global band it could never satisfy.
+        value: [80.0, 100.0]
+        source: abop
+        page: "ch. 4 (decussate phyllotaxis; between-node rotation ~90deg)"
     birch:  # Betula papyrifera (paper birch) — spiral phyllotaxis, slender
       divergence_angle_deg__order1_mean:
         value: [130.0, 145.0]
@@ -184,9 +200,12 @@ ranges:
           page: "balsam fir oven-dry density ~0.34-0.40"
     maple:  # Acer saccharum (sugar maple) — decussate (opposite pairs)
       divergence_angle_deg__order1_mean:
+        # #83: the metric measures the BETWEEN-node rotation of the opposite
+        # pair (≈ 90deg), NOT the within-node 180deg pair split. Measured
+        # ~93-98deg. Do not "correct" this back to a golden-angle band.
         value: [80.0, 100.0]
         source: abop
-        page: "ch. 4 (decussate/opposite phyllotaxis)"
+        page: "ch. 4 (decussate phyllotaxis; between-node rotation ~90deg)"
       tree_height:  # at ~30yr — slow shade-tolerant, mature 25-35m
         value: [8.0, 13.0]
         source: flora_dims
@@ -244,9 +263,13 @@ ranges:
           page: "northern red oak oven-dry density ~0.63-0.70"
     pine:  # Pinus strobus (eastern white pine) — whorled branches
       divergence_angle_deg__order1_mean:
-        value: [130.0, 145.0]
+        # #83: whorled (k=5), so the divergence is the WITHIN-whorl nearest-
+        # neighbour spacing 360/k = 72deg, NOT the golden angle. Measured ~62deg
+        # (nearest-neighbour min gap, pulled a little under 72 by divergence
+        # jitter); band brackets the measured value and the 72deg ideal.
+        value: [52.0, 78.0]
         source: abop
-        page: "ch. 4 (spiral ontogeny underlying branch whorls)"
+        page: "ch. 4 (whorled k-merous phyllotaxis; 360/k=72deg within-whorl)"
       tree_height:  # at ~30yr — fast-growing conifer, mature 25-50m
         value: [12.0, 18.0]
         source: flora_dims
