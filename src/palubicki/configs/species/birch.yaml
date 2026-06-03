@@ -31,6 +31,18 @@ sim:
     enabled: true
     light_threshold: 0.20
     n_consecutive_steps: 3
+  # #86: shade-avoidance LEFT OFF for birch. Paper birch is a very shade-INTOLERANT
+  # pioneer that does not bank reserves — it builds laterals and culls them (reactive
+  # shade_mortality above), so withholding-at-initiation is not botanically warranted
+  # here (acceptance criterion 1: "where warranted"). birch is the true-zero floor of
+  # the tolerance->strength gradient. It must also stay off empirically: birch's canopy
+  # is very sparse (total_leaf_area ~10), so even strength 0.10 removes enough foliage
+  # to lift interior light, suppress the culler, and push a peripheral branch past the
+  # chaotic crown_radius ceiling (mean 4.46 -> 4.90 at 0.10, 5.42 at 0.18; band [2.0,4.8]).
+  # Disabled keeps crown at its calibrated ~4.46 and the determinism golden byte-identical.
+  shade_avoidance:
+    enabled: false
+    strength: 0.0
   # Deciduous (birch turns clear yellow). Shed by the seasonal trigger at
   # sub-annual dt; lifespan is an inert ceiling (see oak.yaml for the rationale).
   leaf_phenology:

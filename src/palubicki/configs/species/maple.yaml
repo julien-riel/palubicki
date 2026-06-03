@@ -32,8 +32,16 @@ sim:
     n_consecutive_steps: 5
   shade_mortality:
     enabled: true
-    light_threshold: 0.18
-    n_consecutive_steps: 3
+    # #86: 0.18 -> 0.15, n 3 -> 4 — co-relax the culler as shade_avoidance (below)
+    # is enabled at high strength, so the two levers hold net density.
+    light_threshold: 0.15
+    n_consecutive_steps: 4
+  # #86: shade-avoidance at initiation. Sugar maple is the canonical very-tolerant
+  # broadleaf -> highest strength; withheld laterals (RESERVE) are reactivatable
+  # (reactivation_count=1) — the headline bank-and-release species for the relief test.
+  shade_avoidance:
+    enabled: true
+    strength: 0.55
   # Deciduous (sugar maple turns fiery red-orange). Shed by the seasonal trigger
   # at sub-annual dt; lifespan is an inert ceiling (see oak.yaml for rationale).
   leaf_phenology:

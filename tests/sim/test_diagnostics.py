@@ -920,13 +920,19 @@ def test_total_leaf_area_matches_pre_refactor_pin():
     main had already moved to oak 588.28, birch 10.22, maple 107.10. (b) #87's oak
     shedding.quality_threshold 0.15→0.08, which retains more order-1 twigs (lifting
     the Horton ratio into band) and so adds leaves: oak 588.28→618.76. birch/maple
-    are untouched by #87; their move is purely (a)."""
+    are untouched by #87; their move is purely (a).
+
+    Re-pinned at #86: enabling shade_avoidance withholds shaded interior laterals
+    (fewer branches -> fewer leaves) on oak (strength 0.40) and maple (0.55): oak
+    618.76→586.65, maple 107.10→91.25. birch is UNCHANGED (10.22) — shade_avoidance is
+    left disabled there (intolerant pioneer; enabling it pushed the chaotic
+    crown_radius past its 4.8 ceiling), so birch stays byte-identical."""
     from pathlib import Path
 
     from palubicki.config import load_config
     from palubicki.sim.diagnostics import compute_metrics
     from palubicki.sim.simulator import simulate
-    pins = {"oak": 618.76190056, "birch": 10.21944408, "maple": 107.09605841}
+    pins = {"oak": 586.64724820, "birch": 10.21944408, "maple": 91.24572832}
     for sp, expected in pins.items():
         cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
                           output=Path("t.glb"), species=sp)

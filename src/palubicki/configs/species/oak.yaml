@@ -31,8 +31,18 @@ sim:
     n_consecutive_steps: 4
   shade_mortality:
     enabled: true
-    light_threshold: 0.20
+    # #86: eased 0.20 -> 0.16 — shade_avoidance (below) is now co-tuned with the
+    # culler, not stacked. Withholding laterals at initiation removes future
+    # self-shading; leaving the culler aggressive would double-count shade
+    # suppression and undershoot the bands.
+    light_threshold: 0.16
     n_consecutive_steps: 3
+  # #86: shade-avoidance at initiation — 2nd crown-density lever, distinct from the
+  # reactive culler above. Red oak is intermediate-tolerance -> moderate strength;
+  # withheld laterals start RESERVE and are reactivatable (reactivation_count=1).
+  shade_avoidance:
+    enabled: true
+    strength: 0.40
   # Deciduous + marcescent (red oak holds dead leaves through winter). Real
   # shedding is the SEASONAL trigger (dormant-window entry), which only fires at
   # sub-annual dt; the lifespan is an inert safety ceiling set above the sim
