@@ -53,18 +53,32 @@ def test_dies_after_n_consecutive_steps():
     assert bud.state is BudState.DEAD
 
 
-def test_doesnt_kill_reserves_or_dormants():
+def test_skips_reserves_and_dead_but_kills_dormants():
+    # RESERVE and DEAD are never touched; DORMANT is living tissue and dies of
+    # sustained shade exactly like ACTIVE (it stays in active_buds and is
+    # re-evaluated every iteration, so it must not be immortal-in-shade).
     reserve = _make_bud(state=BudState.RESERVE)
     dormant = _make_bud(state=BudState.DORMANT)
     dead = _make_bud(state=BudState.DEAD)
     cfg = ShadeMortalityConfig(enabled=True, light_threshold=0.5, n_consecutive_steps=1)
     light = {reserve: 0.0, dormant: 0.0, dead: 0.0}
     n = kill_shaded_buds([reserve, dormant, dead], light, cfg)
-    assert n == 0
+    assert n == 1
     assert reserve.state is BudState.RESERVE
     assert reserve.low_light_steps == 0
-    assert dormant.state is BudState.DORMANT
+    assert dormant.state is BudState.DEAD
     assert dead.state is BudState.DEAD
+
+
+def test_dormant_recovers_shade_counter_when_lit():
+    # A dormant bud that regains light resets its shade counter — its second
+    # chance is preserved, only sustained-shade dormants die.
+    dormant = _make_bud(state=BudState.DORMANT)
+    dormant.low_light_steps = 2
+    cfg = ShadeMortalityConfig(enabled=True, light_threshold=0.5, n_consecutive_steps=3)
+    kill_shaded_buds([dormant], {dormant: 0.9}, cfg)
+    assert dormant.low_light_steps == 0
+    assert dormant.state is BudState.DORMANT
 
 
 def test_missing_light_factor_defaults_to_full_sun():

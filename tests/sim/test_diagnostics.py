@@ -433,7 +433,11 @@ def test_compute_effective_leaf_size_extraction_preserves_geom_output():
     # per-leaf blade area (was a 0.04 scalar per terminal), shifting oak's
     # self-shading → shade-mortality → tree topology / leaf-blade positions. (The
     # area *formula* is unchanged; conifers are untouched, still on the scalar.)
-    EXPECTED_HASH = 33585763.29480557  # noqa: N806
+    # Re-pinned for the 2026 light-pipeline audit fixes: apex self-shading exclusion
+    # (#1), reserve insertion angle now indexed by axis_order (#3), the marker-only
+    # sympodial currency split (F) and dormant shade-mortality (I) each shift oak's
+    # topology / leaf-blade positions by a bounded amount.
+    EXPECTED_HASH = 33736567.02827413  # noqa: N806
     assert h == pytest.approx(EXPECTED_HASH, rel=0, abs=1e-9), (
         f"Hash: {h!r}. If geometry changed intentionally, replace EXPECTED_HASH with this value."
     )
@@ -958,13 +962,18 @@ def test_total_leaf_area_matches_pre_refactor_pin():
     real per-leaf blade area (instead of the old 0.04 scalar-per-terminal) changes
     the self-shading signal → the grown skeleton, and hence the leaf count, shifts.
     Pins captured at #62, seed 0 (oak 791.25→665.10, birch 9.47→8.48,
-    maple 111.28→103.57)."""
+    maple 111.28→103.57).
+
+    Re-pinned for the 2026 light-pipeline audit fixes: apex self-shading exclusion
+    (#1) and dormant shade-mortality (I) shift the grown skeleton / leaf count, and
+    the corrected light_factor shifts sun/shade leaf sizing — so total_leaf_area
+    moves (oak 665.10→558.94, birch 8.48→9.86, maple 103.57→101.29)."""
     from pathlib import Path
 
     from palubicki.config import load_config
     from palubicki.sim.diagnostics import compute_metrics
     from palubicki.sim.simulator import simulate
-    pins = {"oak": 665.09540147, "birch": 8.47687259, "maple": 103.56636427}
+    pins = {"oak": 558.94164063, "birch": 9.86478754, "maple": 101.29386159}
     for sp, expected in pins.items():
         cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
                           output=Path("t.glb"), species=sp)

@@ -14,7 +14,7 @@ from palubicki.sim.caducity import advance_leaf_states
 from palubicki.sim.clock import Clock
 from palubicki.sim.elongation import shoot_extension, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
-from palubicki.sim.light import LightGrid
+from palubicki.sim.light import LightGrid, _resolution_for
 from palubicki.sim.light_perception import perceive_light
 from palubicki.sim.obstacles import any_contains, segment_blocked
 from palubicki.sim.phyllotaxy import (
@@ -39,6 +39,11 @@ logger = logging.getLogger(__name__)
 
 _ILEN_SALT = int.from_bytes(b"ilen", "big")
 _SHADE_SALT = int.from_bytes(b"shav", "big")
+
+# One-time guard for the out-of-grid overshoot warning (#FIX G). Set True after the
+# first warning so a leader that has grown past the sky margin is surfaced once,
+# not spammed every iteration.
+_OVERSHOOT_WARNED = False
 
 
 class _SimState:
@@ -124,9 +129,14 @@ def _init_light_grid(forest: Forest, cfg: Config) -> None:
     if cfg.light.grid_origin is None or cfg.light.grid_size is None:
         envs = [ptc.envelope for ptc in forest.per_tree_cfgs]
         origin, size = forest_light_bounds(envs, forest.obstacles)
-        nx, ny, nz = cfg.light.grid_resolution
+        # Mirror LightGrid.from_config's scale-aware derivation (#65): the forest
+        # size differs from the single-env autofit, so re-derive resolution and
+        # reallocate the LAI array to match.
+        nx, ny, nz = _resolution_for(cfg.light, size)
         forest.light_grid.origin = origin
         forest.light_grid.cell_size = size / np.array([nx, ny, nz], dtype=np.float64)
+        forest.light_grid.resolution = (nx, ny, nz)
+        forest.light_grid.lai = np.zeros((nx, ny, nz), dtype=np.float32)
     # Voxelize obstacles into mask (one-shot)
     if forest.obstacles:
         mask = forest.obstacles[0].voxelize(forest.light_grid)
@@ -146,10 +156,35 @@ def _perceive_forest_light(forest: Forest, union_buds, cfg: Config, iteration: i
         r_tip=cfg.geom.r_tip, exponent=cfg.geom.pipe_exponent,
         vigor_ref=cfg.sim.vigor_ref, vigor_diameter_gain=cfg.sim.vigor_diameter_gain,
     )
+    _warn_if_buds_outside_grid(union_buds, light_grid)
     return perceive_light(
         union_buds, light_grid, cfg.light,
         seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
     )
+
+
+def _warn_if_buds_outside_grid(union_buds, light_grid) -> None:
+    """One-time warning (#FIX G) when any active bud lies outside the light grid
+    AABB during perception. A vigorous leader can grow past the sky margin and then
+    read full sun (rays starting outside the grid accumulate no optical depth), so
+    silent under-shading is otherwise invisible. Cheap: a single vectorized in-bounds
+    test on the stacked positions; fires the logger.warning at most once per process."""
+    global _OVERSHOOT_WARNED
+    if _OVERSHOOT_WARNED or not union_buds:
+        return
+    pos = np.asarray([b.position for b in union_buds], dtype=np.float64)
+    lo = light_grid.origin
+    hi = light_grid.origin + light_grid.cell_size * np.array(light_grid.resolution)
+    outside = np.any((pos < lo) | (pos >= hi), axis=1)
+    n_out = int(outside.sum())
+    if n_out:
+        logger.warning(
+            "%d/%d active bud(s) lie outside the light grid AABB during perception; "
+            "they read full sun (no shading). The leader likely overshot the sky "
+            "margin — consider raising the y-margin or light.grid_size.",
+            n_out, len(union_buds),
+        )
+        _OVERSHOOT_WARNED = True
 
 
 def _apply_shade_mortality(forest: Forest, light_info, cfg: Config) -> list[Bud]:
@@ -169,28 +204,44 @@ def _apply_shade_mortality(forest: Forest, light_info, cfg: Config) -> list[Bud]
     return all_active_buds(forest)
 
 
-def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -> dict:
-    """Combine marker-perception quality with the light factor and the per-axis
-    bud-break bias. Returns a {bud: quality} dict."""
+def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -> tuple[dict, dict]:
+    """Compute two parallel quality currencies and return ``(quality_light, quality_marker)``.
+
+    Both start from the marker-perception count ``res.quality`` and both receive the
+    per-axis bud-break bias. They differ ONLY in the light multiply:
+
+    * ``quality_light`` = marker_count * light_factor * bud_break_bias — the
+      light-weighted currency that drives vigor allocation (bh.allocate /
+      compute_v_subtree), recorded qualities, and shedding.
+    * ``quality_marker`` = marker_count * bud_break_bias (NO light_factor) — the
+      marker-only currency whose units match the integer marker counts that
+      ``sympodial.q_threshold`` is calibrated against. Used ONLY for the sympodial
+      promotion decision (#FIX F); mixing the unitless light_factor into that
+      threshold otherwise made it light-magnitude-dependent.
+
+    Vigor and shedding stay light-weighted by design — leaving the shedding path
+    light-weighted is an accepted, documented limitation (we do not refactor it here).
+    """
     if light_info is not None:
-        quality = {b: res.quality[b] * light_info.light_factor[b] for b in union_buds}
+        quality_light = {b: res.quality[b] * light_info.light_factor[b] for b in union_buds}
     else:
-        quality = dict(res.quality)
+        quality_light = dict(res.quality)
+    quality_marker = dict(res.quality)
 
     # Bud-break bias: modulate lateral quality by position along parent axis.
-    # Skipped entirely in the default (uniform / strength=0) case to avoid the
-    # per-tree axis walk when the bias is off.
+    # Applied identically to BOTH currencies. Skipped entirely in the default
+    # (uniform / strength=0) case to avoid the per-tree axis walk when off.
     bb = cfg.sim.bud_break_bias
     if bb.mode != "uniform" and bb.strength > 0.0:
         for tree in forest.trees:
             positions = compute_axis_positions(tree)
             for b, (node_index, axis_length) in positions.items():
-                if b not in quality:
-                    continue
-                quality[b] = quality[b] * position_weight(
-                    node_index, axis_length, bb.mode, bb.strength
-                )
-    return quality
+                w = position_weight(node_index, axis_length, bb.mode, bb.strength)
+                if b in quality_light:
+                    quality_light[b] = quality_light[b] * w
+                if b in quality_marker:
+                    quality_marker[b] = quality_marker[b] * w
+    return quality_light, quality_marker
 
 
 def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState, t0: float, activity: float = 1.0) -> int:
@@ -214,13 +265,14 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
         theta_perception_deg=cfg.sim.theta_perception_deg,
     )
 
-    quality = _compute_quality(forest, union_buds, res, light_info, cfg)
+    quality, quality_marker = _compute_quality(forest, union_buds, res, light_info, cfg)
 
     new_node_positions: list[np.ndarray] = []
     nodes_created_this_step = 0
     for tree in forest.trees:
         created, positions = _grow_tree(
-            tree, forest, cfg, iteration, t, state, res, light_info, quality, activity
+            tree, forest, cfg, iteration, t, state, res, light_info, quality,
+            quality_marker, activity,
         )
         nodes_created_this_step += created
         new_node_positions.extend(positions)
@@ -245,7 +297,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
 
 def _grow_tree(
     tree: Tree, forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState,
-    res, light_info, quality: dict, activity: float = 1.0,
+    res, light_info, quality: dict, quality_marker: dict, activity: float = 1.0,
 ) -> tuple[int, list[np.ndarray]]:
     """Grow one tree by one iteration. Returns (nodes_created, new_positions).
 
@@ -260,7 +312,11 @@ def _grow_tree(
     nodes_created = 0
 
     if cfg.sim.sympodial.enabled:
-        promote_lateral_if_failing(tree, quality, cfg.sim.sympodial)
+        # Currency separation (#FIX F): the sympodial threshold (sympodial.q_threshold)
+        # is calibrated against integer marker counts, so feed it the marker-ONLY
+        # quality (no light_factor multiply). Vigor allocation / v_subtree / shedding
+        # below stay on the light-weighted ``quality`` by design.
+        promote_lateral_if_failing(tree, quality_marker, cfg.sim.sympodial)
     v_subtree = compute_v_subtree(tree, quality)
     v_by_bud = allocate(
         tree, quality=quality,
@@ -473,6 +529,7 @@ def _emit_node(
             node_index=axis_ord,
             seed=cfg.seed,
             count=cfg.phyllotaxy.dormant_reserve_count,
+            axis_order=cur.axis_order,
             spray_plane_normal=axis_normal,
         )
         for rd in reserve_dirs:

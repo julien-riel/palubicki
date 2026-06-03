@@ -485,7 +485,12 @@ class LightConfig:
     enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
     grid_origin: tuple[float, float, float] | None = None
     grid_size: tuple[float, float, float] | None = None
-    grid_resolution: tuple[int, int, int] = (64, 64, 64)
+    # Hard override; when None the resolution is derived from voxel_edge_m and the
+    # grid size: clamp(ceil(size_axis / voxel_edge_m), 8, 192) per axis (#65).
+    grid_resolution: tuple[int, int, int] | None = None
+    # Target physical cell edge (metres) — drives scale-aware grid resolution when
+    # grid_resolution is None: each axis count = clamp(ceil(size/voxel_edge_m), 8, 192).
+    voxel_edge_m: float = field(default=0.04, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}})
     k_absorption: float = field(default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     # Broadleaf foliage occlusion (#62): unitless multiplier on the *real* per-leaf
     # blade area deposited into the LAI grid. 1.0 = pure rendered foliage area;
@@ -500,6 +505,9 @@ class LightConfig:
     # k_absorption), not propped up by a uniform shell. 0 disables needle occlusion.
     needle_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     internode_area_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
+    # Multiplies the wood/internode LAD at deposit time; 1.0 = legacy (unchanged),
+    # raise toward ~8 to model opaque branches that fully shade what's behind them.
+    wood_extinction_scale: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 20.0, "step": 0.5}})
     n_rays: int = field(default=16, metadata={"ui": {"min": 4, "max": 64, "step": 4}})
     light_direction: tuple[float, float, float] = (0.0, 1.0, 0.0)
 
@@ -892,8 +900,12 @@ class Config:
             raise ConfigError(f"light.needle_area_scale must be >= 0, got {light.needle_area_scale}")
         if light.internode_area_scale < 0:
             raise ConfigError(f"light.internode_area_scale must be >= 0, got {light.internode_area_scale}")
-        if any(r <= 0 for r in light.grid_resolution):
+        if light.grid_resolution is not None and any(r <= 0 for r in light.grid_resolution):
             raise ConfigError(f"light.grid_resolution must be all > 0, got {light.grid_resolution}")
+        if light.voxel_edge_m <= 0:
+            raise ConfigError(f"light.voxel_edge_m must be > 0, got {light.voxel_edge_m}")
+        if light.wood_extinction_scale < 0:
+            raise ConfigError(f"light.wood_extinction_scale must be >= 0, got {light.wood_extinction_scale}")
         if sum(c * c for c in light.light_direction) <= 0:
             raise ConfigError(f"light.light_direction must be non-zero, got {light.light_direction}")
 

@@ -48,8 +48,10 @@ def growth_direction(
     """Blend perception + orthotropy (UP) + gravitropy (DOWN) + photo + inertia.
 
     ``is_main_axis`` selects between main-axis weights (e.g. w_orthotropy_main)
-    and lateral-axis weights. Each tropism weight at order k is multiplied by
-    ``cfg.axis_decay**k``.
+    and lateral-axis weights. Orthotropy, gravitropism and phototropism are
+    multiplied by ``cfg.axis_decay**axis_order``; perception and
+    direction-inertia are NOT decayed; plagiotropism is decayed in the legacy
+    world-XY path but held at full strength (decay=1.0) in the spray-plane frame.
 
     ``spray_plane_normal`` (#55): when provided, plagiotropism projects
     ``current_direction`` onto the parent axis's spray plane (normal =
@@ -58,17 +60,20 @@ def growth_direction(
     frond at least as hard as order-1. ``None`` => legacy world-XY projection with
     the usual order decay (bit-identical to pre-#55 behaviour).
     """
+    w_photo_eff = float(cfg.w_phototropism)
     if light_gradient is not None:
         lg = np.asarray(light_gradient, dtype=np.float64)
         lg_norm = float(np.linalg.norm(lg))
         if lg_norm > 1e-12:
             photo = lg / lg_norm
         else:
-            photo = np.asarray(cfg.photo_direction, dtype=np.float64)
-            pn = np.linalg.norm(photo)
-            if pn > 1e-12:
-                photo = photo / pn
+            # Uniform light (no gradient): phototropism has no direction to steer
+            # toward, so contribute nothing — do NOT fall back to cfg.photo_direction
+            # (that would smuggle a spurious +Y/orthotropic pull under w_phototropism).
+            photo = np.zeros(3)
+            w_photo_eff = 0.0
     else:
+        # Light disabled (legacy path): steer toward the configured photo_direction.
         photo = np.asarray(cfg.photo_direction, dtype=np.float64)
         pn = np.linalg.norm(photo)
         if pn > 1e-12:
@@ -120,7 +125,7 @@ def growth_direction(
         + (w_ortho * decay) * _UP
         + (w_gravi * decay) * _DOWN
         + (w_plagio * plagio_decay) * v_plagio
-        + (cfg.w_phototropism * decay) * photo
+        + (w_photo_eff * decay) * photo
         + cfg.w_direction_inertia * current_direction
     )
     n = np.linalg.norm(blend)

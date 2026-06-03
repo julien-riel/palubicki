@@ -227,10 +227,14 @@ def test_simulator_light_enabled_reduces_density():
     )
     from palubicki.sim.simulator import simulate
 
+    # Phototropism disabled to isolate the shade-SUPPRESSION channel: with the
+    # corrected centered light gradient (#FIX D), phototropism under real light fills
+    # lateral gaps better than the no-light +Y fallback, which can RAISE internode
+    # count, so net density is not a clean suppression signal when photo is on.
     base_kwargs = {
         "envelope": EnvelopeConfig(rx=2.0, ry=3.0, rz=2.0, marker_count=2000),
         "sim": SimConfig(max_simulation_years=10.0),
-        "tropism": TropismConfig(w_phototropism=0.3),
+        "tropism": TropismConfig(w_phototropism=0.0),
         "phyllotaxy": PhyllotaxyConfig(),
         "shedding": SheddingConfig(),
         "geom": GeomConfig(),

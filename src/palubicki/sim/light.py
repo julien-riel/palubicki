@@ -35,18 +35,32 @@ def _autofit_bounds(env: EnvelopeConfig) -> tuple[np.ndarray, np.ndarray]:
     """Return (origin, size) auto-fit to envelope AABB with sky margin.
 
     The grid is padded by 10% of extent on each side in x and z, and 10%
-    below + 30% above in y (sky clearance), giving total size factors of
-    1.2× in x/z and 1.4× in y.
+    below + 50% above in y (sky clearance), giving total size factors of
+    1.2× in x/z and 1.6× in y. The top margin is generous so vigorous leaders
+    that overshoot the envelope still fall inside the grid AABB (#FIX G);
+    overshoot past even this is surfaced by a one-time warning in perception.
     """
     aabb_min, aabb_max = _envelope_aabb(env)
     extent = aabb_max - aabb_min
     origin = aabb_min - 0.1 * extent
     # margin_top: extra space above aabb_max
     # x/z: 0.1*extent so that total = 0.1 below + 0.1 above = 1.2× extent
-    # y:   0.3*extent so that total = 0.1 below + 0.3 above = 1.4× extent
-    margin_top = np.array([0.1 * extent[0], 0.3 * extent[1], 0.1 * extent[2]])
+    # y:   0.5*extent so that total = 0.1 below + 0.5 above = 1.6× extent
+    margin_top = np.array([0.1 * extent[0], 0.5 * extent[1], 0.1 * extent[2]])
     size = (aabb_max + margin_top) - origin
     return origin, size
+
+
+def _resolution_for(light_cfg: LightConfig, size: np.ndarray) -> tuple[int, int, int]:
+    """Per-axis grid resolution. ``light.grid_resolution`` is a HARD override; when
+    None it is DERIVED scale-aware from the post-autofit ``size`` and the target
+    physical cell edge: clamp(ceil(size_axis / voxel_edge_m), 8, 192) per axis (#65)."""
+    if light_cfg.grid_resolution is not None:
+        return tuple(light_cfg.grid_resolution)
+    size = np.asarray(size, dtype=np.float64)
+    return tuple(
+        int(np.clip(np.ceil(size[axis] / light_cfg.voxel_edge_m), 8, 192)) for axis in range(3)
+    )
 
 
 @dataclass
@@ -63,7 +77,7 @@ class LightGrid:
         else:
             origin = np.asarray(light_cfg.grid_origin, dtype=np.float64)
             size = np.asarray(light_cfg.grid_size, dtype=np.float64)
-        nx, ny, nz = light_cfg.grid_resolution
+        nx, ny, nz = _resolution_for(light_cfg, size)
         cell_size = size / np.array([nx, ny, nz], dtype=np.float64)
         lai = np.zeros((nx, ny, nz), dtype=np.float32)
         return cls(origin=origin, cell_size=cell_size, resolution=(nx, ny, nz), lai=lai)
@@ -160,13 +174,22 @@ class LightGrid:
         max_steps = int(np.ceil(grid_diag / step_len)) + 2
 
         optical_depth = 0.0
+        # Apex self-shading fix: record the ray's ORIGIN cell once and skip
+        # optical-depth accumulation whenever the marched cell is that same cell.
+        # The half-step start offset fails to leave the origin voxel ~43% of the
+        # time, so a bud would otherwise be shaded by the foliage deposited at its
+        # own node's cell (also handles any later re-entry of the self-voxel).
+        origin_cell = tuple(
+            np.floor((p.astype(np.float64) - self.origin) / self.cell_size).astype(int)
+        )
         pos = p.astype(np.float64).copy() + 0.5 * step_len * d
         for _ in range(max_steps):
             cell = self.world_to_cell(pos)
             if cell is None:
                 pos = pos + d * step_len
                 continue  # outside the grid: don't accumulate, but keep marching
-            optical_depth += k * float(self.lai[cell]) * step_len
+            if cell != origin_cell:
+                optical_depth += k * float(self.lai[cell]) * step_len
             pos = pos + d * step_len
         return float(np.exp(-optical_depth))
 
@@ -183,7 +206,11 @@ class LightGrid:
 
         Returns:
           light_factors: (B,) float64, mean transmission per bud.
-          gradients:     (B, 3) float64, normalised brightness-weighted direction.
+          gradients:     (B, 3) float64, normalised *centered* brightness-weighted
+            direction Σ (T_k - mean(T_k))·d_k / ‖·‖. Subtracting the per-bud mean
+            transmission makes the gradient ZERO under uniform illumination (no
+            spurious pull toward light_direction) and point toward the brighter side
+            otherwise. Zero-norm => zero vector.
 
         Bit-exact with sequential ``sample_hemisphere`` calls: each (bud, ray) pair
         accumulates its optical depth step-by-step independently; we only batch the
@@ -224,7 +251,11 @@ class LightGrid:
         T = transmissions.reshape(B, n_rays)
 
         light_factors = T.mean(axis=1)
-        weighted = (T[:, :, None] * all_dirs).sum(axis=1)  # (B, 3)
+        # Centered gradient: subtract the per-bud mean transmission before weighting,
+        # so uniform illumination yields a zero gradient (no spurious light_direction
+        # pull) while a brighter side still produces a net direction toward it.
+        T_centered = T - light_factors[:, None]
+        weighted = (T_centered[:, :, None] * all_dirs).sum(axis=1)  # (B, 3)
         grad_norms = np.linalg.norm(weighted, axis=1)
         gradients = np.zeros((B, 3), dtype=np.float64)
         nz = grad_norms > 1e-12
@@ -244,7 +275,10 @@ class LightGrid:
 
         Returns (light_factor, gradient):
           light_factor = mean(T_k) ∈ [0, 1]
-          gradient = normalize(Σ T_k · d_k), or zero vector if Σ ≈ 0
+          gradient = normalize(Σ (T_k - mean(T_k)) · d_k), or zero vector if Σ ≈ 0.
+            The *centered* weighting subtracts the bud's mean transmission so the
+            gradient is ZERO under uniform illumination (no spurious pull toward
+            light_direction) and points toward the brighter side otherwise.
         """
         rng = np.random.default_rng(seed)
         # Build orthonormal basis (u, v, w) with w = light_direction (normalized).
@@ -273,7 +307,10 @@ class LightGrid:
         transmissions = self._sample_transmission_batch(p, dirs, k=k)
 
         light_factor = float(np.mean(transmissions))
-        weighted = (transmissions[:, None] * dirs).sum(axis=0)
+        # Centered gradient: subtract the bud's mean transmission before weighting,
+        # so uniform illumination yields a zero gradient (no spurious light_direction
+        # pull) while a brighter side still produces a net direction toward it.
+        weighted = ((transmissions - light_factor)[:, None] * dirs).sum(axis=0)
         grad_norm = float(np.linalg.norm(weighted))
         gradient = weighted / grad_norm if grad_norm > 1e-12 else np.zeros(3)
         return light_factor, gradient
@@ -307,6 +344,11 @@ class LightGrid:
         cell_size = self.cell_size
         origin = self.origin
         lai = self.lai
+        # Apex self-shading fix: record each ray's ORIGIN cell index once and skip
+        # accumulation whenever the marched cell equals it (the half-step offset
+        # fails to leave the origin voxel ~43% of the time). Per-ray here since each
+        # ray has its own origin. Bit-consistent with the other two march paths.
+        origin_cells = np.floor((origins[active] - origin) / cell_size).astype(np.intp)
         for _ in range(max_steps):
             local = positions - origin
             cells = np.floor(local / cell_size).astype(np.intp)
@@ -315,10 +357,12 @@ class LightGrid:
                 (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
                 (cells[:, 2] >= 0) & (cells[:, 2] < nz)
             )
-            if in_grid.any():
-                vc = cells[in_grid]
+            not_self = np.any(cells != origin_cells, axis=1)
+            accumulate = in_grid & not_self
+            if accumulate.any():
+                vc = cells[accumulate]
                 lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
-                optical_depth[in_grid] += (k * lai_vals) * step_len
+                optical_depth[accumulate] += (k * lai_vals) * step_len
             positions += step_vec
 
         out[active] = np.exp(-optical_depth)
@@ -353,6 +397,11 @@ class LightGrid:
         cell_size = self.cell_size
         origin = self.origin
         lai = self.lai
+        # Apex self-shading fix: record the shared ORIGIN cell index once and skip
+        # accumulation whenever the marched cell equals it (the half-step offset
+        # fails to leave the origin voxel ~43% of the time). All rays share origin p
+        # here. Bit-consistent with the other two march paths.
+        origin_cell = np.floor((p.astype(np.float64) - origin) / cell_size).astype(np.intp)
         for _ in range(max_steps):
             local = positions - origin
             cells = np.floor(local / cell_size).astype(np.intp)
@@ -361,10 +410,12 @@ class LightGrid:
                 (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
                 (cells[:, 2] >= 0) & (cells[:, 2] < nz)
             )
-            if in_grid.any():
-                vc = cells[in_grid]
+            not_self = np.any(cells != origin_cell, axis=1)
+            accumulate = in_grid & not_self
+            if accumulate.any():
+                vc = cells[accumulate]
                 lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
-                optical_depth[in_grid] += (k * lai_vals) * step_len
+                optical_depth[accumulate] += (k * lai_vals) * step_len
             positions += step_vec
 
         out[active] = np.exp(-optical_depth)
@@ -407,9 +458,15 @@ class LightGrid:
             node = stack.pop()
             for child_iod in node.children_internodes:
                 stack.append(child_iod.child_node)
-                self._inject_internode(child_iod, sub_step, cfg.internode_area_scale, cell_volume)
+                self._inject_internode(
+                    child_iod, sub_step, cfg.internode_area_scale, cell_volume,
+                    wood_extinction_scale=cfg.wood_extinction_scale,
+                )
 
-    def _inject_internode(self, iod, sub_step: float, scale: float, cell_volume: float) -> None:
+    def _inject_internode(
+        self, iod, sub_step: float, scale: float, cell_volume: float,
+        *, wood_extinction_scale: float = 1.0,
+    ) -> None:
         """Inject lateral surface LAI along the internode in sub-segments of length sub_step."""
         if iod.diameter <= 0 or scale <= 0 or iod.length <= 0:
             return
@@ -424,7 +481,9 @@ class LightGrid:
         n_steps = max(1, int(np.ceil(seg_len / sub_step)))
         actual_step = seg_len / n_steps
         sub_surface = 2.0 * np.pi * radius * actual_step * scale
-        sub_lai = sub_surface / cell_volume
+        # Wood opacity knob (#65): scale the deposited wood LAD; 1.0 (default) =>
+        # byte-identical, raise to model opaque branches that fully shade behind them.
+        sub_lai = sub_surface * wood_extinction_scale / cell_volume
         for k in range(n_steps):
             p = p0 + (k + 0.5) * actual_step * direction
             cell = self.world_to_cell(p)

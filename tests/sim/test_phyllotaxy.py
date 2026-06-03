@@ -221,18 +221,26 @@ def test_decussate_alternates_90_per_node():
     assert abs(cos_angle) < 1e-6
 
 
-def test_decussate_with_nonzero_divergence():
-    cfg = PhyllotaxyConfig(mode="decussate", branch_angle_by_order=(45.0,), divergence_angle_deg=10.0)
+def test_decussate_ignores_divergence_angle_deg():
+    """FIX H: decussate is the pure 90deg inter-node toggle ALONE — the
+    divergence*node_index spiral term is NOT added (it corrupts the intended
+    structure when divergence != 0, e.g. the 137.5 config default). Two nodes of
+    the same parity therefore share an azimuth regardless of divergence_angle_deg,
+    and successive nodes still toggle exactly 90deg."""
     growth = np.array([0.0, 1.0, 0.0])
+
+    def perp(v):
+        p = v - np.dot(v, growth) * growth
+        return p / np.linalg.norm(p)
+
+    cfg = PhyllotaxyConfig(mode="decussate", branch_angle_by_order=(45.0,), divergence_angle_deg=10.0)
     d0 = lateral_bud_directions(growth, cfg, node_index=0, seed=0, axis_order=0)[0]
+    d1 = lateral_bud_directions(growth, cfg, node_index=1, seed=0, axis_order=0)[0]
     d2 = lateral_bud_directions(growth, cfg, node_index=2, seed=0, axis_order=0)[0]
-    p0 = d0 - np.dot(d0, growth) * growth
-    p2 = d2 - np.dot(d2, growth) * growth
-    p0 = p0 / np.linalg.norm(p0)
-    p2 = p2 / np.linalg.norm(p2)
-    cos_angle = float(np.dot(p0, p2))
-    expected = np.cos(np.radians(20.0))
-    assert abs(cos_angle - expected) < 1e-6
+    # Same parity -> identical azimuth (divergence ignored).
+    assert float(np.dot(perp(d0), perp(d2))) > 1.0 - 1e-6
+    # Successive nodes toggle 90deg (cos 90 = 0).
+    assert abs(float(np.dot(perp(d0), perp(d1)))) < 1e-6
 
 
 def test_distichous_yields_one_direction():

@@ -69,15 +69,58 @@ les nouveaux modes orthogonaux pour la fin.
 > (chêne auto-ombragé, `dormant_reserve_count=0` + `shade_mortality` off pour isoler
 > l'initiation), pas par un preset expédié.
 
+> **#84 (audit du pipeline lumière) — livré.** Correctifs physiques appliqués :
+> auto-ombrage de l'apex (#1, HIGH — le demi-pas de ray-march ne quittait pas la
+> cellule du bourgeon ~43 % du temps, étouffant la dominance apicale), grille
+> *scale-aware* dérivée de `voxel_edge_m`, bouton `wood_extinction_scale`, gradient
+> de lumière centré, phototropisme sans repli +Y, décussé/verticillé sans terme
+> spiral, mortalité d'ombre des dormants, réserves par-mode. Goldens régénérés
+> (6 espèces + ellipsoïde + forêt V3), suite verte (935 passed). Les **métriques de
+> croissance** (hauteur/tronc/couronne/bif) sont désormais **toutes en bande** ;
+> les 8 hors-bande restants sont des **bugs de mesure** isolés dans #83. Limites
+> assumées (non modifiées) documentées dans `realism-assessment.md` (C irradiance
+> hémisphère, B bois partage `k`, F-résiduel lumière dans vigueur/shedding,
+> A-rationale constantes liées au voxel).
+
+### Justesse de calibration (fondation correcte avant d'empiler)
+
+L'audit #84 a rendu le **champ lumineux** correct. Avant d'ajouter de nouveaux
+mécanismes, on rend la **mesure** correcte (#83) puis on **verrouille** la justesse
+botanique en CI (#87) — exactement la règle « rendre la lumière correcte avant ce
+qui y réagit » appliquée à la calibration. Cette piste passe **devant** la mémoire
+mécanique et le reste.
+
+1. **#83 — bug de mesure des angles ordre-1** · `insertion_angle` dilué par la
+   courbure intra-branche + bande `divergence` mal typée pour décussé/verticillé.
+   Les **8 dernières métriques hors-bande** des 6 espèces (post-#84) sont *toutes*
+   dues à ces deux défauts, et **intunables** (aucun preset ne les corrige). Pur
+   correctif de diagnostic ; débloque une lecture *vraie* de l'état de calibration.
+   **Gate tout le reste de cette piste.**
+2. **#87 — garde-fou botanique en CI** · test multi-graines qui échoue si une
+   espèce sort de ses bornes `literature.yaml` (pas seulement le hash de
+   déterminisme). N'a de sens **qu'après #83** (les bandes mesurent enfin la
+   réalité). Verrouille la justesse contre les régressions futures.
+3. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
+   de couronne (rétention à l'**initiation**), séparé de `shade_mortality`
+   (élagage). Sort du piège de non-identifiabilité (même densité atteignable par
+   parcimonie d'initiation *ou* élagage agressif, indistinguables). À faire une fois
+   #87 en place pour attraper les régressions. Le vrai correctif (budget carbone
+   source→puits) reste #66, fermé `NOT_PLANNED` — ceci est le proxy assumé.
+4. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
+   la grille voxel + re-pin des goldens + mise-en-bande de la croissance sont déjà
+   faits dans #84. Reste à **documenter le contrat** (changer `voxel_edge_m`
+   décalibre `k_absorption`/`leaf_area_scale`/`needle_area_scale`) et à **vérifier
+   « tout en bande »** une fois #83 réglé.
+
 ### Mémoire mécanique (intégrée dans le temps)
 
-1. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
+5. **#64 — mémoire mécanique du bois** · bois de réaction / redressement /
    raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
    statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
 
 ### Changement de moteur profond
 
-2. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
+6. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
    backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
    fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
    prescrite par l'enveloppe `cone`. Compose avec #62 (lumière feuillus correcte)
@@ -86,21 +129,21 @@ les nouveaux modes orthogonaux pour la fin.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-3. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+7. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
    déterminées). Lit le driver saisonnier **#65 (livré)** via une fenêtre de
    floraison propre passée au **même** `clock.phenology_activity` (aucune nouvelle
    math de rampe). Débloque forbs, fruits, et un 2ᵉ déclencheur sympodial propre.
-4. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+8. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-5. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+9. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-6. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+10. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
     reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
     (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
     look**). Sous-tickets P0…P5 indépendants, un PR chacun.

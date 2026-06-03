@@ -26,7 +26,9 @@ def test_perceive_light_open_sky():
     res = perceive_light([bud], grid, cfg, seed=42)
     assert isinstance(res, LightPerception)
     assert res.light_factor[bud] == pytest.approx(1.0, rel=1e-4)
-    np.testing.assert_allclose(res.gradient[bud], [0.0, 1.0, 0.0], atol=0.3)
+    # Centered gradient (#FIX D): under open sky all T_k = 1 → zero gradient
+    # (no spurious pull toward the light direction).
+    np.testing.assert_allclose(res.gradient[bud], [0.0, 0.0, 0.0], atol=1e-9)
 
 
 def test_perceive_light_dense_attenuation():

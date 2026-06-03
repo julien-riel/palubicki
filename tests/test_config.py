@@ -127,7 +127,9 @@ def test_light_config_defaults():
     assert c.enabled is False
     assert c.grid_origin is None
     assert c.grid_size is None
-    assert c.grid_resolution == (64, 64, 64)
+    assert c.grid_resolution is None
+    assert c.voxel_edge_m == 0.04
+    assert c.wood_extinction_scale == 1.0
     assert c.k_absorption == 0.5
     assert c.leaf_area_scale == 1.0
     assert c.needle_area_scale == 1.0
