@@ -84,33 +84,48 @@ les nouveaux modes orthogonaux pour la fin.
 
 ### Justesse de calibration (fondation correcte avant d'empiler)
 
-L'audit #84 a rendu le **champ lumineux** correct. Avant d'ajouter de nouveaux
-mécanismes, on rend la **mesure** correcte (#83) puis on **verrouille** la justesse
+> **#83 (mesure des angles ordre-1) — livré.** Les deux métriques de diagnostic
+> d'ordre-1 mesurent enfin ce que leurs bandes attendent (`sim/diagnostics.py`).
+> **Insertion** : `insertion_angle_deg_vs_parent` n'est plus diluée par la courbure
+> intra-branche — mesurée **au seul internode fondateur de chaque axe** (incoming
+> d'ordre strictement inférieur = le point de branchement) ; la courbure intra-axe
+> n'est plus mesurée (aucune bande ne la consomme). **Divergence** :
+> `_divergence_angle_metrics` est désormais **par mode de phyllotaxie** — rotation
+> inter-nœud de l'azimut de base modulo `360/k` (spiral 137,5° ; décussé 90°), et
+> espacement intra-verticille **plus-proche-voisin** `360/k` pour le verticillé
+> (pin ~62°, robuste à l'occupation du verticille là où la moyenne flappe 86–100°).
+> Le mode est *threadé* depuis `cfg.phyllotaxy` (les latéraux ordre-1 utilisent
+> toujours `cfg.mode`). Bandes `literature.yaml` re-dérivées sur la mesure
+> **post-tropisme** (insertion globale `(50,90)` ; divergence : alterne `(130,145)`,
+> décussé maple **+ ash ajouté** `(80,100)`, pin `(52,78)`). Goldens **inchangés**
+> (aucun golden n'épingle la sortie diagnostic, zéro re-pin) ; deux **gardes lentes
+> par-espèce** ajoutées (insertion + divergence in-band) pour fermer le trou
+> « intunable-mais-vert » qui a laissé #83 passer. **Débloque la lecture vraie de
+> l'état de calibration → #87.**
+
+L'audit #84 a rendu le **champ lumineux** correct, #83 (livré) a rendu la **mesure**
+correcte. Avant d'ajouter de nouveaux mécanismes, on **verrouille** la justesse
 botanique en CI (#87) — exactement la règle « rendre la lumière correcte avant ce
 qui y réagit » appliquée à la calibration. Cette piste passe **devant** la mémoire
 mécanique et le reste.
 
-1. **#83 — bug de mesure des angles ordre-1** · `insertion_angle` dilué par la
-   courbure intra-branche + bande `divergence` mal typée pour décussé/verticillé.
-   Les **8 dernières métriques hors-bande** des 6 espèces (post-#84) sont *toutes*
-   dues à ces deux défauts, et **intunables** (aucun preset ne les corrige). Pur
-   correctif de diagnostic ; débloque une lecture *vraie* de l'état de calibration.
-   **Gate tout le reste de cette piste.**
-2. **#87 — garde-fou botanique en CI** · test multi-graines qui échoue si une
+1. **#87 — garde-fou botanique en CI** · test multi-graines qui échoue si une
    espèce sort de ses bornes `literature.yaml` (pas seulement le hash de
-   déterminisme). N'a de sens **qu'après #83** (les bandes mesurent enfin la
-   réalité). Verrouille la justesse contre les régressions futures.
-3. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
+   déterminisme). Possible **maintenant que #83 est livré** (les bandes mesurent
+   enfin la réalité ; les deux gardes lentes par-espèce de #83 sont un premier
+   jalon à généraliser à toutes les métriques / toutes les graines). Verrouille la
+   justesse contre les régressions futures.
+2. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
    de couronne (rétention à l'**initiation**), séparé de `shade_mortality`
    (élagage). Sort du piège de non-identifiabilité (même densité atteignable par
    parcimonie d'initiation *ou* élagage agressif, indistinguables). À faire une fois
    #87 en place pour attraper les régressions. Le vrai correctif (budget carbone
    source→puits) reste #66, fermé `NOT_PLANNED` — ceci est le proxy assumé.
-4. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
+3. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
    la grille voxel + re-pin des goldens + mise-en-bande de la croissance sont déjà
    faits dans #84. Reste à **documenter le contrat** (changer `voxel_edge_m`
    décalibre `k_absorption`/`leaf_area_scale`/`needle_area_scale`) et à **vérifier
-   « tout en bande »** une fois #83 réglé.
+   « tout en bande »** (les angles ordre-1 sont désormais corrects côté mesure, #83).
 
 ### Mémoire mécanique (intégrée dans le temps)
 

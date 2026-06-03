@@ -924,6 +924,58 @@ def test_conifer_height_and_trunk_within_band(species):
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir", "ash"])
+def test_insertion_angle_within_band_per_species(species):
+    """#83 guard: order-1 insertion is now measured ONLY at the founding
+    internode of each axis (the true branch point), not pooled with intra-
+    branch curvature. Pin every preset inside its insertion_angle_deg_vs_parent
+    band at design density (seed 0) so a future calibration drift — or a
+    regression of the first-of-axis gate — surfaces as a red test instead of an
+    untunable-but-green metric (the exact state that let #83 hide)."""
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.diagnostics import MetricRanges
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species=species)
+    m = compute_metrics(simulate(cfg), cfg=cfg)
+    assert 1 in m["insertion_angle_deg_vs_parent"], f"{species}: no order-1 insertion"
+    mean = m["insertion_angle_deg_vs_parent"][1]["mean"]
+    bound = MetricRanges.from_species(species).insertion_angle_deg_vs_parent__order1_mean
+    assert bound is not None, f"{species}: no insertion band"
+    lo, hi = bound
+    assert lo <= mean <= hi, f"{species}: insertion[1]={mean:.1f} outside {bound}"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("species", ["oak", "birch", "pine", "maple", "fir", "ash"])
+def test_divergence_angle_within_species_band(species):
+    """#83 guard: divergence is now measured per phyllotaxy mode (spiral
+    between-node rotation; whorled within-whorl spacing), so the bands are the
+    textbook per-mode angles (spiral ~137.5°, decussate ~90°, whorled ~360/k)
+    instead of one golden-angle band that decussate/whorled species could never
+    satisfy. Pin each preset inside its mode's band at design density (seed 0)
+    so the measurement can't silently drift back to a mode-blind value."""
+    from pathlib import Path
+
+    from palubicki.config import load_config
+    from palubicki.sim.diagnostics import MetricRanges
+    from palubicki.sim.simulator import simulate
+
+    cfg = load_config(yaml_path=None, cli_overrides={"seed": 0},
+                      output=Path("tree.glb"), species=species)
+    m = compute_metrics(simulate(cfg), cfg=cfg)
+    assert 1 in m["divergence_angle_deg"], f"{species}: no order-1 divergence"
+    mean = m["divergence_angle_deg"][1]["mean"]
+    bound = MetricRanges.from_species(species).divergence_angle_deg__order1_mean
+    assert bound is not None, f"{species}: no divergence band"
+    lo, hi = bound
+    assert lo <= mean <= hi, f"{species}: divergence[1]={mean:.1f} outside {bound}"
+
+
+@pytest.mark.slow
 def test_total_leaf_area_scales_with_leaflets():
     """Pinnate leaf area > simple leaf area for the same tree (more blades),
     and simple stays positive. Uses leaflet_aspect=0.5 so leaflets are slim."""

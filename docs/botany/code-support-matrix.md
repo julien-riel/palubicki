@@ -143,8 +143,8 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Loi de flambement `H ∝ D^(2/3)` (McMahon) | 🟡 | non imposée comme contrainte ; le fuselage **émerge** du pipe-model + vigueur | `SKIP` — émergent, pas un levier direct |
 | Dimension fractale (densité de couronne) | ❌ | pas de paramètre dédié | `SKIP` — émerge des règles, pas un réglage direct |
 | Ordres de branchaison Strahler / Horton | ✅ | `sim/diagnostics.py` — `_strahler_orders`, ratios de bifurcation | [#1](https://github.com/julien-riel/palubicki/issues/1) livré |
-| Angles de divergence (spiral/décussé/distique/verticillé) | ✅ | `sim/phyllotaxy.py` (voir §5) | — |
-| Angle d'insertion des branches (30–60°, par ordre) | ✅ | `branch_angle_by_order` ; mesuré dans `sim/diagnostics.py` | — |
+| Angles de divergence (spiral/décussé/distique/verticillé) | ✅ | génération `sim/phyllotaxy.py` (voir §5) ; **mesure** diagnostic désormais **par mode** (`_divergence_angle_metrics` : rotation inter-nœud mod `360/k` pour spiral/décussé, espacement intra-verticille plus-proche-voisin `360/k` pour le verticillé) | [#83](https://github.com/julien-riel/palubicki/issues/83) livré (mesure) |
+| Angle d'insertion des branches (par ordre) | ✅ | `branch_angle_by_order` (génération) ; **mesuré au point de branchement** dans `sim/diagnostics.py` (#83 — internode fondateur de chaque axe, plus dilué par la courbure intra-axe) | [#83](https://github.com/julien-riel/palubicki/issues/83) livré (mesure) |
 | Compétition lumineuse (Beer-Lambert), forêts, obstacles | ✅ | `sim/light.py` / `light_perception.py` (ray-marching, grille LAI) ; `sim/forest.py`, `sim/obstacles.py` | — |
 
 ---
