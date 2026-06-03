@@ -776,9 +776,12 @@ class MetricRanges:
       "insertion_angle_deg_vs_parent__orderN_mean" → metrics["insertion_angle_deg_vs_parent"][N]["mean"]
     A field absent from this class means no flag is rendered for that path.
     """
+    # These three defaults mirror the manifest `global` block so a bare
+    # MetricRanges() agrees with from_species(None); from_species always overlays
+    # literature.yaml, so the manifest remains the single source of truth.
     horton_bifurcation_ratio_mean: tuple[float, float] | None = (3.0, 5.0)
     divergence_angle_deg__order1_mean: tuple[float, float] | None = (130.0, 145.0)
-    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] | None = (30.0, 65.0)
+    insertion_angle_deg_vs_parent__order1_mean: tuple[float, float] | None = (50.0, 90.0)
     # Architectural bounds — measured by compute_metrics, read by format_report.
     # Default None (no flag) so global-only behavior is unchanged; populated
     # per-species from the manifest.
@@ -856,6 +859,107 @@ def _scalar_value(metrics: dict, key: str) -> float | None:
 
 def _bounds_for(ranges: MetricRanges, field_name: str) -> tuple[float, float] | None:
     return getattr(ranges, field_name, None)
+
+
+def _resolve_metric_value(metrics: dict, field_name: str) -> float | None:
+    """Resolve a MetricRanges field name to its scalar value in a metrics dict,
+    honoring the path convention documented on MetricRanges:
+
+      "tree_height"                          -> metrics["tree_height"]
+      "horton_bifurcation_ratio_mean"        -> metrics["horton_bifurcation_ratio_mean"]
+      "divergence_angle_deg__orderN_mean"    -> metrics["divergence_angle_deg"][N]["mean"]
+      "insertion_..._vs_parent__orderN_mean" -> metrics["insertion_..._vs_parent"][N]["mean"]
+
+    Works on single-seed metrics (a scalar leaf is a float; a per-order leaf is a
+    ``_stats`` dict) and multi-seed metrics (a scalar leaf is an ``_agg_scalar``
+    dict carrying "mean"; a per-order leaf likewise). Returns None when the path
+    is absent — e.g. an axis order that never appeared in the tree. The order key
+    is looked up as both int and str so a JSON-round-tripped metrics dict (string
+    keys) resolves the same as the live, int-keyed ``compute_metrics`` output.
+    """
+    if "__order" in field_name:
+        base, _sep, rest = field_name.partition("__order")
+        try:
+            order = int(rest.removesuffix("_mean"))
+        except ValueError:
+            return None
+        d = metrics.get(base) or {}
+        entry = d.get(order, d.get(str(order)))
+        return entry.get("mean") if isinstance(entry, dict) else None
+    return _scalar_value(metrics, field_name)
+
+
+@dataclass(frozen=True)
+class BoundViolation:
+    """A gated metric whose value falls outside (or can't be read from) its
+    literature bound. ``value`` is None when the metric is missing or NaN — an
+    unmeasurable metric counts as a violation, since we can't confirm it in-band.
+    ``kind`` is one of "below" / "above" / "missing"."""
+    field: str
+    value: float | None
+    bounds: tuple[float, float]
+    kind: str
+
+    def __str__(self) -> str:
+        lo, hi = self.bounds
+        if self.kind == "missing":
+            return f"{self.field}: missing/NaN, expected within [{lo}, {hi}]"
+        return f"{self.field}: {self.value:.4g} {self.kind} [{lo}, {hi}]"
+
+
+def gated_fields(ranges: MetricRanges) -> dict[str, tuple[float, float]]:
+    """Every MetricRanges field carrying a (non-None) literature bound, mapped to
+    its ``(lo, hi)``. This is exactly the set the manifest gates for a species:
+    add a bound to literature.yaml and it appears here automatically."""
+    return {
+        f.name: getattr(ranges, f.name)
+        for f in dataclasses.fields(ranges)
+        if getattr(ranges, f.name) is not None
+    }
+
+
+def check_bounds(
+    metrics: dict,
+    ranges: MetricRanges,
+    *,
+    fields: list[str] | None = None,
+) -> list[BoundViolation]:
+    """Check ``metrics`` against the literature bounds in ``ranges``.
+
+    Returns a :class:`BoundViolation` for every checked field whose resolved
+    value is missing/NaN or outside its ``[lo, hi]``. ``fields`` restricts the
+    check to a subset of MetricRanges field names; the default checks every field
+    that carries a bound (:func:`gated_fields`). A requested field with no bound
+    (None, e.g. an architectural metric a species never had calibrated) is
+    skipped — it cannot be gated. Works on single- or multi-seed metrics; this is
+    the same comparison the ✓/✗ flags in ``format_report`` render, lifted into a
+    reusable invariant the #87 guardrail asserts on.
+
+    On a multi-seed metrics dict this compares the aggregated MEAN (central
+    tendency) — matching ``diagnose --seed ...`` — NOT per-seed values. A
+    consistent drift moves the mean out of band and is caught; a pathological
+    high-variance/bimodal spread whose per-seed values straddle the band can
+    average back in and pass. Per-seed hard-gating is intentionally not done here:
+    chaotic metrics (``crown_radius`` is a max-extent measure) and noisy ones
+    (Horton) have legitimate per-seed excursions the bands were never set against.
+    """
+    names = list(gated_fields(ranges)) if fields is None else list(fields)
+    out: list[BoundViolation] = []
+    for name in names:
+        bnd = _bounds_for(ranges, name)
+        if bnd is None:
+            continue
+        lo, hi = bnd
+        val = _resolve_metric_value(metrics, name)
+        # A missing / NaN / non-numeric (malformed leaf) value can't be confirmed
+        # in-band, so it counts as a violation rather than raising on comparison.
+        if val is None or not isinstance(val, (int, float)) or math.isnan(val):
+            out.append(BoundViolation(name, None, (lo, hi), "missing"))
+        elif val < lo:
+            out.append(BoundViolation(name, float(val), (lo, hi), "below"))
+        elif val > hi:
+            out.append(BoundViolation(name, float(val), (lo, hi), "above"))
+    return out
 
 
 def _fmt_scalar(v) -> str:

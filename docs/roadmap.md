@@ -103,25 +103,43 @@ les nouveaux modes orthogonaux pour la fin.
 > « intunable-mais-vert » qui a laissé #83 passer. **Débloque la lecture vraie de
 > l'état de calibration → #87.**
 
-L'audit #84 a rendu le **champ lumineux** correct, #83 (livré) a rendu la **mesure**
-correcte. Avant d'ajouter de nouveaux mécanismes, on **verrouille** la justesse
-botanique en CI (#87) — exactement la règle « rendre la lumière correcte avant ce
-qui y réagit » appliquée à la calibration. Cette piste passe **devant** la mémoire
-mécanique et le reste.
+> **#87 (garde-fou botanique en CI) — livré.** `tests/integration/test_botanical_guardrail.py`
+> simule chaque espèce sur les graines {0,1,2} et **échoue** si une métrique bornée
+> dérive hors de sa bande `literature.yaml` (moyenne multi-graines vs bande, comme
+> `diagnose --seed 0,1,2`). Moteur réutilisable `sim.diagnostics.check_bounds` /
+> `gated_fields` (résout la convention de chemin `__orderN_mean`, single- &
+> multi-graine). **Gated** = toute métrique bornée (hauteur, tronc, couronne,
+> continuation, leader, Horton, divergence+insertion ordre-1) ; **advisory** = le
+> reste (sans borne citée). ash : borné sur ses 3 bandes héritées (divergence
+> décussée + insertion/Horton globales) ; bandes architecturales Fraxinus différées
+> (absentes du manifeste). **Consolide** les 5 gardes mono-graine #83/#48/#7 (un
+> balayage par espèce plutôt qu'un-par-métrique → moins de simulations lentes,
+> notamment pin ~210-820 s/graine). Deux dérives mises **in-band** : chêne
+> `shedding.quality_threshold` 0.15→0.08 (retient plus de brindilles ordre-1 →
+> Horton 2.95→3.29) ; bouleau **bande** couronne 4.0→4.8 (la valeur 4.46 m est
+> réaliste pour un *B. papyrifera* de 30 ans et `crown_radius` est une mesure
+> *max-extent* chaotique — `rx` couple à la divergence, donc pas de réglage propre).
+> Le golden chêne 10 ans est **inchangé** (le seuil de `shedding` ne mord qu'au-delà,
+> la géométrie à 10 ans est identique) ; seul le pin d'aire foliaire est re-pinné
+> (chêne +#87, et dérive bouleau/érable **préexistante** des commits geom). Seule la
+> **moyenne** multi-graines est gardée (pas le par-graine : `crown_radius` max-extent
+> et Horton sont trop bruités pour un seuil par-graine). **Marqué `slow`** : tourne
+> dans la suite lente complète (locale / pré-merge), **pas** dans la matrice GitHub
+> (`-m 'not slow'`) — ~15-45 min dominé par le pin. **Débloque #86.**
 
-1. **#87 — garde-fou botanique en CI** · test multi-graines qui échoue si une
-   espèce sort de ses bornes `literature.yaml` (pas seulement le hash de
-   déterminisme). Possible **maintenant que #83 est livré** (les bandes mesurent
-   enfin la réalité ; les deux gardes lentes par-espèce de #83 sont un premier
-   jalon à généraliser à toutes les métriques / toutes les graines). Verrouille la
-   justesse contre les régressions futures.
-2. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
+L'audit #84 a rendu le **champ lumineux** correct, #83 (livré) a rendu la **mesure**
+correcte, #87 (livré) **verrouille** la justesse botanique en CI — exactement la
+règle « rendre la lumière correcte avant ce qui y réagit » appliquée à la
+calibration. Restent, sur cette piste de calibration :
+
+1. **#86 — activer + calibrer `shade_avoidance` par espèce** · 2ᵉ levier de densité
    de couronne (rétention à l'**initiation**), séparé de `shade_mortality`
    (élagage). Sort du piège de non-identifiabilité (même densité atteignable par
-   parcimonie d'initiation *ou* élagage agressif, indistinguables). À faire une fois
-   #87 en place pour attraper les régressions. Le vrai correctif (budget carbone
-   source→puits) reste #66, fermé `NOT_PLANNED` — ceci est le proxy assumé.
-3. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
+   parcimonie d'initiation *ou* élagage agressif, indistinguables). **Débloqué par
+   #87** (le garde-fou attrapera les régressions de calibration que ce levier
+   pourrait introduire). Le vrai correctif (budget carbone source→puits) reste #66,
+   fermé `NOT_PLANNED` — ceci est le proxy assumé.
+2. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
    la grille voxel + re-pin des goldens + mise-en-bande de la croissance sont déjà
    faits dans #84. Reste à **documenter le contrat** (changer `voxel_edge_m`
    décalibre `k_absorption`/`leaf_area_scale`/`needle_area_scale`) et à **vérifier

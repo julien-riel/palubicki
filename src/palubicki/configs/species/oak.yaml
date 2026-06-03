@@ -63,7 +63,15 @@ phyllotaxy:
   branch_angle_jitter_deg: 4.0
   dormant_reserve_count: 2
 shedding:
-  quality_threshold: 0.15
+  # 0.08 (was 0.15): red oak retains substantial fine twig branching; shedding
+  # low-quality twigs less aggressively keeps more order-1 tips, lifting the
+  # Strahler/Horton bifurcation ratio from ~2.95 (just under the abop 3.0 floor)
+  # to ~3.29 across seeds {0,1,2} — the #87 guardrail floor, with margin. This
+  # threshold is now load-bearing for Horton; retaining more twigs also nudges UP
+  # crown_radius / total_leaf_area (588->618), but the #87 multi-seed guard
+  # re-checks every oak bound, so a side-effect drift would self-fail. Leaves the
+  # 10yr species golden unchanged (few twigs hit the threshold that young).
+  quality_threshold: 0.08
   window: 5
   enabled: true
   reactivation_count: 1
