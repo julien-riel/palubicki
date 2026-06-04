@@ -43,6 +43,14 @@ class SimConfig:
     alpha_basipetal: float = field(default=2.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     lambda_apical: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}})
     shoot_extension_max: float = field(default=0.3, metadata={"ui": {"min": 0.02, "max": 1.0, "step": 0.01}})
+    # Apical control (#56): acropetal suppression of LATERAL internode length by
+    # depth below the tree apex, independent of light. A lateral's emitted length
+    # is scaled by clip(gap_below_apex / apical_control_length, 0.1, 1.0), so
+    # young laterals near the leader stay short and old laterals far below reach
+    # full length — the top-down taper that light-driven vigor alone inverts
+    # (light makes the lit top grow widest). 0.0 = off (byte-identical); a conifer
+    # uses ~tree_height to taper the whole crown. The main axis is never suppressed.
+    apical_control_length: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 15.0, "step": 0.5}})
     vigor_ref: float = field(default=1.0, metadata={"ui": {"min": 0.05, "max": 5.0, "step": 0.05}})
     vigor_dormancy: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
     vigor_smoothing: float = field(default=0.5, metadata={"ui": {"min": 0.05, "max": 1.0, "step": 0.05}})
@@ -541,6 +549,60 @@ class LightConfig:
 
 
 @dataclass(frozen=True)
+class ShadowConfig:
+    """Shadow-propagation exposure backend (#56, Palubicki 2009).
+
+    Active only when ``Config.exposure == "shadow_propagation"``; with the
+    default ``"bhse"`` backend this whole block is inert. Each organ stamps a
+    pyramid of "shadow" into the voxels below it that decays with depth as
+    ``Δs = a · b**(−q)`` over ``q = 0..q_max`` layers; a bud's exposure is
+    ``Q = max(0, full_light_C − s + a)`` (the ``+a`` cancels the bud's own
+    ``q=0`` self-stamp, so an unshaded bud reads exactly ``full_light_C``). Q
+    drives both the light-gradient growth direction and bud fate (dormancy /
+    shedding), so crown form emerges from self-shadowing instead of a prescribed
+    ``envelope.shape``.
+
+    Grid extent/resolution and the perception cone are NOT duplicated here: they
+    are reused from ``LightConfig`` (``voxel_edge_m`` / ``grid_*``) and
+    ``SimConfig`` (``r_perception`` / ``theta_perception_deg``), so the
+    ``voxel_edge_m = 0.04`` calibration contract stays single-sourced. ``Δs`` is
+    voxel-edge-dependent (``q_max`` counts voxels; physical penumbra depth is
+    ``q_max · voxel_edge_m``), so these constants are tuned for that same edge —
+    see docs/botany/realism-assessment.md.
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    # Self-contribution / apex shadow intensity: Δs at q=0 (the organ's own cell).
+    a: float = field(default=1.0, metadata={"ui": {"min": 0.05, "max": 5.0, "step": 0.05}})
+    # Per-layer decay base of the shadow pyramid, Δs = a·b**(−q); must be > 1.
+    b: float = field(default=2.0, metadata={"ui": {"min": 1.05, "max": 5.0, "step": 0.05}})
+    # Penumbra depth cap (voxel layers below an organ); physical depth = q_max·voxel_edge_m.
+    q_max: int = field(default=4, metadata={"ui": {"min": 0, "max": 16, "step": 1}})
+    # Open-sky exposure constant C; bud exposure Q = max(0, C − s + a).
+    full_light_C: float = field(default=1.0, metadata={"ui": {"min": 0.1, "max": 10.0, "step": 0.1}})
+    # Multiplier on each organ's real leaf_area_records area when it deposits Δs
+    # (the #62/#7 coupling lever): 1.0 = pure rendered foliage area, 0 disables.
+    area_weight: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 10.0, "step": 0.1}})
+    # Exposure below which a bud goes DORMANT (Q < q_dormancy): the clear-bole /
+    # soft height governor — the lever this issue is about.
+    q_dormancy: float = field(default=0.05, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.01}})
+    # Maps exposure Q (∈ [0, full_light_C]) onto the Borchert-Honda quality
+    # currency. BH and its absolute thresholds (sim.vigor_dormancy,
+    # sympodial.q_threshold, shedding.quality_threshold) are calibrated against
+    # integer MARKER COUNTS (~1–50 under BHse), not Q (~order 1), so Q is scaled
+    # into that regime here (#56 C1). Re-fit per species during calibration.
+    quality_scale: float = field(default=20.0, metadata={"ui": {"min": 0.1, "max": 200.0, "step": 1.0}})
+    # How a bud's exposure Q is measured:
+    #   "skyview" — Q = the #37 hemisphere transmission (open-sky fraction). A
+    #     lower-edge branch open to the side reads high Q, keeps vigor, and grows
+    #     out → the crown widens toward the base (a real conifer cone).
+    #   "pyramid" — Q from the downward shadow-propagation field (a / b / q_max
+    #     below; the Palubicki proxy). Cheaper but over-suppresses lower branches
+    #     (no side light) → an inverted crown. Kept for comparison.
+    measure: Literal["skyview", "pyramid"] = field(
+        default="skyview", metadata={"ui": {"label": "Exposure measure"}})
+
+
+@dataclass(frozen=True)
 class ObstacleAABB:
     kind: Literal["aabb"] = "aabb"
     min: tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -594,17 +656,34 @@ class Config:
     shedding: SheddingConfig
     geom: GeomConfig
     light: LightConfig = field(default_factory=LightConfig)
+    shadow: ShadowConfig = field(default_factory=ShadowConfig)
     forest: ForestConfig = field(default_factory=ForestConfig)
     sag: SagConfig = field(default_factory=SagConfig)
+    # Bud-exposure backend (#56): "bhse" = space-colonization markers in an
+    # envelope (default; macro form prescribed by envelope.shape).
+    # "shadow_propagation" = emergent form from a self-shadowing light grid
+    # (see ShadowConfig). Nothing reads this until the shadow backend lands;
+    # BHse stays byte-identical.
+    exposure: Literal["bhse", "shadow_propagation"] = field(
+        default="bhse", metadata={"ui": {"label": "Exposure backend"}}
+    )
     seed: int = field(default=0, metadata={"ui": {"min": 0, "max": 2**31 - 1, "step": 1}})
     output: Path = field(default_factory=lambda: Path("tree.glb"))
     log_level: str = "INFO"
 
     def __post_init__(self) -> None:
+        if self.exposure not in ("bhse", "shadow_propagation"):
+            raise ConfigError(
+                f"exposure must be 'bhse' or 'shadow_propagation', got {self.exposure!r}"
+            )
+
         env = self.envelope
+        # rx/ry/rz are the bounds AABB under BOTH backends, so always validate.
         if env.rx <= 0 or env.ry <= 0 or env.rz <= 0:
             raise ConfigError(f"envelope rx/ry/rz must be > 0, got {(env.rx, env.ry, env.rz)}")
-        if env.marker_count <= 0:
+        # marker_count is BHse-only — shadow propagation seeds no markers and
+        # treats the envelope as an advisory bounds volume, so it is gated here.
+        if self.exposure == "bhse" and env.marker_count <= 0:
             raise ConfigError(f"envelope.marker_count must be > 0, got {env.marker_count}")
 
         s = self.sim
@@ -618,6 +697,8 @@ class Config:
             raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
         if s.shoot_extension_max <= 0:
             raise ConfigError(f"sim.shoot_extension_max must be > 0, got {s.shoot_extension_max}")
+        if s.apical_control_length < 0:
+            raise ConfigError(f"sim.apical_control_length must be >= 0, got {s.apical_control_length}")
         if s.vigor_ref <= 0:
             raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
         if s.vigor_dormancy < 0:
@@ -947,6 +1028,22 @@ class Config:
         if sum(c * c for c in light.light_direction) <= 0:
             raise ConfigError(f"light.light_direction must be non-zero, got {light.light_direction}")
 
+        shadow = self.shadow
+        if shadow.a <= 0:
+            raise ConfigError(f"shadow.a must be > 0, got {shadow.a}")
+        if shadow.b <= 1:
+            raise ConfigError(f"shadow.b must be > 1, got {shadow.b}")
+        if shadow.q_max < 0:
+            raise ConfigError(f"shadow.q_max must be >= 0, got {shadow.q_max}")
+        if shadow.full_light_C <= 0:
+            raise ConfigError(f"shadow.full_light_C must be > 0, got {shadow.full_light_C}")
+        if shadow.area_weight < 0:
+            raise ConfigError(f"shadow.area_weight must be >= 0, got {shadow.area_weight}")
+        if shadow.q_dormancy < 0:
+            raise ConfigError(f"shadow.q_dormancy must be >= 0, got {shadow.q_dormancy}")
+        if shadow.quality_scale <= 0:
+            raise ConfigError(f"shadow.quality_scale must be > 0, got {shadow.quality_scale}")
+
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")
 
@@ -967,6 +1064,7 @@ _SECTION_TYPES = {
     "shedding": SheddingConfig,
     "geom": GeomConfig,
     "light": LightConfig,
+    "shadow": ShadowConfig,
     "sag": SagConfig,
 }
 

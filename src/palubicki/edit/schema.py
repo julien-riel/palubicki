@@ -11,6 +11,7 @@ from palubicki.config import (
     LightConfig,
     PhyllotaxyConfig,
     SagConfig,
+    ShadowConfig,
     SheddingConfig,
     SimConfig,
     TropismConfig,
@@ -25,6 +26,7 @@ _SECTIONS: list[tuple[str, type, str]] = [
     ("shedding", SheddingConfig, "Shedding"),
     ("geom", GeomConfig, "Geometry"),
     ("light", LightConfig, "Light"),
+    ("shadow", ShadowConfig, "Shadow exposure"),
     ("sag", SagConfig, "Sag"),
 ]
 

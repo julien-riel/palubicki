@@ -15,7 +15,11 @@ from palubicki.sim.clock import Clock
 from palubicki.sim.elongation import shoot_extension, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
 from palubicki.sim.light import LightGrid, _resolution_for
-from palubicki.sim.light_perception import perceive_light
+from palubicki.sim.light_perception import (
+    perceive_exposure,
+    perceive_exposure_skyview,
+    perceive_light,
+)
 from palubicki.sim.obstacles import any_contains, segment_blocked
 from palubicki.sim.phyllotaxy import (
     lateral_bud_directions,
@@ -27,7 +31,7 @@ from palubicki.sim.sag import apply_sag
 from palubicki.sim.shade_avoidance import lateral_break_probability
 from palubicki.sim.shade_mortality import kill_shaded_buds
 from palubicki.sim.shedding import record_qualities, shed_low_quality
-from palubicki.sim.space_competition import perceive
+from palubicki.sim.space_competition import PerceptionResult, perceive
 from palubicki.sim.sympodial import promote_lateral_if_failing
 from palubicki.sim.tree import Bud, BudState, Internode, Leaf, LeafState, Node, Tree
 from palubicki.sim.tropisms import growth_direction, spray_plane_normal_from_direction
@@ -72,7 +76,9 @@ def simulate_forest(cfg: Config, collector: DebugCollector | None = None) -> For
     forest = build_forest(cfg)
     if collector is not None:
         collector.capture_static(forest, cfg)
-    if cfg.light.enabled:
+    if cfg.light.enabled or cfg.exposure == "shadow_propagation":
+        # Shadow propagation needs the voxel grid even when the BHse light pipeline
+        # is off, so a preset that forgets light.enabled still gets one (#56 C5).
         _init_light_grid(forest, cfg)
     no_new_streak = 0
     t0 = time.time()
@@ -137,6 +143,7 @@ def _init_light_grid(forest: Forest, cfg: Config) -> None:
         forest.light_grid.cell_size = size / np.array([nx, ny, nz], dtype=np.float64)
         forest.light_grid.resolution = (nx, ny, nz)
         forest.light_grid.lai = np.zeros((nx, ny, nz), dtype=np.float32)
+        forest.light_grid.shadow = np.zeros((nx, ny, nz), dtype=np.float32)
     # Voxelize obstacles into mask (one-shot)
     if forest.obstacles:
         mask = forest.obstacles[0].voxelize(forest.light_grid)
@@ -157,6 +164,21 @@ def _perceive_forest_light(forest: Forest, union_buds, cfg: Config, iteration: i
         vigor_ref=cfg.sim.vigor_ref, vigor_diameter_gain=cfg.sim.vigor_diameter_gain,
     )
     _warn_if_buds_outside_grid(union_buds, light_grid)
+    if cfg.exposure == "shadow_propagation":
+        # Shadow propagation (#56): form from light competition, not markers.
+        if cfg.shadow.measure == "skyview":
+            # Q = open-sky fraction from the #37 hemisphere ray-march (uses the LAI
+            # rebuilt above). Lower-edge branches stay vigorous → crown widens to
+            # the base. The fix for the downward-shadow inversion.
+            return perceive_exposure_skyview(
+                union_buds, light_grid, cfg.light, cfg.shadow,
+                seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
+            )
+        # "pyramid": Q from the downward shadow-propagation field (Palubicki proxy).
+        light_grid.propagate_shadow(forest, cfg.shadow, geom=cfg.geom)
+        return perceive_exposure(
+            union_buds, light_grid, cfg.shadow, r_perception=cfg.sim.r_perception,
+        )
     return perceive_light(
         union_buds, light_grid, cfg.light,
         seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
@@ -222,7 +244,13 @@ def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -
     Vigor and shedding stay light-weighted by design — leaving the shedding path
     light-weighted is an accepted, documented limitation (we do not refactor it here).
     """
-    if light_info is not None:
+    if cfg.exposure == "shadow_propagation":
+        # Q is ALREADY the light currency (the scaled exposure from
+        # _exposure_result); multiplying by light_factor (= Q/C) again would give
+        # Q² (#56 C2). There are no markers, so the marker currency is the same
+        # scaled Q — a sympodial preset still gets a sensible threshold input.
+        quality_light = dict(res.quality)
+    elif light_info is not None:
         quality_light = {b: res.quality[b] * light_info.light_factor[b] for b in union_buds}
     else:
         quality_light = dict(res.quality)
@@ -244,6 +272,29 @@ def _compute_quality(forest: Forest, union_buds, res, light_info, cfg: Config) -
     return quality_light, quality_marker
 
 
+def _exposure_result(union_buds, light_info, cfg: Config) -> PerceptionResult:
+    """Build a PerceptionResult from the shadow-propagation exposure signal (#56).
+
+    The shadow backend's analog of :func:`perceive`: ``direction`` is the
+    light-gradient growth direction and ``quality`` is the exposure Q scaled into
+    the integer-marker-count regime BH is calibrated for
+    (``shadow.quality_scale``, #56 C1). No KDTree marker query. A bud missing from
+    the perception (e.g. off-grid) defaults to full light, so it is not spuriously
+    starved."""
+    res = PerceptionResult()
+    C = cfg.shadow.full_light_C
+    scale = cfg.shadow.quality_scale
+    if light_info is None:
+        for b in union_buds:
+            res.quality[b] = 0
+            res.direction[b] = np.zeros(3, dtype=np.float64)
+        return res
+    for b in union_buds:
+        res.quality[b] = light_info.exposure.get(b, C) * scale
+        res.direction[b] = light_info.gradient.get(b, np.zeros(3, dtype=np.float64))
+    return res
+
+
 def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState, t0: float, activity: float = 1.0) -> int:
     """One simulation step on the whole forest. Returns total nodes created.
 
@@ -255,15 +306,25 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
     bit-exactly the same evolution as V2's simulate() loop body."""
     union_buds = all_active_buds(forest)
     light_info = _perceive_forest_light(forest, union_buds, cfg, iteration)
+    shadow_mode = cfg.exposure == "shadow_propagation"
 
-    if light_info is not None and cfg.sim.shade_mortality.enabled:
+    # Shade-mortality is OFF under shadow propagation (#56 C3): Q-dormancy is the
+    # reversible bole mechanism, and stacking an irreversible DEAD gate on the same
+    # exposure signal (calibrated for BHse Beer-Lambert light_factor) would over-kill
+    # the lower crown.
+    if light_info is not None and cfg.sim.shade_mortality.enabled and not shadow_mode:
         union_buds = _apply_shade_mortality(forest, light_info, cfg)
 
-    res = perceive(
-        union_buds, forest.markers,
-        r_perception=cfg.sim.r_perception,
-        theta_perception_deg=cfg.sim.theta_perception_deg,
-    )
+    if shadow_mode:
+        # Form is driven by light competition, not markers: direction = light
+        # gradient, quality = scaled exposure Q. The KDTree marker query is bypassed.
+        res = _exposure_result(union_buds, light_info, cfg)
+    else:
+        res = perceive(
+            union_buds, forest.markers,
+            r_perception=cfg.sim.r_perception,
+            theta_perception_deg=cfg.sim.theta_perception_deg,
+        )
 
     quality, quality_marker = _compute_quality(forest, union_buds, res, light_info, cfg)
 
@@ -277,7 +338,9 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
         nodes_created_this_step += created
         new_node_positions.extend(positions)
 
-    if new_node_positions:
+    if new_node_positions and not shadow_mode:
+        # Markers are a BHse mechanism; under shadow propagation self-spacing IS
+        # self-shadowing, so there is nothing to consume.
         forest.markers.kill_near(np.array(new_node_positions), cfg.sim.r_kill)
 
     for tree in forest.trees:
@@ -326,6 +389,15 @@ def _grow_tree(
     record_qualities(tree, v_subtree=v_subtree)
 
     s = cfg.sim.vigor_smoothing
+    shadow_mode = cfg.exposure == "shadow_propagation"
+    # Apical control (#56): apex height for the acropetal lateral-length taper.
+    # The highest active bud is the leader tip; laterals are suppressed by their
+    # depth below it. Computed once per iteration (off when length == 0).
+    apical_L = cfg.sim.apical_control_length
+    y_apex = (
+        max((float(b.position[1]) for b in tree.active_buds), default=0.0)
+        if apical_L > 0.0 else 0.0
+    )
     new_active: list[Bud] = []
     for bud in list(tree.active_buds):
         v_b = float(v_by_bud.get(bud, 0.0))
@@ -340,12 +412,26 @@ def _grow_tree(
         bud.recent_vigor = (1.0 - s) * bud.recent_vigor + s * v_b
         v_perc = res.direction[bud]
         v_perc_norm = float(np.linalg.norm(v_perc))
-        if bud.recent_vigor < cfg.sim.vigor_dormancy or v_perc_norm < 1e-12:
+        if shadow_mode:
+            # Both a fully-lit apex and a deep-shade interior bud have a ~zero light
+            # gradient, so dormancy must key on EXPOSURE, not the gradient norm
+            # (#56 R1) — keying on v_perc_norm would freeze the leader.
+            q_exp = (
+                light_info.exposure.get(bud, cfg.shadow.full_light_C)
+                if light_info is not None else cfg.shadow.full_light_C
+            )
+            dormant = bud.recent_vigor < cfg.sim.vigor_dormancy or q_exp < cfg.shadow.q_dormancy
+        else:
+            dormant = bud.recent_vigor < cfg.sim.vigor_dormancy or v_perc_norm < 1e-12
+        if dormant:
             bud.state = BudState.DORMANT
             new_active.append(bud)
             continue
 
-        light_grad = light_info.gradient[bud] if light_info else None
+        # Under shadow propagation the light gradient already enters as the
+        # perception direction (res.direction, the w_perception channel), so it must
+        # NOT also be fed as phototropism here (#56 C4 double-count).
+        light_grad = None if shadow_mode else (light_info.gradient[bud] if light_info else None)
         is_main = (bud is bud.parent_node.terminal_bud)
         parent_iod = bud.parent_node.parent_internode
         branch_age_years = (t - parent_iod.birth_time) if parent_iod is not None else 0.0
@@ -366,6 +452,12 @@ def _grow_tree(
             continue
 
         target = _internode_target(bud, v_b, cfg, iteration, t, state, activity)
+        if apical_L > 0.0 and not is_main:
+            # Acropetal taper: a lateral near the apex (small gap) emits a short
+            # internode; far below (large gap) it reaches full length. Floored at
+            # 0.1 so apex laterals still creep rather than freeze.
+            gap = y_apex - float(bud.position[1])
+            target *= min(1.0, max(0.1, gap / apical_L))
         new_pos = bud.position + d * target
 
         if forest.obstacles:

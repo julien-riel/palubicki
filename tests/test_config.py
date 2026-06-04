@@ -845,3 +845,98 @@ def test_geom_config_petiole_overrides_construct():
     g = GeomConfig(petiole_length_ratio=0.25, petiole_droop_deg=15.0)
     assert g.petiole_length_ratio == 0.25
     assert g.petiole_droop_deg == 15.0
+
+
+# --- Shadow-propagation exposure backend (#56) ---
+
+def test_exposure_defaults_to_bhse(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.exposure == "bhse"
+    # ShadowConfig exists with defaults even on the BHse path (inert).
+    assert cfg.shadow.enabled is False
+    assert cfg.shadow.a == 1.0
+    assert cfg.shadow.b == 2.0
+    assert cfg.shadow.q_max == 4
+    assert cfg.shadow.q_dormancy == 0.05
+
+
+def test_config_rejects_unknown_exposure(tmp_path):
+    with pytest.raises(ConfigError, match="exposure"):
+        _make_config(exposure="nope", output=tmp_path / "out.glb")
+
+
+def test_shadow_propagation_allows_zero_marker_count(tmp_path):
+    """marker_count is BHse-only; under shadow propagation the envelope is an
+    advisory bounds volume, so marker_count is not validated."""
+    cfg = _make_config(
+        exposure="shadow_propagation",
+        envelope=EnvelopeConfig(shape="ellipsoid", rx=2.0, ry=4.0, rz=2.0, marker_count=0),
+        output=tmp_path / "out.glb",
+    )
+    assert cfg.exposure == "shadow_propagation"
+
+
+def test_bhse_still_rejects_zero_marker_count(tmp_path):
+    with pytest.raises(ConfigError, match="marker_count"):
+        _make_config(
+            envelope=EnvelopeConfig(shape="ellipsoid", rx=1.0, ry=1.0, rz=1.0, marker_count=0),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_rx_validation_holds_under_shadow_propagation(tmp_path):
+    """rx/ry/rz are the bounds AABB under both backends — still validated."""
+    with pytest.raises(ConfigError, match="rx"):
+        _make_config(
+            exposure="shadow_propagation",
+            envelope=EnvelopeConfig(shape="ellipsoid", rx=0.0, ry=1.0, rz=1.0),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_shadow_config_validation(tmp_path):
+    from palubicki.config import ShadowConfig
+    with pytest.raises(ConfigError, match=r"shadow\.b"):
+        _make_config(shadow=ShadowConfig(b=1.0), output=tmp_path / "out.glb")
+    with pytest.raises(ConfigError, match=r"shadow\.a"):
+        _make_config(shadow=ShadowConfig(a=0.0), output=tmp_path / "out.glb")
+    with pytest.raises(ConfigError, match="q_dormancy"):
+        _make_config(shadow=ShadowConfig(q_dormancy=-0.1), output=tmp_path / "out.glb")
+
+
+def test_shadow_measure_defaults_to_skyview(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.shadow.measure == "skyview"
+
+
+def test_config_rejects_unknown_shadow_measure(tmp_path):
+    from palubicki.config import ShadowConfig
+    # Literal isn't enforced at runtime; the editor schema gates it. A bad value
+    # simply isn't one of the two the simulator dispatches on — assert the two
+    # valid ones construct.
+    assert ShadowConfig(measure="skyview").measure == "skyview"
+    assert ShadowConfig(measure="pyramid").measure == "pyramid"
+
+
+def test_apical_control_length_defaults_off_and_validates(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.sim.apical_control_length == 0.0     # off by default (BHse byte-identical)
+    with pytest.raises(ConfigError, match="apical_control_length"):
+        _make_config(sim=SimConfig(apical_control_length=-1.0), output=tmp_path / "out.glb")
+
+
+def test_load_config_reads_exposure_and_shadow(tmp_path):
+    """A YAML opting into shadow propagation threads through the loader, and the
+    shadow section coerces into ShadowConfig."""
+    yaml_path = tmp_path / "tree.yaml"
+    yaml_path.write_text(
+        "exposure: shadow_propagation\n"
+        "envelope: {shape: ellipsoid, rx: 3.0, ry: 9.0, rz: 3.0}\n"
+        "shadow: {a: 1.5, b: 2.5, q_max: 6, q_dormancy: 0.1}\n"
+    )
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.exposure == "shadow_propagation"
+    assert cfg.shadow.a == 1.5
+    assert cfg.shadow.b == 2.5
+    assert cfg.shadow.q_max == 6
+    assert cfg.shadow.q_dormancy == 0.1

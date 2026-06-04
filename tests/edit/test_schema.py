@@ -18,7 +18,7 @@ def test_build_schema_section_names_in_declared_order():
     # ui-tagged field must appear; sections with none must be omitted.
     s = build_schema()
     expected_order = ["envelope", "sim", "tropism", "phyllotaxy",
-                      "shedding", "geom", "light", "sag"]
+                      "shedding", "geom", "light", "shadow", "sag"]
     names = [sec["name"] for sec in s["sections"]]
     # Whatever sections appear, they must be in this relative order:
     indices = [expected_order.index(n) for n in names]
