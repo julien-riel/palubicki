@@ -510,6 +510,14 @@ class LightConfig:
     grid_resolution: tuple[int, int, int] | None = None
     # Target physical cell edge (metres) — drives scale-aware grid resolution when
     # grid_resolution is None: each axis count = clamp(ceil(size/voxel_edge_m), 8, 192).
+    # CALIBRATION CONTRACT (#85): every species preset's light constants
+    # (k_absorption, leaf_area_scale, needle_area_scale) are tuned for THIS value
+    # (0.04 m); no preset pins voxel_edge_m, so all six inherit it. Per-leaf optical
+    # depth scales ~1/voxel_edge_m**2 (LAI = area/cell_volume; tau += k*LAI*step_len
+    # with step_len ~= voxel_edge_m), so changing it silently rescales ALL self-
+    # shading and decalibrates the whole library. If you must change it, re-tune the
+    # light constants and re-verify against the #87 guardrail — full procedure in
+    # docs/botany/realism-assessment.md "Contrat de calibration".
     voxel_edge_m: float = field(default=0.04, metadata={"ui": {"min": 0.005, "max": 0.2, "step": 0.005}})
     k_absorption: float = field(default=0.5, metadata={"ui": {"min": 0.0, "max": 3.0, "step": 0.05}})
     # Broadleaf foliage occlusion (#62): unitless multiplier on the *real* per-leaf

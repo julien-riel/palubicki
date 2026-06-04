@@ -74,6 +74,9 @@ shedding:
   enabled: true
   reactivation_count: 1
 light:
+  # Calibrated for light.voxel_edge_m=0.04 (the default; unpinned here). Changing the
+  # voxel size rescales self-shading ~1/edge² and invalidates these light constants —
+  # see docs/botany/realism-assessment.md "Contrat de calibration" (#85).
   enabled: true
   k_absorption: 0.45
 sag:
