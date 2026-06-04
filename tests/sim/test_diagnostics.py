@@ -1015,3 +1015,128 @@ def test_phenology_metrics_aggregate_multi_seed():
     assert agg["per_seed"] == [pytest.approx(1.0), pytest.approx(1.0)]
     assert agg["mean"] == pytest.approx(1.0)
     assert m["shoulder_internode_fraction"]["per_seed"] == [0.0, 0.0]
+
+
+# ── Silhouette emergence (#56) ────────────────────────────────────────────
+
+def _make_silhouette_tree(*, height=10.0, base_r=3.0, n=10, taper=True,
+                          bole_frac=0.0) -> Tree:
+    """A vertical trunk of ``n`` nodes (y = height*i/n) with one lateral per node.
+
+    ``taper=True``  → lateral radius shrinks to the apex (a cone / spire).
+    ``taper=False`` → constant lateral radius (a column / lollipop).
+    ``bole_frac``   → laterals only appear above this height fraction (a bare
+                      bole below), so ``clear_bole_fraction`` ≈ ``bole_frac``.
+    """
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    prev = root
+    for i in range(1, n + 1):
+        y = height * i / n
+        node = Node(position=np.array([0.0, y, 0.0]))
+        tree.all_internodes.append(_link(prev, node, is_main_axis=True))
+        if y > bole_frac * height + 1e-9:
+            r = base_r * (1.0 - i / (n + 1)) if taper else base_r
+            lat = Node(position=np.array([r, y, 0.0]))
+            tree.all_internodes.append(_link(node, lat, is_main_axis=False))
+        prev = node
+    return tree
+
+
+def test_silhouette_profile_spire_vs_column():
+    """A cone's apex band is the narrow tip (apex_sharpness → 0); a column stays
+    full-width at the top (apex_sharpness → 1)."""
+    from palubicki.sim.diagnostics import _silhouette_profile
+
+    cone = _silhouette_profile(_walk_nodes_for(_make_silhouette_tree(taper=True)))
+    column = _silhouette_profile(_walk_nodes_for(_make_silhouette_tree(taper=False)))
+
+    assert len(cone["crown_radius_profile"]) == 10
+    assert cone["apex_sharpness"] < 0.35
+    assert column["apex_sharpness"] > 0.95
+    assert cone["apex_sharpness"] < column["apex_sharpness"]
+    # Cone widens with depth below apex → positive taper; column is flat → ~0.
+    assert cone["taper_exponent"] > 0.3
+    assert abs(column["taper_exponent"]) < 1e-6
+
+
+def test_silhouette_clear_bole_measures_petit_tronc():
+    """A crown-to-ground cone has ~no clear bole; lifting the foliage raises
+    clear_bole_fraction — the petit-tronc symptom #56 fixes, made measurable."""
+    from palubicki.sim.diagnostics import _silhouette_profile
+
+    to_ground = _silhouette_profile(_walk_nodes_for(
+        _make_silhouette_tree(taper=True, bole_frac=0.0)))
+    with_bole = _silhouette_profile(_walk_nodes_for(
+        _make_silhouette_tree(taper=True, bole_frac=0.5)))
+
+    assert to_ground["clear_bole_fraction"] < 0.2
+    assert with_bole["clear_bole_fraction"] >= 0.5
+    assert with_bole["clear_bole_fraction"] > to_ground["clear_bole_fraction"]
+
+
+def test_silhouette_degenerate_inputs_return_zeros():
+    from palubicki.sim.diagnostics import _silhouette_profile
+
+    # No nodes.
+    z = _silhouette_profile([])
+    assert z["crown_radius_profile"] == [0.0] * 10
+    assert z["apex_sharpness"] == 0.0 and z["clear_bole_fraction"] == 0.0
+    # A bare vertical stick (trunk, no laterals) has no horizontal extent.
+    stick = _make_silhouette_tree(taper=True, bole_frac=1.0)  # no node clears the bole
+    s = _silhouette_profile(_walk_nodes_for(stick))
+    assert max(s["crown_radius_profile"]) == 0.0
+    assert s["apex_sharpness"] == 0.0
+
+
+def test_silhouette_drift_is_shape_only():
+    """silhouette_drift is 0 for identical shapes and scale-invariant in both
+    width and height; it is positive for genuinely different silhouettes."""
+    from palubicki.sim.diagnostics import compute_metrics, silhouette_drift
+
+    cone = compute_metrics(_make_silhouette_tree(taper=True, base_r=3.0, height=10.0))
+    cone_wide = compute_metrics(_make_silhouette_tree(taper=True, base_r=6.0, height=10.0))
+    cone_tall = compute_metrics(_make_silhouette_tree(taper=True, base_r=3.0, height=20.0))
+    column = compute_metrics(_make_silhouette_tree(taper=False))
+
+    assert silhouette_drift(cone, cone) == pytest.approx(0.0, abs=1e-12)
+    assert silhouette_drift(cone, cone_wide) == pytest.approx(0.0, abs=1e-9)  # width-invariant
+    assert silhouette_drift(cone, cone_tall) == pytest.approx(0.0, abs=1e-9)  # height-invariant
+    assert silhouette_drift(cone, column) > 0.15
+
+
+def test_silhouette_drift_handles_missing_or_flat():
+    from palubicki.sim.diagnostics import silhouette_drift
+
+    cone = compute_metrics(_make_silhouette_tree(taper=True))
+    assert math.isnan(silhouette_drift({}, cone))            # missing profile
+    assert math.isnan(silhouette_drift(cone, {"crown_radius_profile": [0.0] * 10}))  # flat
+
+
+def test_silhouette_scalars_in_compute_metrics_and_aggregate():
+    """The scalars surface in single-tree metrics and flow through multi-seed
+    aggregation; the per-band profile aggregates per index."""
+    cone = _make_silhouette_tree(taper=True)
+    column = _make_silhouette_tree(taper=False)
+
+    single = compute_metrics(cone)
+    assert "apex_sharpness" in single and "crown_radius_profile" in single
+    assert single["apex_sharpness"] < 0.35
+
+    multi = compute_metrics([cone, column])
+    agg = multi["apex_sharpness"]
+    assert agg["per_seed"][0] < 0.35 and agg["per_seed"][1] > 0.95
+    prof = multi["crown_radius_profile"]
+    assert len(prof) == 10
+    assert all(isinstance(band, dict) and "mean" in band for band in prof)
+    # The widest band's mean is the average of the two trees' widest band.
+    assert prof[1]["mean"] == pytest.approx(
+        (single["crown_radius_profile"][1]
+         + compute_metrics(column)["crown_radius_profile"][1]) / 2.0)
+
+
+def _walk_nodes_for(tree: Tree) -> list[Node]:
+    """The node list compute_metrics walks (BFS from root) — exposed for the
+    silhouette unit tests that call _silhouette_profile directly."""
+    from palubicki.sim.diagnostics import _walk_nodes
+    return _walk_nodes(tree.root)

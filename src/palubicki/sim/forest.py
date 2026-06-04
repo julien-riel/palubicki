@@ -20,7 +20,7 @@ from palubicki.sim.obstacles import build_obstacles, filter_markers
 from palubicki.sim.tree import Bud, Node, Tree
 
 _SECTION_FIELDS = {
-    "envelope", "sim", "tropism", "phyllotaxy", "shedding", "geom", "light", "sag",
+    "envelope", "sim", "tropism", "phyllotaxy", "shedding", "geom", "light", "shadow", "sag",
 }
 
 
@@ -67,9 +67,11 @@ def per_tree_config(cfg: Config, seed_entry: ForestSeed, tree_index: int) -> Con
         shedding=new_sections["shedding"],
         geom=new_sections["geom"],
         light=new_sections["light"],
+        shadow=new_sections["shadow"],
         sag=new_sections["sag"],
         forest=cfg.forest,
         seed=top_updates.get("seed", derived_seed),
+        exposure=top_updates.get("exposure", cfg.exposure),
         output=cfg.output,
         log_level=cfg.log_level,
     )

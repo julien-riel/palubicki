@@ -259,3 +259,71 @@ Les métriques de croissance (hauteur, tronc, couronne, leader, continuation,
 Horton) restent **toutes en bande** sur les 6 espèces (#84). La calibration
 `voxel_edge_m = 0.04` (**Contrat de calibration** ci-dessus) est donc **vérifiée
 tout en bande**, graines {0,1,2} — ce qui **clôt #85**.
+
+## Forme émergente — backend shadow-propagation (#56)
+
+`palubicki` propose deux **backends d'exposition** des bourgeons, sélectionnables
+par config (`exposure`), tous deux issus de Palubicki et al. 2009 :
+
+| Variante | `exposure` | La forme macro est… | Enveloppe `shape` |
+| --- | --- | --- | --- |
+| **BHse** (défaut) | `bhse` | **prescrite** — markers échantillonnés *dans* le volume d'enveloppe ; `cone` ⇒ silhouette conique | le volume **est** la forme |
+| **Shadow propagation** | `shadow_propagation` | **émergente** — la direction et le sort des bourgeons viennent de la compétition lumineuse ; pas de markers | volume de bornes **neutre/advisory** seulement |
+
+Sous `shadow_propagation`, l'exposition `Q` d'un bourgeon se mesure de deux façons
+(`shadow.measure`) : **`skyview`** (défaut) réutilise la transmission hémisphérique
+du grid lumière #37 (fraction de ciel ouvert, machinerie d'auto-ombrage calibrée
+#85) ; **`pyramid`** utilise le champ d'ombre descendant de Palubicki
+(`a · b^(−q)`, `shadow.{a,b,q_max}`), moins cher mais plus grossier. `Q` pilote la
+direction (gradient vers le plus éclairé), la dormance (`Q < shadow.q_dormancy`) et
+la vigueur BH (`Q · shadow.quality_scale`, mis à l'échelle des comptes de markers
+contre lesquels BH est calibré). `shade_mortality` est **désactivé** sous ce backend
+(la dormance réversible sur `Q` est le mécanisme de fût clair).
+
+### Constat de calibration : couronne émergente **ovoïde/inversée**, pas un cône
+
+Le **leader est excellent** et émergent (`main_axis_continuation_rate = 1.0`,
+`leader_deviation_deg = 0°` — sans enveloppe `cone`). Mais la **couronne latérale**
+est, sous toute mesure et tout le levier de calibration, **ovoïde voire inversée**
+(profil le plus large vers la **cime**, base étroite) — l'inverse d'un sapin :
+
+| | profil rayon couronne (base→cime) | apex_sharpness | `silhouette_drift` vs fir-BHse cône |
+| --- | --- | --- | --- |
+| fir BHse (cône, référence) | `[2.99 … 1.93 … 0.84]` (décroissant) | 0,28 | 0,00 |
+| fir shadow-prop (sky-view, calibré) | `[0.6 … 3.8 (cime) … 1.6]` | 0,37–0,41 | ≈ 0,38 |
+
+**Cause racine — dynamique de longueur de branche** (pas un défaut de l'une des
+mesures d'exposition) : la vigueur pilotée par la lumière fait que les latérales de
+**cime** (jeunes mais les plus éclairées → ciel ouvert) poussent **le plus long**,
+tandis que les latérales **basses** (sous la canopée → ombragées → faible `Q`)
+restent **courtes**. Chez un vrai sapin c'est l'inverse : les branches basses sont
+les **plus longues** car elles ont grandi **tôt** (quand elles étaient la cime
+éclairée) et **conservent** cette longueur après ombrage (persistance ligneuse) — ce
+que ce modèle vigueur-par-itération ne **banque** jamais.
+
+Levier `sim.apical_control_length` (contrôle apical acrotone : la longueur d'internode
+latéral est mise à l'échelle par la profondeur sous l'apex) livré dans #56 : il
+**affine la cime** (2 bandes du haut) mais ne renverse pas le corps ovoïde — et
+pénalise même les futures branches basses pendant leur fenêtre de croissance
+précoce. La forme cône réelle exige une **dynamique de longueur de branche**
+(banque + persistance) + un contrôle apical qui ne prive pas les branches basses —
+**hors périmètre de #56** (backend d'exposition), suivi en **[#94](https://github.com/julien-riel/palubicki/issues/94)**
+(territoire dominance apicale #36/#51).
+
+**Livré par #56** : le backend lui-même (config-sélectionnable, `bhse` défaut
+**byte-identique**), les deux mesures d'exposition, le diagnostic de silhouette
+(`apex_sharpness` / `clear_bole_fraction` / `silhouette_drift`, `sim/diagnostics.py`),
+et le levier `apical_control_length`. **Non livré (→ #94)** : la silhouette conique
+émergente. Les presets conifères restent sur `bhse` (le cône calibré). Pour essayer
+le backend : `exposure: shadow_propagation`, `envelope.shape: half_ellipsoid` (bornes
+généreuses non-cône), `shadow.measure: skyview`.
+
+### Contrat de calibration — mesure `pyramid` (#56)
+
+Si `shadow.measure: pyramid`, le dépôt `Δs = (aire · area_weight) · a · b^(−q)` est
+**dépendant de `voxel_edge_m`** (`q_max` compte des voxels ; profondeur physique
+`= q_max · voxel_edge_m`). Les constantes `shadow.{a,b,q_max}` sont donc liées au
+même `voxel_edge_m = 0.04` que le **Contrat de calibration** ci-dessus, et **n'héritent
+pas** des constantes Beer-Lambert (`k_absorption`, `needle_area_scale`) — c'est une loi
+optique distincte. La mesure `skyview` (défaut) réutilise au contraire la machinerie
+#37/#85 déjà calibrée et n'introduit pas de nouveau contrat.
