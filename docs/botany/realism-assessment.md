@@ -141,7 +141,8 @@ notées ici pour qu'on ne les reprenne pas pour des oublis.
   physique de cellule.** `k_absorption`, `leaf_area_scale` et `needle_area_scale`
   supposent une taille de voxel donnée ; avec `voxel_edge_m` fixe, elles
   **transfèrent** désormais d'une taille d'enveloppe à l'autre (c'était l'objet
-  du correctif A). Un re-réglage reste nécessaire **si** `voxel_edge_m` change.
+  du correctif A). Un re-réglage reste nécessaire **si** `voxel_edge_m` change —
+  ce contrat est désormais explicite ci-dessous (**Contrat de calibration**, #85).
 
 - **#4 (tenté puis ABANDONNÉ) — diagnostic de divergence spray-aware.** L'idée
   était de mesurer les latéraux d'ordre 2+ dans le repère spray (gaucher) où ils
@@ -153,6 +154,50 @@ notées ici pour qu'on ne les reprenne pas pour des oublis.
   ordre-1 (oak 142 → 198, hors la bande 130-145) — métrique pourtant bandée.
   Reverté ; le miroir d'ordre-2+ (non bandé, cosmétique) reste un quirk connu du
   diagnostic.
+
+### Contrat de calibration — `voxel_edge_m = 0.04` (#85)
+
+**Les six presets d'espèces sont calibrés pour `light.voxel_edge_m = 0.04` m.**
+Aucun preset ne fixe `voxel_edge_m` (`grep configs/species/*.yaml` → zéro) : tous
+héritent du défaut de `LightConfig`. Les constantes optiques — `k_absorption`
+(0.45 `birch` … 0.65 `fir`/`pine`), `leaf_area_scale` (1.0, hérité partout) et
+`needle_area_scale` (0.5 sur `fir`/`pine`) — ont été réglées **à cette taille de
+cellule**, contre les bandes `literature.yaml` (garde-fou #87).
+
+**Pourquoi changer `voxel_edge_m` invalide ces constantes.** La grille dépose
+l'aire de lame réelle en densité surfacique `LAI = aire / volume_cellule`
+([`light.py`](../../src/palubicki/sim/light.py) `_inject_tree`), et le ray-march
+Beer-Lambert accumule `τ += k · LAI · step_len` avec
+`step_len = min(cell_size) ≈ voxel_edge_m`. Les cellules étant ~cubiques d'arête
+`e = voxel_edge_m` (`volume ≈ e³`, `step_len ≈ e`), la profondeur optique d'une
+feuille déposée vaut `k · aire · e / e³ = k · aire / e²` : **la profondeur optique
+par feuille est ∝ 1/voxel_edge_m²**. Diviser `voxel_edge_m` par deux **quadruple**
+donc l'auto-ombrage à constantes égales — la couronne se referme, l'élagueur
+d'ombre sur-coupe, et hauteur/tronc/couronne/Horton sortent de bande. (Vrai dans
+le régime non *clampé* `[8,192]` voxels/axe ; aux très grandes/petites enveloppes
+le clamp fait dévier `e` de la cible, donc la relation `1/e²` n'est qu'un guide —
+raison de plus pour re-régler **empiriquement** plutôt que par formule.)
+
+**Procédure de re-calibration, si `voxel_edge_m` doit changer** (de `e₀=0.04` à
+`e₁`) :
+
+1. Poser la nouvelle valeur — défaut `LightConfig.voxel_edge_m`, ou par-preset.
+2. Premier jet analytique : `k_absorption ← k · (e₁/e₀)²` comme **point de départ**
+   (annule la mise à l'échelle `1/e²` au premier ordre) ; alternativement bouger
+   `leaf_area_scale`/`needle_area_scale` du même facteur si l'on préfère agir sur
+   l'aire que sur `k`.
+3. Boucle empirique ([`mindset-boucle-empirique.md`](../mindset-boucle-empirique.md)) :
+   `palubicki diagnose --species <sp> --seed 0,1,2` par espèce, ajuster jusqu'à ce
+   que les métriques **bandées** (hauteur, tronc, couronne, leader, continuation,
+   Horton, divergence + insertion ordre-1) rentrent.
+4. Verrouiller : `pytest tests/integration/test_botanical_guardrail.py` — vert =
+   6 espèces en bande sur graines {0,1,2} (#87).
+5. Re-épingler les goldens (`tests/golden`) : la géométrie change.
+
+Tant que `voxel_edge_m` reste à `0.04`, ces constantes **transfèrent** d'une
+taille d'enveloppe à l'autre (objet du correctif A : grille *scale-aware*) — c'est
+précisément la propriété qui rend ce contrat tenable, et pourquoi le défaut ne
+doit pas bouger à la légère.
 
 ### Dérive de calibration (vs baseline, FIX #4 reverté)
 
@@ -186,3 +231,31 @@ espèces. Les 8 hors-bande restants sont **tous pré-existants** et relèvent de
    « angle d'or » (130-145) ne correspond pas à la divergence structurelle du
    décussé (~90/180°) ni du verticillé (pine ~72-93°). Question de **bande mal
    typée par mode**, pas de réglage.
+
+### Vérification finale post-#83 (#85) — tout en bande
+
+Les deux bugs de mesure ci-dessus sont **résolus dans #83 (livré)** : l'insertion
+est mesurée au seul **internode fondateur** de chaque axe (plus diluée par la
+courbure intra-branche) et la divergence **par mode** de phyllotaxie, bandes
+re-dérivées post-tropisme (insertion globale `(50,90)` ; divergence alterné
+`(130,145)` / décussé `(80,100)` / verticillé pin `(52,78)`). La **vérification
+finale de #85** — `palubicki diagnose --species <sp> --seed 0,1,2` sur les
+**6 espèces** **+** `tests/integration/test_botanical_guardrail.py` (#87 :
+**6 passed**, 958 s, graines {0,1,2}) — confirme que **toutes les métriques
+bornées sont en bande** : les 8 résidus du tableau #84 sont **tous résorbés**
+(c'étaient bien des **artefacts de mesure**, pas une dérive des constantes
+lumière). Valeurs ordre-1 désormais en bande :
+
+| Espèce | insertion ∠ ordre-1 | divergence ∠ ordre-1 (mode) |
+| --- | --- | --- |
+| oak   | 74,4 ✓ | 141 ✓ (alterné) |
+| birch | 82,0 ✓ | 138 ✓ (alterné) |
+| maple | 54,7 ✓ | 90,9 ✓ (décussé) |
+| ash   | 53,8 ✓ | 89,5 ✓ (décussé) |
+| fir   | 75,2 ✓ | 141 ✓ (alterné) |
+| pine  | 76,7 ✓ | 66,0 ✓ (verticillé) |
+
+Les métriques de croissance (hauteur, tronc, couronne, leader, continuation,
+Horton) restent **toutes en bande** sur les 6 espèces (#84). La calibration
+`voxel_edge_m = 0.04` (**Contrat de calibration** ci-dessus) est donc **vérifiée
+tout en bande**, graines {0,1,2} — ce qui **clôt #85**.

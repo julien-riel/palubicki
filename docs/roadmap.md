@@ -154,16 +154,31 @@ les nouveaux modes orthogonaux pour la fin.
 > deux mécanismes actifs) ; goldens `oak`/`maple`/`fir`/`pine` re-épinglés (`birch`/`ash`
 > inchangés ; `ash` n'a pas de golden).
 
-L'audit #84 a rendu le **champ lumineux** correct, #83 (livré) a rendu la **mesure**
-correcte, #87 (livré) **verrouille** la justesse botanique en CI — exactement la
-règle « rendre la lumière correcte avant ce qui y réagit » appliquée à la
-calibration. Reste, sur cette piste de calibration :
+> **#85 (contrat `voxel_edge_m=0.04` + vérif finale) — livré.** Le contrat de
+> calibration implicite est rendu **explicite et découvrable** sur trois surfaces :
+> commentaire dans le bloc `light:` des **six** presets, champ
+> `LightConfig.voxel_edge_m` ([`config.py`](../src/palubicki/config.py)) et section
+> dédiée **« Contrat de calibration »** dans
+> [`realism-assessment.md`](botany/realism-assessment.md) avec la **procédure de
+> re-calibration** (5 étapes). Fait physique posé : la profondeur optique par
+> feuille vaut `k · aire / voxel_edge_m²` (dépôt `LAI = aire/volume_cellule`,
+> `τ += k·LAI·step_len`, `step_len ≈ voxel_edge_m`) — donc **∝ 1/voxel_edge_m²** :
+> changer la taille de voxel rescale **tout** l'auto-ombrage et décalibre les six
+> espèces (`k_absorption` 0.45–0.65 ; `needle_area_scale` 0.5 sapin/pin ; aucun
+> preset ne fixe `voxel_edge_m`, tous héritent du défaut 0.04). **Vérif finale** :
+> #83 (mesure ordre-1) et #87 (garde-fou) livrés, le balayage `diagnose --seed
+> 0,1,2` sur les 6 espèces **+** `test_botanical_guardrail.py` (**6 passed**, 958 s)
+> sont **tout en bande** — les 8 hors-bande de #84 étaient bien des **artefacts de
+> mesure #83** (insertion/divergence ordre-1 ✓ partout, p.ex. oak insertion
+> 27,7°→74,4°, érable divergence 178°→90,9°), **zéro vraie dérive restante**.
+> Documentation + vérification **uniquement** : commentaires seuls, **aucun
+> changement de comportement**, goldens **byte-identiques** (zéro re-pin).
 
-1. **#85 — contrat `voxel_edge_m=0.04` + vérif finale** · *réduite* : le re-base sur
-   la grille voxel + re-pin des goldens + mise-en-bande de la croissance sont déjà
-   faits dans #84. Reste à **documenter le contrat** (changer `voxel_edge_m`
-   décalibre `k_absorption`/`leaf_area_scale`/`needle_area_scale`) et à **vérifier
-   « tout en bande »** (les angles ordre-1 sont désormais corrects côté mesure, #83).
+L'audit #84 a rendu le **champ lumineux** correct, #83 a rendu la **mesure**
+correcte, #87 **verrouille** la justesse botanique en CI, et #85 **documente le
+contrat** `voxel_edge_m=0.04` + acte la **vérif « tout en bande »** — la piste
+**« Justesse de calibration » est close** (« rendre la lumière correcte avant ce
+qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
 
 ### Mémoire mécanique (intégrée dans le temps)
 
