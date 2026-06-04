@@ -167,3 +167,46 @@ def test_perceive_exposure_wraps_batch_into_struct():
     # Empty input is a no-op.
     empty = perceive_exposure([], g, cfg, r_perception=0.3)
     assert empty.exposure == {} and empty.gradient == {}
+
+
+# ── Phase 3: the simulator dispatch helper (_exposure_result) ──────────────
+
+def test_exposure_result_builds_direction_and_scaled_quality():
+    from types import SimpleNamespace
+
+    from palubicki.sim.light_perception import LightPerception
+    from palubicki.sim.simulator import _exposure_result
+    from palubicki.sim.tree import Bud, Node
+
+    cfg = SimpleNamespace(shadow=ShadowConfig(full_light_C=2.0, quality_scale=10.0))
+    root = Node(position=np.zeros(3))
+    b1 = Bud(position=np.zeros(3), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=root)
+    b2 = Bud(position=np.ones(3), direction=np.array([1.0, 0.0, 0.0]), axis_order=1, parent_node=root)
+    li = LightPerception()
+    li.exposure = {b1: 2.0, b2: 0.5}
+    li.gradient = {b1: np.array([0.0, 1.0, 0.0]), b2: np.array([-1.0, 0.0, 0.0])}
+
+    res = _exposure_result([b1, b2], li, cfg)
+    assert res.quality[b1] == pytest.approx(2.0 * 10.0)      # Q · quality_scale
+    assert res.quality[b2] == pytest.approx(0.5 * 10.0)
+    assert np.allclose(res.direction[b1], [0.0, 1.0, 0.0])   # direction == gradient
+
+    # A bud missing from perception (e.g. off-grid) defaults to full light, not starved.
+    b3 = Bud(position=np.zeros(3), direction=np.array([0.0, 0.0, 1.0]), axis_order=0, parent_node=root)
+    res2 = _exposure_result([b3], li, cfg)
+    assert res2.quality[b3] == pytest.approx(2.0 * 10.0)     # default C · scale
+    assert np.allclose(res2.direction[b3], [0.0, 0.0, 0.0])
+
+
+def test_exposure_result_none_light_info_starves_all():
+    from types import SimpleNamespace
+
+    from palubicki.sim.simulator import _exposure_result
+    from palubicki.sim.tree import Bud, Node
+
+    cfg = SimpleNamespace(shadow=ShadowConfig(full_light_C=1.0, quality_scale=20.0))
+    root = Node(position=np.zeros(3))
+    b = Bud(position=np.zeros(3), direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=root)
+    res = _exposure_result([b], None, cfg)
+    assert res.quality[b] == 0
+    assert np.allclose(res.direction[b], [0.0, 0.0, 0.0])

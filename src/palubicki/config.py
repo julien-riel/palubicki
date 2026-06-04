@@ -577,6 +577,12 @@ class ShadowConfig:
     # Exposure below which a bud goes DORMANT (Q < q_dormancy): the clear-bole /
     # soft height governor — the lever this issue is about.
     q_dormancy: float = field(default=0.05, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.01}})
+    # Maps exposure Q (∈ [0, full_light_C]) onto the Borchert-Honda quality
+    # currency. BH and its absolute thresholds (sim.vigor_dormancy,
+    # sympodial.q_threshold, shedding.quality_threshold) are calibrated against
+    # integer MARKER COUNTS (~1–50 under BHse), not Q (~order 1), so Q is scaled
+    # into that regime here (#56 C1). Re-fit per species during calibration.
+    quality_scale: float = field(default=20.0, metadata={"ui": {"min": 0.1, "max": 200.0, "step": 1.0}})
 
 
 @dataclass(frozen=True)
@@ -1016,6 +1022,8 @@ class Config:
             raise ConfigError(f"shadow.area_weight must be >= 0, got {shadow.area_weight}")
         if shadow.q_dormancy < 0:
             raise ConfigError(f"shadow.q_dormancy must be >= 0, got {shadow.q_dormancy}")
+        if shadow.quality_scale <= 0:
+            raise ConfigError(f"shadow.quality_scale must be > 0, got {shadow.quality_scale}")
 
         if not self.output.parent.exists():
             raise ConfigError(f"output parent directory does not exist: {self.output.parent}")
