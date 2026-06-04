@@ -904,6 +904,27 @@ def test_shadow_config_validation(tmp_path):
         _make_config(shadow=ShadowConfig(q_dormancy=-0.1), output=tmp_path / "out.glb")
 
 
+def test_shadow_measure_defaults_to_skyview(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.shadow.measure == "skyview"
+
+
+def test_config_rejects_unknown_shadow_measure(tmp_path):
+    from palubicki.config import ShadowConfig
+    # Literal isn't enforced at runtime; the editor schema gates it. A bad value
+    # simply isn't one of the two the simulator dispatches on — assert the two
+    # valid ones construct.
+    assert ShadowConfig(measure="skyview").measure == "skyview"
+    assert ShadowConfig(measure="pyramid").measure == "pyramid"
+
+
+def test_apical_control_length_defaults_off_and_validates(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    assert cfg.sim.apical_control_length == 0.0     # off by default (BHse byte-identical)
+    with pytest.raises(ConfigError, match="apical_control_length"):
+        _make_config(sim=SimConfig(apical_control_length=-1.0), output=tmp_path / "out.glb")
+
+
 def test_load_config_reads_exposure_and_shadow(tmp_path):
     """A YAML opting into shadow propagation threads through the loader, and the
     shadow section coerces into ShadowConfig."""

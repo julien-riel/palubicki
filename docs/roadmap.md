@@ -188,12 +188,18 @@ qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
 
 ### Changement de moteur profond
 
-6. **#56 — forme émergente : variante shadow-propagation (Palubicki 2009)** · 2ᵉ
-   backend d'exposition (BHse reste le défaut) : la silhouette (cône conifère,
-   fût clair) **émerge** de l'auto-ombrage + dominance apicale au lieu d'être
-   prescrite par l'enveloppe `cone`. Compose avec #62 (lumière feuillus correcte)
-   et #63 (levier d'initiation). Le plus profond du backlog ; tranche d'abord le
-   compromis dirigeable-vs-émergent.
+6. **#94 — cône conifère émergent : dynamique de longueur de branche + contrôle
+   apical** · suite directe de **#56** (backend shadow-propagation **livré** :
+   `exposure: shadow_propagation` config-sélectionnable, BHse défaut byte-identique ;
+   mesures `skyview`/`pyramid` ; diagnostic de silhouette ; levier
+   `apical_control_length`). Constat de calibration #56 : la forme émergente sous
+   compétition lumineuse est **ovoïde/inversée** (cime la plus large), pas un cône —
+   le leader est parfait mais les branches basses, ombragées, restent courtes au lieu
+   d'être les plus longues. La silhouette conique exige une **dynamique de longueur
+   de branche** (banque pendant la lumière + persistance ligneuse) et un contrôle
+   apical qui ne prive pas les branches basses — territoire dominance apicale
+   **#36/#51**. Compose avec #62 (lumière feuillus) et #63 (initiation). Voir
+   `docs/botany/realism-assessment.md` §forme émergente.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 

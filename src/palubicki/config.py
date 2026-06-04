@@ -43,6 +43,14 @@ class SimConfig:
     alpha_basipetal: float = field(default=2.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     lambda_apical: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.01}})
     shoot_extension_max: float = field(default=0.3, metadata={"ui": {"min": 0.02, "max": 1.0, "step": 0.01}})
+    # Apical control (#56): acropetal suppression of LATERAL internode length by
+    # depth below the tree apex, independent of light. A lateral's emitted length
+    # is scaled by clip(gap_below_apex / apical_control_length, 0.1, 1.0), so
+    # young laterals near the leader stay short and old laterals far below reach
+    # full length — the top-down taper that light-driven vigor alone inverts
+    # (light makes the lit top grow widest). 0.0 = off (byte-identical); a conifer
+    # uses ~tree_height to taper the whole crown. The main axis is never suppressed.
+    apical_control_length: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 15.0, "step": 0.5}})
     vigor_ref: float = field(default=1.0, metadata={"ui": {"min": 0.05, "max": 5.0, "step": 0.05}})
     vigor_dormancy: float = field(default=1.0, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
     vigor_smoothing: float = field(default=0.5, metadata={"ui": {"min": 0.05, "max": 1.0, "step": 0.05}})
@@ -583,6 +591,15 @@ class ShadowConfig:
     # integer MARKER COUNTS (~1–50 under BHse), not Q (~order 1), so Q is scaled
     # into that regime here (#56 C1). Re-fit per species during calibration.
     quality_scale: float = field(default=20.0, metadata={"ui": {"min": 0.1, "max": 200.0, "step": 1.0}})
+    # How a bud's exposure Q is measured:
+    #   "skyview" — Q = the #37 hemisphere transmission (open-sky fraction). A
+    #     lower-edge branch open to the side reads high Q, keeps vigor, and grows
+    #     out → the crown widens toward the base (a real conifer cone).
+    #   "pyramid" — Q from the downward shadow-propagation field (a / b / q_max
+    #     below; the Palubicki proxy). Cheaper but over-suppresses lower branches
+    #     (no side light) → an inverted crown. Kept for comparison.
+    measure: Literal["skyview", "pyramid"] = field(
+        default="skyview", metadata={"ui": {"label": "Exposure measure"}})
 
 
 @dataclass(frozen=True)
@@ -680,6 +697,8 @@ class Config:
             raise ConfigError(f"sim.r_kill must be > 0, got {s.r_kill}")
         if s.shoot_extension_max <= 0:
             raise ConfigError(f"sim.shoot_extension_max must be > 0, got {s.shoot_extension_max}")
+        if s.apical_control_length < 0:
+            raise ConfigError(f"sim.apical_control_length must be >= 0, got {s.apical_control_length}")
         if s.vigor_ref <= 0:
             raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
         if s.vigor_dormancy < 0:

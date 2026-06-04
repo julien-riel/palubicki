@@ -15,7 +15,11 @@ from palubicki.sim.clock import Clock
 from palubicki.sim.elongation import shoot_extension, update_lengths
 from palubicki.sim.forest import Forest, all_active_buds, build_forest, forest_light_bounds
 from palubicki.sim.light import LightGrid, _resolution_for
-from palubicki.sim.light_perception import perceive_exposure, perceive_light
+from palubicki.sim.light_perception import (
+    perceive_exposure,
+    perceive_exposure_skyview,
+    perceive_light,
+)
 from palubicki.sim.obstacles import any_contains, segment_blocked
 from palubicki.sim.phyllotaxy import (
     lateral_bud_directions,
@@ -161,9 +165,16 @@ def _perceive_forest_light(forest: Forest, union_buds, cfg: Config, iteration: i
     )
     _warn_if_buds_outside_grid(union_buds, light_grid)
     if cfg.exposure == "shadow_propagation":
-        # Shadow propagation (#56): darken the voxel field from the current foliage,
-        # then read each bud's exposure Q + light-gradient direction. rebuild_from_forest
-        # above still recomputes radii; its LAI fill is simply unused on this path.
+        # Shadow propagation (#56): form from light competition, not markers.
+        if cfg.shadow.measure == "skyview":
+            # Q = open-sky fraction from the #37 hemisphere ray-march (uses the LAI
+            # rebuilt above). Lower-edge branches stay vigorous → crown widens to
+            # the base. The fix for the downward-shadow inversion.
+            return perceive_exposure_skyview(
+                union_buds, light_grid, cfg.light, cfg.shadow,
+                seed=int(np.random.SeedSequence([cfg.seed, iteration]).generate_state(1)[0]),
+            )
+        # "pyramid": Q from the downward shadow-propagation field (Palubicki proxy).
         light_grid.propagate_shadow(forest, cfg.shadow, geom=cfg.geom)
         return perceive_exposure(
             union_buds, light_grid, cfg.shadow, r_perception=cfg.sim.r_perception,
@@ -379,6 +390,14 @@ def _grow_tree(
 
     s = cfg.sim.vigor_smoothing
     shadow_mode = cfg.exposure == "shadow_propagation"
+    # Apical control (#56): apex height for the acropetal lateral-length taper.
+    # The highest active bud is the leader tip; laterals are suppressed by their
+    # depth below it. Computed once per iteration (off when length == 0).
+    apical_L = cfg.sim.apical_control_length
+    y_apex = (
+        max((float(b.position[1]) for b in tree.active_buds), default=0.0)
+        if apical_L > 0.0 else 0.0
+    )
     new_active: list[Bud] = []
     for bud in list(tree.active_buds):
         v_b = float(v_by_bud.get(bud, 0.0))
@@ -433,6 +452,12 @@ def _grow_tree(
             continue
 
         target = _internode_target(bud, v_b, cfg, iteration, t, state, activity)
+        if apical_L > 0.0 and not is_main:
+            # Acropetal taper: a lateral near the apex (small gap) emits a short
+            # internode; far below (large gap) it reaches full length. Floored at
+            # 0.1 so apex laterals still creep rather than freeze.
+            gap = y_apex - float(bud.position[1])
+            target *= min(1.0, max(0.1, gap / apical_L))
         new_pos = bud.position + d * target
 
         if forest.obstacles:

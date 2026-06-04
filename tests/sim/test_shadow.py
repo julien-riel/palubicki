@@ -198,6 +198,28 @@ def test_exposure_result_builds_direction_and_scaled_quality():
     assert np.allclose(res2.direction[b3], [0.0, 0.0, 0.0])
 
 
+def test_perceive_exposure_skyview_reads_hemisphere(tmp_path):
+    from palubicki.config import LightConfig
+    from palubicki.sim.light_perception import perceive_exposure_skyview
+    from palubicki.sim.tree import Bud, Node
+
+    g = _grid()
+    light_cfg = LightConfig(n_rays=16, k_absorption=0.5)
+    shadow_cfg = ShadowConfig(full_light_C=1.0)
+    root = Node(position=np.zeros(3))
+    # Empty grid → open sky → exposure ≈ full light (transmission 1.0).
+    bud = Bud(position=g.cell_to_world_center(5, 5, 5),
+              direction=np.array([0.0, 1.0, 0.0]), axis_order=0, parent_node=root)
+    res = perceive_exposure_skyview([bud], g, light_cfg, shadow_cfg, seed=0)
+    assert res.exposure[bud] == pytest.approx(1.0, abs=1e-6)   # open sky
+    assert res.light_factor[bud] == pytest.approx(1.0, abs=1e-6)
+    assert bud in res.gradient
+    # Dense LAI above the bud → reduced transmission → lower exposure.
+    g.lai[:, 6:, :] = 50.0
+    res2 = perceive_exposure_skyview([bud], g, light_cfg, shadow_cfg, seed=0)
+    assert res2.exposure[bud] < 0.9
+
+
 def test_exposure_result_none_light_info_starves_all():
     from types import SimpleNamespace
 

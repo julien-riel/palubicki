@@ -46,6 +46,7 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Monopodial (leader persistant) | ✅ | `Internode.is_main_axis` ; continuation du terminal | — |
 | Sympodial (terminal cède au latéral) | ✅ | `sim/sympodial.py::promote_lateral_if_failing` ; `Node.sympodial_fork` | — |
 | Dominance apicale | ✅ | `sim/bh.py` — allocation Borchert-Honda à deux passes, `lambda_apical` ; dominance **émergente** (pas d'hormone explicite — choix de conception) | — |
+| Forme macro de couronne émergente (auto-ombrage) | 🟡 | 2ᵉ backend d'exposition config-sélectionnable : `exposure: shadow_propagation` (`shadow.measure: skyview \| pyramid`) — la forme vient de la compétition lumineuse, pas de l'enveloppe. Leader excurrent **émergent** (continuation 1.0, déviation 0°). MAIS la couronne latérale émergente est **ovoïde/inversée** (la cime éclairée est la plus large ; les branches basses ombragées restent courtes) — pas un cône (`silhouette_drift ≈ 0.38` vs fir-BHse cône). Voir realism-assessment §pipeline lumière | backend + diagnostic + levier `apical_control_length` livrés ([#56](https://github.com/julien-riel/palubicki/issues/56)) ; forme cône → [#94](https://github.com/julien-riel/palubicki/issues/94) (dynamique de longueur de branche) |
 | Acrotonie / mésotonie / basitonie | ✅ | `sim/bud_break_bias.py::position_weight` + `sim.bud_break_bias` (mode + force) | [#3](https://github.com/julien-riel/palubicki/issues/3) livré |
 | Orthotropie vs plagiotropie | ✅ | `sim/tropisms.py` — `w_orthotropy_*`, `w_plagiotropism_*` (projection sur XY, ou sur le plan de la branche-mère si `spray_plane_enabled`) | — |
 | Plagiotropie par épinastie (arc temporel vers l'horizontale) | ✅ | `sim/tropisms.py` — rampe `1 − exp(−âge/τ)`, `epinasty_tau_years` | [#34](https://github.com/julien-riel/palubicki/issues/34) livré |
@@ -181,6 +182,10 @@ Au-delà de la morphologie, les écarts **physiologiques** relevés par
 3. **Preset d'arbuste** (§10.3) — le biais basitone existe déjà ; livrer un
    preset (lilas, cornouiller) est peu coûteux et n'exige aucun changement
    moteur.
+
+> **Déjà créé** — [#94](https://github.com/julien-riel/palubicki/issues/94)
+> (forme cône émergente : dynamique de longueur de branche + contrôle apical),
+> issu du constat de calibration de [#56](https://github.com/julien-riel/palubicki/issues/56).
 
 Les autres absences sont des **`SKIP` assumés** : topologie racinaire
 souterraine, anneaux annuels, dimension fractale, loi de flambement,

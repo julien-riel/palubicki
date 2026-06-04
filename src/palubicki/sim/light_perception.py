@@ -87,3 +87,44 @@ def perceive_exposure(
         result.light_factor[bud] = q / C if C > 0 else 0.0
         result.gradient[bud] = gradients[i]
     return result
+
+
+def perceive_exposure_skyview(
+    buds: list[Bud],
+    grid: LightGrid,
+    light_cfg: LightConfig,
+    shadow_cfg: ShadowConfig,
+    *,
+    seed: int,
+) -> LightPerception:
+    """Sky-view exposure for the shadow backend (#56): Q from the #37 hemisphere
+    transmission (open-sky fraction), gradient toward the brightest sky.
+
+    The fix for the downward-shadow inversion: a bud's exposure is how much open
+    sky its hemisphere sees (the calibrated Beer-Lambert ray-march of
+    :meth:`LightGrid.sample_hemisphere_batch`), NOT just the shadow directly
+    overhead. A lower-edge branch open to the side therefore reads high Q, keeps
+    vigor, and grows out — so the crown widens toward the base instead of
+    collapsing into an inverted feather-duster. Assumes ``grid.lai`` is current
+    (rebuilt upstream). Mirrors :func:`perceive_light`'s sampling/seeding so the
+    direction signal is identical, but packages the result as the exposure struct
+    the shadow dispatch consumes (``exposure`` = Q on the [0, C] scale).
+    """
+    result = LightPerception()
+    if not buds:
+        return result
+    light_dir = np.asarray(light_cfg.light_direction, dtype=np.float64)
+    ss = np.random.SeedSequence(seed)
+    seeds = [int(sub.generate_state(1)[0]) for sub in ss.spawn(len(buds))]
+    positions = np.asarray([bud.position for bud in buds], dtype=np.float64)
+    light_factors, gradients = grid.sample_hemisphere_batch(
+        positions, n_rays=light_cfg.n_rays, light_direction=light_dir,
+        k=light_cfg.k_absorption, seeds=seeds,
+    )
+    C = float(shadow_cfg.full_light_C)
+    for i, bud in enumerate(buds):
+        lf = float(light_factors[i])            # mean transmission ∈ [0, 1]
+        result.light_factor[bud] = lf
+        result.exposure[bud] = lf * C            # Q on the [0, C] scale
+        result.gradient[bud] = gradients[i]
+    return result

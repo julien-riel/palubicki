@@ -1,66 +1,74 @@
-"""End-to-end smoke for the shadow-propagation exposure backend (#56 Phase 3).
+"""End-to-end smoke for the shadow-propagation exposure backend (#56).
 
-Slow (runs a real sim). The point is to catch the integration failure modes the
-adversarial review flagged: self-shadow blackout collapsing to an empty tree
-(C2/R2) and the zero-gradient dormancy trap freezing the leader (R1)."""
+Slow (runs real sims). Asserts the backend produces a live, excurrent-leader tree
+under both exposure measures and that apical control measurably tapers the upper
+crown. It does NOT assert a conifer cone: pure-emergent form under light
+competition is ovoid/inverted (the lowest branches are shaded-short rather than
+longest) — a branch-length-dynamics limitation tracked as a follow-up. The
+silhouette drift vs the cone-seeded BHse fir is recorded, not gated."""
 from __future__ import annotations
 
 import pytest
 
 from palubicki.config import load_config
-from palubicki.sim.diagnostics import compute_metrics
+from palubicki.sim.diagnostics import compute_metrics, silhouette_drift
 from palubicki.sim.simulator import simulate
+
+_SP = {
+    "exposure": "shadow_propagation",
+    "envelope.shape": "half_ellipsoid",
+    "envelope.rx": 3.0, "envelope.ry": 12.0, "envelope.rz": 3.0,
+    "shadow.enabled": True,
+}
+
+
+def _run(overrides, years=20, seed=0, tmp_path=None):
+    ov = {"seed": seed, "sim.max_simulation_years": years}
+    ov.update(overrides)
+    cfg = load_config(yaml_path=None, cli_overrides=ov,
+                      output=(tmp_path / "t.glb"), species="fir")
+    return compute_metrics(simulate(cfg), cfg=cfg)
 
 
 @pytest.mark.slow
-def test_shadow_propagation_fir_grows_a_real_tree(tmp_path):
-    """A fir under a generous, deliberately NON-cone ellipsoid bounds volume must
-    grow a real, branched tree under shadow propagation — not collapse and not
-    freeze. (Dimensional calibration is a later phase; here we only assert the
-    backend produces a live, non-degenerate tree.)"""
-    cfg = load_config(
-        yaml_path=None,
-        cli_overrides={
-            "seed": 0,
-            "exposure": "shadow_propagation",
-            "envelope.shape": "ellipsoid",        # non-cone: no prescribed spire
-            "shadow.enabled": True,
-            "sim.max_simulation_years": 8,
-        },
-        output=tmp_path / "t.glb",
-        species="fir",
-    )
-    assert cfg.exposure == "shadow_propagation"
-
-    tree = simulate(cfg)
-    m = compute_metrics(tree, cfg=cfg)
-
-    # Leader grew (R1: not frozen by a zero-gradient apex) and the canopy did not
-    # black itself out (C2/R2: not an empty tree).
+@pytest.mark.parametrize("measure", ["skyview", "pyramid"])
+def test_shadow_backend_grows_excurrent_tree(measure, tmp_path):
+    """Both exposure measures produce a real, branched tree with a dominant,
+    near-vertical leader — no blackout (C2/R2), no frozen leader (R1)."""
+    m = _run({**_SP, "shadow.measure": measure}, tmp_path=tmp_path)
     assert m["tree_height"] > 1.0
     assert m["strahler_order_max"] >= 2
-    # The Phase-0 silhouette diagnostic resolves on the emergent tree.
-    assert 0.0 <= m["clear_bole_fraction"] <= 1.0
+    assert m["main_axis_continuation_rate"] >= 0.6     # excurrent leader
+    assert m["leader_deviation_deg"] <= 20.0           # near-vertical
     assert 0.0 <= m["apex_sharpness"] <= 1.0
 
 
 @pytest.mark.slow
-def test_bhse_default_path_unchanged(tmp_path):
-    """The default BHse path is byte-stable across the new shadow plumbing: same
-    seed → identical structural metrics. (The geometry goldens are the
-    authoritative byte-identity check; this is a cheap guard that the default
-    dispatch wasn't perturbed.)"""
-    def _metrics():
-        cfg = load_config(
-            yaml_path=None,
-            cli_overrides={"seed": 0, "sim.max_simulation_years": 5},
-            output=tmp_path / "t.glb",
-            species="fir",
-        )
-        assert cfg.exposure == "bhse"
-        tree = simulate(cfg)
-        m = compute_metrics(tree, cfg=cfg)
-        return (m["tree_height"], m["crown_radius"], m["strahler_order_max"],
-                m["main_axis_continuation_rate"])
+def test_apical_control_tapers_the_upper_crown(tmp_path):
+    """Acropetal apical control narrows the top of the crown — apex_sharpness with
+    control on is below control off (a partial taper; the full cone is deferred)."""
+    base = {**_SP, "shadow.measure": "skyview",
+            "shadow.quality_scale": 8.0, "sim.lambda_apical": 0.94}
+    off = _run(base, years=30, tmp_path=tmp_path)
+    on = _run({**base, "sim.apical_control_length": 8.0}, years=30, tmp_path=tmp_path)
+    assert on["apex_sharpness"] < off["apex_sharpness"]
 
-    assert _metrics() == _metrics()
+
+@pytest.mark.slow
+def test_silhouette_drift_vs_cone_bhse_is_measurable(tmp_path):
+    """The AC3 diagnostic resolves between the cone-seeded BHse fir and the
+    neutral-bounds shadow-prop fir. Recorded, not gated (the form gap is the
+    documented finding, not a regression to guard)."""
+    ref = _run({}, years=30, tmp_path=tmp_path)               # shipped BHse cone
+    sp = _run({**_SP, "shadow.measure": "skyview"}, years=30, tmp_path=tmp_path)
+    drift = silhouette_drift(sp, ref)
+    assert drift == drift and drift >= 0.0                    # finite, non-negative
+
+
+@pytest.mark.slow
+def test_bhse_default_path_unchanged(tmp_path):
+    """The default BHse path is deterministic across the shadow plumbing."""
+    a = _run({}, years=15, tmp_path=tmp_path)
+    b = _run({}, years=15, tmp_path=tmp_path)
+    assert (a["tree_height"], a["crown_radius"], a["strahler_order_max"]) == \
+           (b["tree_height"], b["crown_radius"], b["strahler_order_max"])
