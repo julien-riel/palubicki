@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig
+from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig, ShadowConfig
 from palubicki.sim.radii import compute_radii
 from palubicki.sim.tree import Tree
 
@@ -63,12 +63,26 @@ def _resolution_for(light_cfg: LightConfig, size: np.ndarray) -> tuple[int, int,
     )
 
 
+def _fib_hemisphere(n: int) -> np.ndarray:
+    """``n`` roughly-even unit directions in the +Z hemisphere (Fibonacci
+    spiral). Deterministic — no per-bud RNG — so the shadow-propagation gradient
+    sampling (#56) is reproducible across runs. ``z ∈ (0, 1)`` keeps every
+    direction forward (ahead of the bud's heading once rotated into its frame)."""
+    n = max(1, int(n))
+    i = np.arange(n, dtype=np.float64) + 0.5
+    z = i / n                                       # (0, 1): forward hemisphere
+    r = np.sqrt(np.maximum(0.0, 1.0 - z * z))
+    phi = np.pi * (1.0 + 5.0 ** 0.5) * i            # golden-angle azimuth
+    return np.stack([r * np.cos(phi), r * np.sin(phi), z], axis=1)
+
+
 @dataclass
 class LightGrid:
     origin: np.ndarray            # (3,) float64
     cell_size: np.ndarray         # (3,) float64
     resolution: tuple[int, int, int]
     lai: np.ndarray               # (nx, ny, nz) float32
+    shadow: np.ndarray            # (nx, ny, nz) float32 — shadow-propagation field (#56)
 
     @classmethod
     def from_config(cls, light_cfg: LightConfig, env_cfg: EnvelopeConfig) -> LightGrid:
@@ -80,7 +94,9 @@ class LightGrid:
         nx, ny, nz = _resolution_for(light_cfg, size)
         cell_size = size / np.array([nx, ny, nz], dtype=np.float64)
         lai = np.zeros((nx, ny, nz), dtype=np.float32)
-        return cls(origin=origin, cell_size=cell_size, resolution=(nx, ny, nz), lai=lai)
+        shadow = np.zeros((nx, ny, nz), dtype=np.float32)
+        return cls(origin=origin, cell_size=cell_size, resolution=(nx, ny, nz),
+                   lai=lai, shadow=shadow)
 
     def world_to_cell(self, p: np.ndarray) -> tuple[int, int, int] | None:
         local = p - self.origin
@@ -489,3 +505,146 @@ class LightGrid:
             cell = self.world_to_cell(p)
             if cell is not None:
                 self.lai[cell] += sub_lai
+
+    # ── Shadow-propagation exposure backend (#56) ─────────────────────────
+
+    def propagate_shadow(self, forest, cfg: ShadowConfig, *, geom: GeomConfig) -> None:
+        """Rebuild the shadow-propagation field from the current foliage (#56).
+
+        Each leaf/needle stamps a downward pyramid of "shadow" into the voxels
+        below it, decaying with depth as ``Δs = (area·area_weight)·a·b**(−q)``
+        over ``q = 0..q_max`` layers, with a ``(2q+1)²`` footprint at layer q —
+        the Palubicki 2009 index set ``(I±p, J−q, K±p)``, ``p = 0..q``. Occluders
+        are the SAME real per-blade-area organs the LAI deposit uses
+        (:func:`leaf_area_records`), so the canopy's shadow matches its rendered
+        foliage (fascicle multiplicity, blade shape, sun/shade — all inherited).
+        Wood is foliage-only for the first cut (#56 watch-item: a bole reading
+        full light could sprout along its length).
+        """
+        self.shadow.fill(0.0)
+        if int(cfg.q_max) < 0 or cfg.a <= 0 or cfg.area_weight <= 0:
+            return
+        from palubicki.geom.leaves import leaf_area_records
+
+        positions: list = []
+        areas: list = []
+        for tree in forest.trees:
+            for pos, area in leaf_area_records(tree, geom):
+                positions.append(pos)
+                areas.append(area)
+        if positions:
+            self._deposit_shadow(
+                np.asarray(positions, dtype=np.float64),
+                np.asarray(areas, dtype=np.float64),
+                cfg,
+            )
+
+    def _deposit_shadow(
+        self, positions: np.ndarray, areas: np.ndarray, cfg: ShadowConfig,
+    ) -> None:
+        """Stamp each organ's decaying downward pyramid into ``self.shadow``.
+
+        ``positions`` (M,3) world; ``areas`` (M,). Readable per-organ loop with a
+        per-layer slab add (the ``(2q+1)²`` footprint as a clamped array slice);
+        vectorize across organs only if profiling the sim demands it (#56 R8)."""
+        nx, ny, nz = self.resolution
+        a, b, q_max, aw = float(cfg.a), float(cfg.b), int(cfg.q_max), float(cfg.area_weight)
+        layer_factor = [a * (b ** (-q)) for q in range(q_max + 1)]
+        weights = np.asarray(areas, dtype=np.float64) * aw
+        for p, w in zip(positions, weights):
+            if w <= 0.0:
+                continue
+            home = self.world_to_cell(p)
+            if home is None:
+                continue
+            cI, cJ, cK = home
+            for q in range(q_max + 1):
+                j = cJ - q
+                if j < 0:
+                    break
+                ds = np.float32(w * layer_factor[q])
+                i0, i1 = max(cI - q, 0), min(cI + q + 1, nx)
+                k0, k1 = max(cK - q, 0), min(cK + q + 1, nz)
+                if i0 < i1 and k0 < k1:
+                    self.shadow[i0:i1, j, k0:k1] += ds
+
+    def _shadow_at(self, pts: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Vectorised shadow lookup at world points ``pts`` (N,3). Returns
+        ``(s, in_grid)``: ``s[i]`` is the shadow in the cell containing ``pts[i]``
+        (0.0 where off-grid), ``in_grid[i]`` whether it fell inside the grid."""
+        local = (np.asarray(pts, dtype=np.float64) - self.origin) / self.cell_size
+        cells = np.floor(local).astype(np.intp)
+        nx, ny, nz = self.resolution
+        in_grid = (
+            (cells[:, 0] >= 0) & (cells[:, 0] < nx) &
+            (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
+            (cells[:, 2] >= 0) & (cells[:, 2] < nz)
+        )
+        s = np.zeros(cells.shape[0], dtype=np.float64)
+        vc = cells[in_grid]
+        if vc.size:
+            s[in_grid] = self.shadow[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
+        return s, in_grid
+
+    def sample_exposure_batch(
+        self,
+        positions: np.ndarray,
+        directions: np.ndarray,
+        *,
+        cfg: ShadowConfig,
+        r_perception: float,
+        n_dirs: int = 16,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Per-bud exposure ``Q`` and the light-gradient growth direction (#56).
+
+        Returns:
+          Q:        (B,) float64 exposure ``min(C, max(0, C − s_home + a))``. The
+            ``+a`` cancels a bud's own ``q=0`` self-stamp so an unshaded bud reads
+            exactly ``full_light_C`` (the upper clamp keeps Q ≤ C even when an
+            organ's area-weighted self-stamp is below ``a``). Off-grid buds read
+            full light. Q drives bud fate (dormancy / shedding).
+          gradients: (B,3) float64 unit direction toward the most-exposed part of
+            the perception cone, built like ``sample_hemisphere_batch`` (frame with
+            w = bud heading; centered brightness weighting over forward
+            directions), but reading the exposure field ``C − s`` at distance
+            ``r_perception`` — NOT the ``+a`` self-corrected Q, since ``+a`` is a
+            home-cell-only correction that must not bias neighbour samples (#56 C4).
+            Zero under uniform exposure, so the tropism blend's inertia / orthotropy
+            decide direction there (the #56 R1 fate/direction decoupling). A
+            zero-length heading yields a zero gradient.
+        """
+        positions = np.asarray(positions, dtype=np.float64)
+        directions = np.asarray(directions, dtype=np.float64)
+        B = positions.shape[0]
+        if B == 0:
+            return np.zeros(0, dtype=np.float64), np.zeros((0, 3), dtype=np.float64)
+
+        C = float(cfg.full_light_C)
+        a = float(cfg.a)
+
+        # Q (fate): home-cell shadow with flat +a self-cancel, clamped to C.
+        s_home, home_in = self._shadow_at(positions)
+        Q = np.where(home_in, np.minimum(C, np.maximum(0.0, C - s_home + a)), C)
+
+        # Gradient (direction): toward the brightest perception-cone sample.
+        canon = _fib_hemisphere(n_dirs)                 # (M,3) forward (+Z) hemisphere
+        gradients = np.zeros((B, 3), dtype=np.float64)
+        for i in range(B):
+            w = directions[i]
+            wn = float(np.linalg.norm(w))
+            if wn < 1e-12:
+                continue
+            w = w / wn
+            ref = np.array([1.0, 0.0, 0.0]) if abs(w[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+            u = ref - np.dot(ref, w) * w
+            u = u / np.linalg.norm(u)
+            v = np.cross(w, u)
+            world_dirs = canon[:, 0:1] * u + canon[:, 1:2] * v + canon[:, 2:3] * w  # (M,3)
+            pts = positions[i] + r_perception * world_dirs
+            s_m, in_m = self._shadow_at(pts)
+            E = np.where(in_m, np.maximum(0.0, C - s_m), C)   # off-grid = open sky
+            weighted = ((E - E.mean())[:, None] * world_dirs).sum(axis=0)
+            gn = float(np.linalg.norm(weighted))
+            if gn > 1e-12:
+                gradients[i] = weighted / gn
+        return Q, gradients

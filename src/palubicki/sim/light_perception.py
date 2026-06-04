@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from palubicki.config import LightConfig
+from palubicki.config import LightConfig, ShadowConfig
 from palubicki.sim.light import LightGrid
 from palubicki.sim.tree import Bud
 
@@ -14,6 +14,12 @@ from palubicki.sim.tree import Bud
 class LightPerception:
     light_factor: dict[Bud, float] = field(default_factory=dict)
     gradient: dict[Bud, np.ndarray] = field(default_factory=dict)
+    # Raw shadow-propagation exposure Q (#56), un-normalized. Populated only by
+    # perceive_exposure; light_factor carries the normalized Q/C so the
+    # shade-mortality / shade-avoidance thresholds stay on their [0,1] scale,
+    # while this raw Q is the source for the BH vigor currency (scaled in the
+    # simulator dispatch, Phase 3). Empty on the BHse / hemisphere path.
+    exposure: dict[Bud, float] = field(default_factory=dict)
 
 
 def perceive_light(
@@ -46,5 +52,38 @@ def perceive_light(
     )
     for i, bud in enumerate(buds):
         result.light_factor[bud] = float(light_factors[i])
+        result.gradient[bud] = gradients[i]
+    return result
+
+
+def perceive_exposure(
+    buds: list[Bud],
+    grid: LightGrid,
+    cfg: ShadowConfig,
+    *,
+    r_perception: float,
+) -> LightPerception:
+    """Shadow-propagation perception (#56): per-bud exposure Q + light gradient.
+
+    The dual to :func:`perceive_light` for the shadow backend. Fills the SAME
+    ``LightPerception`` struct so every downstream consumer is unchanged:
+    ``exposure`` carries the raw Q (BH-currency source), ``light_factor`` the
+    normalized ``Q / full_light_C`` (∈ [0, 1] for the calibrated shade signals),
+    and ``gradient`` the light-gradient growth direction. Assumes ``grid.shadow``
+    has already been rebuilt (:meth:`LightGrid.propagate_shadow`).
+    """
+    result = LightPerception()
+    if not buds:
+        return result
+    positions = np.asarray([bud.position for bud in buds], dtype=np.float64)
+    directions = np.asarray([bud.direction for bud in buds], dtype=np.float64)
+    Q, gradients = grid.sample_exposure_batch(
+        positions, directions, cfg=cfg, r_perception=r_perception,
+    )
+    C = float(cfg.full_light_C)
+    for i, bud in enumerate(buds):
+        q = float(Q[i])
+        result.exposure[bud] = q
+        result.light_factor[bud] = q / C if C > 0 else 0.0
         result.gradient[bud] = gradients[i]
     return result

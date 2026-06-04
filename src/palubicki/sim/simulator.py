@@ -137,6 +137,7 @@ def _init_light_grid(forest: Forest, cfg: Config) -> None:
         forest.light_grid.cell_size = size / np.array([nx, ny, nz], dtype=np.float64)
         forest.light_grid.resolution = (nx, ny, nz)
         forest.light_grid.lai = np.zeros((nx, ny, nz), dtype=np.float32)
+        forest.light_grid.shadow = np.zeros((nx, ny, nz), dtype=np.float32)
     # Voxelize obstacles into mask (one-shot)
     if forest.obstacles:
         mask = forest.obstacles[0].voxelize(forest.light_grid)
