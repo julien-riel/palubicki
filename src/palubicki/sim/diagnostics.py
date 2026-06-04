@@ -545,6 +545,97 @@ def _height_and_crown(nodes: list[Node]) -> tuple[float, float]:
     return (height, crown)
 
 
+def _silhouette_profile(
+    nodes: list[Node], *, n_bands: int = 10, crown_base_frac: float = 0.2
+) -> dict:
+    """Vertical band profile of crown radius on the bent node cloud (#56).
+
+    Bands span the FULL vertical extent ``[y_min, y_max]`` of the bent cloud
+    (``n.position + n.sag_offset``, the convention :func:`_height_and_crown`
+    uses), so band 0 is the base (bole) and band ``n_bands-1`` the apex. Within
+    a band ``r_k`` is the MAX horizontal extent ``hypot(x, z)`` of any node —
+    the same max-extent convention as ``crown_radius``, so the two stay
+    consistent.
+
+    The point of these metrics is to read *silhouette* directly off the node
+    cloud, independent of HOW the form was driven (envelope vs shadow). That is
+    what lets the #56 acceptance test assert "a spire emerged" under a neutral
+    bounds volume — the axis-topology signals (``main_axis_continuation_rate``
+    etc.) can pass while the *envelope*, not emergence, drew the cone.
+
+    Returns a dict with:
+      * ``crown_radius_profile`` — ``list[float]`` of length ``n_bands``.
+      * ``apex_sharpness`` — ``r_{top band} / max_k r_k``. A spire's apex band is
+        the narrow tip → ~0; a lollipop/sphere stays wide at the top → ~1. The
+        single most discriminating "is it a spire" scalar.
+      * ``clear_bole_fraction`` — height fraction below the crown base, where the
+        crown base is the lowest band reaching ``crown_base_frac`` of the peak
+        width. The petit-tronc symptom made measurable (0 = foliage to the
+        ground; rises as a clear bole emerges).
+      * ``taper_exponent`` — slope of ``log(r_k)`` vs ``log(depth-below-apex)``
+        over filled bands; a linear cone ≈ 1, a paraboloid ≈ 0.5. A descriptor,
+        not a gated bound.
+
+    Degenerate inputs (no nodes, zero height, or a bare vertical stick with no
+    horizontal extent) return an all-zero profile and zero scalars, matching the
+    root-only convention the rest of the module uses.
+    """
+    empty = {
+        "crown_radius_profile": [0.0] * n_bands,
+        "apex_sharpness": 0.0,
+        "clear_bole_fraction": 0.0,
+        "taper_exponent": 0.0,
+    }
+    if not nodes or n_bands < 1:
+        return empty
+    bents = [n.position + n.sag_offset for n in nodes]
+    ys = [float(b[1]) for b in bents]
+    y_min, y_max = min(ys), max(ys)
+    span = y_max - y_min
+    if span <= 1e-9:
+        return empty
+
+    radii = [0.0] * n_bands
+    for b in bents:
+        frac = (float(b[1]) - y_min) / span
+        k = min(int(frac * n_bands), n_bands - 1)
+        r = float(math.hypot(float(b[0]), float(b[2])))
+        if r > radii[k]:
+            radii[k] = r
+
+    max_r = max(radii)
+    if max_r <= 1e-9:
+        return empty  # bare vertical stick — no crown to characterize
+
+    apex_sharpness = radii[-1] / max_r
+    thresh = crown_base_frac * max_r
+    base_band = next((k for k, r in enumerate(radii) if r >= thresh), n_bands - 1)
+    clear_bole_fraction = base_band / n_bands
+
+    # Taper: regress log(r) on log(depth below apex) over the filled bands.
+    dy = span / n_bands
+    log_depth: list[float] = []
+    log_r: list[float] = []
+    for k, r in enumerate(radii):
+        if r <= 1e-9:
+            continue
+        depth = y_max - (y_min + (k + 0.5) * dy)
+        if depth > 1e-9:
+            log_depth.append(math.log(depth))
+            log_r.append(math.log(r))
+    taper_exponent = 0.0
+    if len(log_depth) >= 2 and len(set(log_depth)) >= 2:
+        slope, _intercept = np.polyfit(np.asarray(log_depth), np.asarray(log_r), 1)
+        taper_exponent = float(slope)
+
+    return {
+        "crown_radius_profile": radii,
+        "apex_sharpness": float(apex_sharpness),
+        "clear_bole_fraction": float(clear_bole_fraction),
+        "taper_exponent": taper_exponent,
+    }
+
+
 def _trunk_base_diameter(root: Node) -> float:
     if not root.children_internodes:
         return 0.0
@@ -622,6 +713,13 @@ def compute_metrics(
     out["crown_radius"] = crown_radius
     out["main_axis_continuation_rate"] = _main_axis_continuation_rate(tree.root)
     out["leader_deviation_deg"] = _leader_deviation_deg(tree.root)
+    # Emergent-form silhouette (#56): read straight off the bent node cloud so it
+    # is independent of whether form was envelope-driven (BHse) or self-shadowing.
+    sil = _silhouette_profile(nodes)
+    out["crown_radius_profile"] = sil["crown_radius_profile"]
+    out["apex_sharpness"] = sil["apex_sharpness"]
+    out["clear_bole_fraction"] = sil["clear_bole_fraction"]
+    out["taper_exponent"] = sil["taper_exponent"]
     if cfg is not None:
         tla = _total_leaf_area(tree, cfg)
         out["total_leaf_area"] = tla
@@ -677,12 +775,21 @@ _SCALAR_KEYS = (
     "crown_radius",
     "main_axis_continuation_rate",
     "leader_deviation_deg",
+    "apex_sharpness",
+    "clear_bole_fraction",
+    "taper_exponent",
     "total_leaf_area",
     "foliage_area_density",
     "internode_length_proximal_mean",
     "internode_length_distal_mean",
     "mean_growth_activity",
     "shoulder_internode_fraction",
+)
+
+# Per-band silhouette vector (#56): aggregated per-index across seeds, mirroring
+# the per-order union the angle keys use (a list, not a dict-by-order).
+_VECTOR_KEYS = (
+    "crown_radius_profile",
 )
 
 _HISTOGRAM_KEYS = (
@@ -760,6 +867,17 @@ def _aggregate(per_tree: list[dict]) -> dict:
             ]
             out[k][order] = _agg_scalar(means)
 
+    for k in _VECTOR_KEYS:
+        lengths = [len(m[k]) for m in per_tree if isinstance(m.get(k), list)]
+        n_bands = max(lengths) if lengths else 0
+        out[k] = [
+            _agg_scalar([
+                (m[k][i] if isinstance(m.get(k), list) and i < len(m[k]) else None)
+                for m in per_tree
+            ])
+            for i in range(n_bands)
+        ]
+
     return out
 
 
@@ -796,6 +914,12 @@ class MetricRanges:
     # populated per-species — excurrent conifers must stand near-vertical
     # (low deviation), decurrent species tolerate a leaning leader (looser).
     leader_deviation_deg: tuple[float, float] | None = None
+    # Emergent silhouette (#56). Default None (no flag); populated per-species
+    # from the manifest once a species is calibrated under shadow propagation —
+    # an excurrent conifer's apex band is narrow (low apex_sharpness) and it
+    # earns a clear bole (clear_bole_fraction > 0).
+    apex_sharpness: tuple[float, float] | None = None
+    clear_bole_fraction: tuple[float, float] | None = None
 
     @classmethod
     def from_species(cls, name: str | None) -> MetricRanges:
@@ -962,6 +1086,52 @@ def check_bounds(
     return out
 
 
+def _resolve_profile(metrics: dict) -> list[float] | None:
+    """Pull a ``crown_radius_profile`` out of a single- or multi-seed metrics
+    dict as a plain ``list[float]``. Single-seed leaves are floats; multi-seed
+    leaves are ``_agg_scalar`` dicts → take each band's ``mean``. Missing /
+    None / NaN bands resolve to 0.0. Returns None when the key is absent."""
+    v = metrics.get("crown_radius_profile")
+    if v is None:
+        return None
+    out: list[float] = []
+    for item in v:
+        if isinstance(item, dict):
+            m = item.get("mean")
+            out.append(0.0 if m is None or (isinstance(m, float) and math.isnan(m)) else float(m))
+        elif item is None:
+            out.append(0.0)
+        else:
+            out.append(float(item))
+    return out
+
+
+def silhouette_drift(metrics_a: dict, metrics_b: dict) -> float:
+    """Shape-only distance between two silhouette profiles (#56).
+
+    Each ``crown_radius_profile`` is self-normalized to its own widest band, so
+    the drift measures SHAPE independent of absolute size — height and width are
+    gated separately by ``tree_height`` / ``crown_radius``. Returns the mean
+    per-band absolute difference of the normalized profiles; 0 means identical
+    silhouette shape. A low drift between a cone-seeded BHse run and a
+    neutral-bounds shadow-propagation run (plus a low ``apex_sharpness`` from the
+    neutral run alone) is the evidence that "a spire emerged without a cone
+    envelope" (#56 AC2/AC3).
+
+    Works on single- or multi-seed metrics (a multi-seed band uses its mean).
+    Returns NaN when either profile is missing/empty, the two have different band
+    counts, or either profile is flat (zero width) so normalization is undefined.
+    """
+    pa = _resolve_profile(metrics_a)
+    pb = _resolve_profile(metrics_b)
+    if not pa or not pb or len(pa) != len(pb):
+        return float("nan")
+    na, nb = max(pa), max(pb)
+    if na <= 1e-9 or nb <= 1e-9:
+        return float("nan")
+    return float(sum(abs(a / na - b / nb) for a, b in zip(pa, pb)) / len(pa))
+
+
 def _fmt_scalar(v) -> str:
     if v is None:
         return "—"
@@ -1002,11 +1172,16 @@ def format_report(
     lines.append("Architecture")
     for k in ("tree_height", "trunk_base_diameter", "crown_radius",
               "main_axis_continuation_rate", "leader_deviation_deg",
+              "apex_sharpness", "clear_bole_fraction", "taper_exponent",
               "total_leaf_area", "foliage_area_density",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)
         flag = _flag(_scalar_value(metrics, k), _bounds_for(ranges, k))
         lines.append(f"  {k:24s} {_fmt_scalar(val):28s} {flag}".rstrip())
+    prof = metrics.get("crown_radius_profile")
+    if prof and not multi:
+        prof_s = " ".join(f"{float(r):.2g}" for r in prof)
+        lines.append(f"  {'crown_radius_profile':24s} [{prof_s}]")
     lines.append("")
 
     # Phenology (#65): graded seasonal activity read off the emitted internodes.
