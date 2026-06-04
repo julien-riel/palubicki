@@ -87,12 +87,14 @@ geom:
   r_tip: 0.007
   bark_color: [0.40, 0.28, 0.18]
   bark_texture: "proc:oak_bark"
-  leaf_texture: "proc:oak_leaf"
-  # Soft/matte sugar-maple leaf (vs the waxy oak): high roughness, no cuticle
-  # specular, softened vein relief. All SceneKit-safe core PBR (specular omitted).
-  leaf_roughness: 0.95
-  leaf_specular: 0.0
-  leaf_normal_strength: 0.30
+  # leaf_texture omitted -> albedo is derived from the actual palmate outline
+  # (silhouette + veins match the mesh and reach the petiole tip).
+  # Sugar-maple leaf: fairly matte but with a touch of cuticle sheen + a little
+  # vein relief, so the new blade curvature (below) catches a grazing highlight
+  # instead of reading as a flat card.
+  leaf_roughness: 0.82
+  leaf_specular: 0.20
+  leaf_normal_strength: 0.45
   leaf_size: 0.12
   leaf_aspect: 1.0
   leaf_shape: palmate
@@ -103,9 +105,15 @@ geom:
   leaf_splay_deg: 30.0
   foliage_depth: 4
   leaf_autumn_color: [0.85, 0.25, 0.10]  # fiery red-orange
-  # Hero blade (P2): folded midrib + gentle recurve across the palmate lobes.
-  leaf_blade_fold_deg: 12.0
-  leaf_blade_curl: 0.12
+  # Hero blade (P2): per-lobe rib fold + cross-blade cup + recurve, so the palmate
+  # leaf reads as a cupped 3D surface. fold now creases each of the 5 lobes along
+  # its own rib (not one central line). Subdivided fan gives the relief lamina to
+  # bend across.
+  leaf_blade_fold_deg: 16.0
+  leaf_blade_curl: 0.16
+  leaf_blade_cup: 0.12
+  # Diaheliotropic: present the upper (adaxial) surface toward the sky.
+  leaf_skyface: 0.7
   leaf_sun_shade_k: 0.6
   petiole_length_ratio: 0.4
   petiole_radius_ratio: 0.03  # thicker petiole reads as attached to the twig (#1)

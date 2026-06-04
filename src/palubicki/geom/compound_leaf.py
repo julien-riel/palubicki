@@ -190,7 +190,7 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
 def build_rachis_primitive(
     tree, *, material, leaf_size, foliage_depth, leaf_kind, leaflet_specs,
     ring_sides=5, needle_cluster_spacing=0.0, sun_shade_k=0.0, splay_deg=0.0,
-    droop_deg=0.0,
+    droop_deg=0.0, skyface=0.0,
 ):
     """Thin stem tubes for petiole + rachis(es), lifted at every selected leaf
     site. Empty primitive for leaf_kind='simple' (no rachis)."""
@@ -242,7 +242,7 @@ def build_rachis_primitive(
     for leaf, stem_dir, source_iod, render_pos in records:
         eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
         rot_axis_u, leaf_up, _ = leaf_basis(
-            stem_dir, leaf.azimuth, splay_rad, droop_rad
+            stem_dir, leaf.azimuth, splay_rad, droop_rad, skyface
         )
         center = np.asarray(render_pos, dtype=np.float64)
         # Stems are tier-2 detail riding with their branch: same per-leaf phase, low

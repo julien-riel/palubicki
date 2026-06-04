@@ -193,6 +193,57 @@ def birch_leaf_png(size: int = 128) -> bytes:
     return buf.getvalue()
 
 
+def blade_albedo_png(
+    size: int = 128,
+    *,
+    shape: str = "ovate",
+    aspect: float = 1.0,
+    margin: str = "entire",
+    margin_depth: float = 0.0,
+    margin_count: int = 0,
+    lamina: tuple[int, int, int] = (95, 150, 65),
+    vein: tuple[int, int, int] = (60, 100, 45),
+) -> bytes:
+    """Leaf albedo (RGBA) rasterised from the SAME outline polygon the mesh uses.
+
+    The per-shape boundary (``geom/leaf_blade``) is drawn into the card with the
+    IDENTICAL UV convention the blade exports (``tex_u=(u+W/2)/W``, ``tex_v=v/L``;
+    image row 0 = ``tex_v`` 0 = the petiole base). So the opaque painted silhouette
+    matches the mesh outline exactly and REACHES the petiole tip — closing the
+    transparent basal gap the old centred silhouettes left — and the painted veins
+    run down the real lobes (palmate fans from the petiole anchor to the actual
+    lobe tips via :func:`palubicki.geom.leaf_blade.palmate_lobe_axes`). Replaces the
+    species silhouettes (oak_leaf/birch_leaf/default) whose centred artwork floated
+    in the middle of the quad and disagreed with the mesh shape.
+    """
+    from palubicki.geom.leaf_blade import (
+        _OUTLINE_FNS,
+        _apply_margin,
+        palmate_lobe_axes,
+    )
+    L, W = 1.0, float(aspect)
+    boundary, _anchor = _OUTLINE_FNS[shape](L, W)
+    boundary = _apply_margin(boundary, margin, margin_depth, margin_count, shape, L, W)
+
+    def to_px(u: float, v: float) -> tuple[float, float]:
+        return ((u + W * 0.5) / W * size, (v / L) * size)
+
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.polygon([to_px(float(p[0]), float(p[1])) for p in boundary], fill=(*lamina, 255))
+    midrib = max(2, int(size * 0.02))
+    if shape == "palmate":
+        anchor, tips = palmate_lobe_axes(L, W)
+        a_px = to_px(float(anchor[0]), float(anchor[1]))
+        for tip in tips:
+            draw.line([a_px, to_px(float(tip[0]), float(tip[1]))], fill=(*vein, 255), width=midrib)
+    else:
+        draw.line([to_px(0.0, 0.0), to_px(0.0, L * 0.98)], fill=(*vein, 255), width=midrib)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
 # ---------- HEIGHT FIELDS (P2 normal/ORM source) ----------
 #
 # Clean grayscale relief fields (NOT lit albedo) per species, the source
@@ -302,6 +353,7 @@ def leaf_vein_mask(
     size: int = 128,
     *,
     shape: str = "ovate",
+    aspect: float = 1.0,
     vein_pairs: int = 6,
 ) -> np.ndarray:
     """Lamina/vein source field in [0, 1]: 1 over thin lamina, →0 on the opaque
@@ -309,9 +361,12 @@ def leaf_vein_mask(
 
     UV-aligned with :func:`palubicki.geom.leaf_blade.build_blade` (``tex_u`` runs
     across the blade with the midrib at ``u=0`` → column ``0.5``; ``tex_v`` runs
-    base→tip). geom/maps.py turns this into the back-light alpha mask AND (via
-    ``1 - mask``) a subtle vein normal map. ``palmate`` radiates veins from the
-    base; every other shape uses a pinnate herringbone off the midrib.
+    base→tip, row 0 = base). geom/maps.py turns this into the back-light alpha mask
+    AND (via ``1 - mask``) a subtle vein normal map. ``palmate`` radiates one vein
+    per lobe from the petiole anchor to the actual lobe tip (shared
+    :func:`palubicki.geom.leaf_blade.palmate_lobe_axes`, so the painted veins line up
+    with both the mesh lobes and the hero-blade ribs); every other shape uses a
+    pinnate herringbone off the midrib.
     """
     img = Image.new("L", (size, size), 255)  # white lamina
     draw = ImageDraw.Draw(img)
@@ -319,12 +374,17 @@ def leaf_vein_mask(
     midrib = max(2, int(size * 0.035))
 
     if shape == "palmate":
-        base = (cx, size * 0.5)
-        for k in range(5):
-            ang = math.radians(-90 + (k - 2) * 32.0)  # fan upward from centre
-            tip = (base[0] + size * 0.55 * math.sin(ang),
-                   base[1] - size * 0.55 * math.cos(ang))
-            draw.line([base, tip], fill=45, width=max(2, midrib - 1))
+        from palubicki.geom.leaf_blade import palmate_lobe_axes
+        L, W = 1.0, float(aspect)
+        anchor, tips = palmate_lobe_axes(L, W)
+
+        def to_px(u: float, v: float) -> tuple[float, float]:
+            return ((u + W * 0.5) / W * size, (v / L) * size)
+
+        base = to_px(float(anchor[0]), float(anchor[1]))
+        for tip in tips:
+            draw.line([base, to_px(float(tip[0]), float(tip[1]))],
+                      fill=45, width=max(2, midrib - 1))
     else:
         # Midrib: tapered wedge, thick at the base (tex_v≈0, top row) → thin at tip.
         top, bot = int(size * 0.04), int(size * 0.96)

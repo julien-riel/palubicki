@@ -394,9 +394,13 @@ class GeomConfig:
     bark_normal_strength: float = field(default=3.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
     # Leaf vein/midrib normal-map depth.
     leaf_normal_strength: float = field(default=0.6, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.1}})
-    # Leaf back-light strength (KHR_materials_diffuse_transmission factor; the
-    # extension is forward-looking metadata in 2026). 0 = no transmission emitted.
-    leaf_translucency: float = field(default=0.55, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Leaf back-light strength (KHR_materials_diffuse_transmission factor). 0 = no
+    # transmission emitted. NOTE: this is now rendered by current engines (e.g.
+    # Babylon), not the inert forward-looking metadata the original design assumed.
+    # At the old 0.55 it washed the rich dark-green adaxial albedo into a pale,
+    # underside-like glow under image-based lighting; 0.2 keeps a subtle back-lit
+    # sheen while letting the opaque green of the top surface read.
+    leaf_translucency: float = field(default=0.2, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
     # Cuticle / dielectric specular (KHR_materials_specular). 0 = omit.
     bark_specular: float = field(default=0.2, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
     leaf_specular: float = field(default=0.35, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
@@ -410,6 +414,17 @@ class GeomConfig:
     # card (legacy, byte-identical). Broadleaf-only (flat needles stay planar).
     leaf_blade_fold_deg: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 80.0, "step": 1.0}})
     leaf_blade_curl: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 2.0, "step": 0.05}})
+    # Concave bowl across the blade half-width (the lamina edges curl up toward the
+    # adaxial face), fraction of blade length. 0 = no cupping. Broadleaf-only; reads
+    # together with leaf_blade_fold_deg/curl on the hero blade.
+    leaf_blade_cup: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 0.6, "step": 0.05}})
+    # Diaheliotropic re-seat: rotate the leaf frame about the petiole axis so the
+    # adaxial (top) surface tilts toward the sky (+Y), as a fraction [0, 1] of full
+    # alignment. 0 = orientation purely from branch geometry (legacy); 1 = top as
+    # vertical as the petiole pose allows. Broadleaf-only (needles stay at 0). Pure
+    # rotation, so the projected leaf area / light grid / botanical bounds are
+    # untouched — render-only.
+    leaf_skyface: float = field(default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
     # Seasons: emit KHR_materials_variants ("summer"/"autumn") on the leaf
     # material, swapping base colour. Needs leaf_autumn_color; use *instead of*
     # the COLOR_1 phenology tint, not alongside it.
@@ -805,6 +820,14 @@ class Config:
         if not (0.0 <= g.leaf_blade_fold_deg <= 80.0):
             raise ConfigError(
                 f"geom.leaf_blade_fold_deg must be in [0, 80], got {g.leaf_blade_fold_deg}"
+            )
+        if not (0.0 <= g.leaf_blade_cup <= 0.6):
+            raise ConfigError(
+                f"geom.leaf_blade_cup must be in [0, 0.6], got {g.leaf_blade_cup}"
+            )
+        if not (0.0 <= g.leaf_skyface <= 1.0):
+            raise ConfigError(
+                f"geom.leaf_skyface must be in [0, 1], got {g.leaf_skyface}"
             )
         if g.leaf_season_variants and g.leaf_autumn_color is None:
             raise ConfigError(

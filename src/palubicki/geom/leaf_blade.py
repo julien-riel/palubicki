@@ -40,14 +40,22 @@ def build_blade(
     margin: str,
     margin_depth: float = 0.0,
     margin_count: int = 0,
+    subdivisions: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Build a triangulated leaf blade as a flat 3D mesh in the (u, v, 0) plane.
+
+    ``subdivisions`` > 0 inserts that many concentric interior rings between the
+    anchor and the boundary, giving the lamina interior vertices for the hero
+    blade (``geom/leaf_blade3d.py``) to curve smoothly across instead of a flat
+    cone of slivers. 0 (default) is the legacy single fan — byte-identical, and
+    the convention ``leaf_area_records`` keeps for its area integral (the
+    projected polygon, hence its area, is unchanged either way).
 
     Returns
     -------
     positions : (N, 3) float32
         Vertex positions. positions[0] is the anchor; positions[1:] are the
-        boundary points after margin modulation.
+        boundary points (subdivisions == 0) or the interior rings then boundary.
     normals : (N, 3) float32
         Constant +z normal for all vertices.
     uvs : (N, 2) float32
@@ -76,7 +84,7 @@ def build_blade(
     boundary, anchor = outline_fn(length, width)
     # margin pass (no-op for "entire" or count==0)
     boundary = _apply_margin(boundary, margin, margin_depth, margin_count, shape, length, width)
-    positions_2d, indices = _triangulate_fan(boundary, anchor)
+    positions_2d, indices = _triangulate_fan(boundary, anchor, subdivisions)
 
     # Lift 2D into 3D: z=0, normal=+z, UV from bounding-box convention.
     n = positions_2d.shape[0]
@@ -196,19 +204,20 @@ def _outline_cordate(L: float, W: float, n: int = 20) -> tuple[np.ndarray, np.nd
     return boundary, anchor
 
 
-def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.ndarray, np.ndarray]:
-    """5 lobes fanning UPWARD from the petiole attachment at the base (0, 0).
+_PALMATE_LOBES = 5
 
-    The blade origin (0, 0) is lifted onto the petiole tip (geom/leaves.py), so the
-    lamina must reach it. The prior design radiated 5 lobes over a full 360° from a
-    center at (0, 0.4*L), which left (0, 0) in the basal notch between the two
-    downward lobes — the petiole tip dangled in empty space and the leaf read as
-    detached. Here the lobes fan over an upward ~150° arc from a low center, the two
-    outer lobes sweep back down to (0, 0), and the central lobe is longest —
-    matching the palmate venation baked in geom/_textures.leaf_vein_mask. Per-lobe
-    reach is capped to the [-W/2, W/2] x [0, L] box so the UV stays on-atlas.
+
+def _palmate_fan(L: float, W: float) -> tuple[float, float, list[float], list[float]]:
+    """Shared palmate fan parameters in the 2D (u, v) blade frame.
+
+    Returns ``(cx, cy, peak_angles, peak_radii)``: the radiating centre just above
+    the petiole tip and, per lobe, the polar angle + radius of its apex. The lobes
+    fan over an upward ~150° arc; the central lobe is longest (rounded fan); each
+    reach is capped to the [-W/2, W/2] x [0, L] box so the UV stays on-atlas. The
+    single source of truth consumed by :func:`_outline_palmate` (mesh outline) and
+    :func:`palmate_lobe_axes` (texture + 3D relief), so they cannot drift.
     """
-    n_lobes = 5
+    n_lobes = _PALMATE_LOBES
     cx, cy = 0.0, 0.08 * L
     up = np.pi * 0.5                       # +v, toward the tip
     fan_half = np.radians(74.0)            # half of the ~150° upward fan
@@ -226,22 +235,54 @@ def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.
 
     peak_angles = [(up - fan_half) + (2.0 * fan_half) * (k / (n_lobes - 1))
                    for k in range(n_lobes)]
+    # Central lobe fills ~0.97 of its reach; outer lobes shorter → rounded fan.
+    peak_radii = [(0.72 + 0.25 * np.sin(np.pi * (k / (n_lobes - 1)))) * reach(peak_angles[k])
+                  for k in range(n_lobes)]
+    return cx, cy, peak_angles, peak_radii
 
-    def peak_R(k: int) -> float:
-        # Central lobe fills ~0.97 of its reach; outer lobes shorter → rounded fan.
-        f = k / (n_lobes - 1)
-        return (0.72 + 0.25 * np.sin(np.pi * f)) * reach(peak_angles[k])
+
+def palmate_lobe_axes(L: float = 1.0, W: float = 1.0) -> tuple[np.ndarray, np.ndarray]:
+    """The palmate venation skeleton: the fan anchor + the lobe-tip points, in the
+    2D (u, v) blade frame (origin = petiole attachment, v = base→tip).
+
+    Single source of truth for where the maple's lobes radiate, shared by the mesh
+    outline (:func:`_outline_palmate`), the leaf albedo + vein/normal mask
+    (``geom/_textures.py``), and the per-rib hero-blade fold
+    (``geom/leaf_blade3d.py``) — so geometry, texture, and 3D relief stay aligned.
+    Returns ``(anchor (2,), tips (_PALMATE_LOBES, 2))``.
+    """
+    cx, cy, angles, radii = _palmate_fan(L, W)
+    anchor = np.array([cx, cy], dtype=np.float64)
+    tips = np.array([[cx + R * np.cos(a), cy + R * np.sin(a)]
+                     for a, R in zip(angles, radii, strict=True)], dtype=np.float64)
+    return anchor, tips
+
+
+def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.ndarray, np.ndarray]:
+    """5 lobes fanning UPWARD from the petiole attachment at the base (0, 0).
+
+    The blade origin (0, 0) is lifted onto the petiole tip (geom/leaves.py), so the
+    lamina must reach it. The prior design radiated 5 lobes over a full 360° from a
+    center at (0, 0.4*L), which left (0, 0) in the basal notch between the two
+    downward lobes — the petiole tip dangled in empty space and the leaf read as
+    detached. Here the lobes fan over an upward ~150° arc from a low center (shared
+    via :func:`_palmate_fan`), the two outer lobes sweep back down to (0, 0), and
+    the central lobe is longest — matching the palmate venation baked in
+    geom/_textures.leaf_vein_mask.
+    """
+    n_lobes = _PALMATE_LOBES
+    cx, cy, peak_angles, peak_radii = _palmate_fan(L, W)
 
     def pt(theta: float, R: float) -> np.ndarray:
         return np.array([cx + R * np.cos(theta), cy + R * np.sin(theta)])
 
     boundary_pts = [np.array([0.0, 0.0])]   # petiole attachment at the base
     for k in range(n_lobes):
-        th, Rk = peak_angles[k], peak_R(k)
+        th, Rk = peak_angles[k], peak_radii[k]
         boundary_pts.append(pt(th, Rk))
         if k < n_lobes - 1:                  # inter-lobe sinus + walk to next peak
-            th2, Rk2 = peak_angles[k + 1], peak_R(k + 1)
-            thv, Rv = 0.5 * (th + th2), 0.55 * min(peak_R(k), Rk2)
+            th2, Rk2 = peak_angles[k + 1], peak_radii[k + 1]
+            thv, Rv = 0.5 * (th + th2), 0.55 * min(peak_radii[k], Rk2)
             for s in range(1, samples_per_lobe):
                 t = s / samples_per_lobe
                 boundary_pts.append(pt(th + t * (thv - th), Rk + t * (Rv - Rk)))
@@ -261,18 +302,53 @@ def _outline_palmate(L: float, W: float, samples_per_lobe: int = 4) -> tuple[np.
 
 
 def _triangulate_fan(
-    boundary: np.ndarray, anchor: np.ndarray
+    boundary: np.ndarray, anchor: np.ndarray, subdivisions: int = 0
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Fan triangulate boundary from anchor. positions[0] is the anchor."""
+    """Fan triangulate ``boundary`` from ``anchor``. ``positions[0]`` is the anchor.
+
+    ``subdivisions == 0`` is the legacy single fan: one triangle per boundary edge,
+    no interior vertices. ``subdivisions > 0`` inserts that many concentric rings
+    between the anchor and the boundary (each ring is the boundary lerped toward the
+    anchor) and triangulates anchor→ring₁ as a fan + ringⱼ→ringⱼ₊₁ as quad strips,
+    so the lamina has interior vertices to curve across. The outlines are star-convex
+    from the anchor, so every interior ring stays inside the polygon. Winding stays
+    CCW in (u, v) → +z face normals, matching the flat convention.
+    """
     n = boundary.shape[0]
-    positions = np.empty((n + 1, 2), dtype=np.float64)
+    if subdivisions <= 0:
+        positions = np.empty((n + 1, 2), dtype=np.float64)
+        positions[0] = anchor
+        positions[1:] = boundary
+        indices = np.empty((n * 3,), dtype=np.uint32)
+        for i in range(n):
+            indices[3 * i + 0] = 0
+            indices[3 * i + 1] = 1 + i
+            indices[3 * i + 2] = 1 + ((i + 1) % n)
+        return positions, indices
+
+    rings = subdivisions + 1                 # ring `rings` IS the boundary
+    positions = np.empty((1 + rings * n, 2), dtype=np.float64)
     positions[0] = anchor
-    positions[1:] = boundary
-    indices = np.empty((n * 3,), dtype=np.uint32)
-    for i in range(n):
-        indices[3 * i + 0] = 0
-        indices[3 * i + 1] = 1 + i
-        indices[3 * i + 2] = 1 + ((i + 1) % n)
+    for j in range(1, rings + 1):
+        t = j / rings
+        positions[1 + (j - 1) * n : 1 + j * n] = anchor[None, :] + t * (boundary - anchor[None, :])
+
+    idx: list[int] = []
+    r1 = 1                                    # base index of the innermost ring
+    for i in range(n):                        # anchor → ring₁ fan
+        a = r1 + i
+        b = r1 + (i + 1) % n
+        idx += [0, a, b]
+    for j in range(1, rings):                 # ringⱼ → ringⱼ₊₁ quad strips
+        inner = 1 + (j - 1) * n
+        outer = 1 + j * n
+        for i in range(n):
+            a = inner + i
+            b = inner + (i + 1) % n
+            c = outer + i
+            d = outer + (i + 1) % n
+            idx += [a, c, b, b, c, d]
+    indices = np.asarray(idx, dtype=np.uint32)
     return positions, indices
 
 

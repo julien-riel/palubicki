@@ -474,3 +474,40 @@ def test_leaf_basis_droop_is_rigid_preserves_splay_angle():
     # the angle between lateral axis and leaf_up (the area-defining shear) is
     # invariant under the rigid droop rotation
     assert abs(float(np.dot(u0, up0)) - float(np.dot(u1, up1))) < 1e-9
+
+
+def test_leaf_basis_skyface_zero_matches_legacy():
+    """skyface == 0 reproduces the branch-geometry-only frame byte-for-byte."""
+    import math
+    d = np.array([1.0, 0.0, 0.0])
+    az, splay = 1.3, math.radians(30.0)
+    u0, up0, w0 = leaf_basis(d, az, splay, 0.0)
+    u1, up1, w1 = leaf_basis(d, az, splay, 0.0, 0.0)
+    assert np.allclose(u0, u1) and np.allclose(up0, up1) and np.allclose(w0, w1)
+
+
+def test_leaf_basis_skyface_tilts_adaxial_toward_sky():
+    """On a horizontal stem the adaxial normal points sideways/down across azimuths
+    (mean +Y ~ 0); skyface lifts every leaf's top toward +Y without flipping any
+    leaf to face the ground."""
+    import math
+    d = np.array([1.0, 0.0, 0.0])  # horizontal branch
+    splay = math.radians(30.0)
+    azs = np.linspace(0.0, 2 * math.pi, 16, endpoint=False)
+    base_y = [leaf_basis(d, az, splay, 0.0, 0.0)[2][1] for az in azs]
+    sky_y = [leaf_basis(d, az, splay, 0.0, 0.8)[2][1] for az in azs]
+    assert abs(np.mean(base_y)) < 1e-6           # legacy: no sky bias
+    assert min(base_y) < -0.5                     # legacy: some tops face down
+    assert np.mean(sky_y) > 0.6                    # skyface: tops face up
+    assert min(sky_y) > 0.0                        # no leaf left facing the ground
+
+
+def test_leaf_basis_skyface_preserves_petiole_axis():
+    """skyface rotates ABOUT leaf_up, so the petiole/length axis is unchanged
+    (the petiole↔blade attachment cannot drift)."""
+    import math
+    d = np.array([0.3, 0.6, 0.2])
+    az, splay = 0.9, math.radians(25.0)
+    _, up0, _ = leaf_basis(d, az, splay, 0.0, 0.0)
+    _, up1, _ = leaf_basis(d, az, splay, 0.0, 0.9)
+    assert np.allclose(up0, up1, atol=1e-12)

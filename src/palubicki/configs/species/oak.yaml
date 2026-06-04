@@ -99,7 +99,8 @@ geom:
   r_tip: 0.008
   bark_color: [0.32, 0.22, 0.14]
   bark_texture: "proc:oak_bark"
-  leaf_texture: "proc:oak_leaf"
+  # leaf_texture omitted -> albedo derived from the ovate+lobed outline (matches the
+  # mesh silhouette and reaches the petiole tip).
   # Waxy red-oak cuticle: low roughness gives a glossy lamina highlight. Rides core
   # PBR roughnessFactor, so it reads even in viewers that drop KHR_materials_specular.
   leaf_roughness: 0.45
@@ -110,10 +111,13 @@ geom:
   leaf_margin_depth: 0.35
   leaf_margin_count: 7
   leaf_autumn_color: [0.55, 0.30, 0.12]  # russet brown
-  # Hero blade (P2): folded midrib + gentle recurve so the broadleaf catches the
-  # light with depth instead of as a flat card.
-  leaf_blade_fold_deg: 14.0
-  leaf_blade_curl: 0.12
+  # Hero blade (P2): folded midrib + cross-blade cup + recurve so the broadleaf
+  # catches the light with depth instead of as a flat card.
+  leaf_blade_fold_deg: 16.0
+  leaf_blade_curl: 0.14
+  leaf_blade_cup: 0.10
+  # Diaheliotropic: present the upper surface toward the sky.
+  leaf_skyface: 0.6
   leaf_cluster_count: 3
   leaf_splay_deg: 25
   foliage_depth: 4
