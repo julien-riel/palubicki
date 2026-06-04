@@ -102,9 +102,13 @@ geom:
   leaf_aspect: 0.55
   leaf_splay_deg: 18.0
   leaf_autumn_color: [0.82, 0.70, 0.28]  # muted yellow
-  # Hero blade (P2): folded midrib + gentle recurve on each lanceolate leaflet.
+  # Hero blade (P2): folded midrib + gentle cup + recurve on each lanceolate leaflet.
   leaf_blade_fold_deg: 13.0
   leaf_blade_curl: 0.10
+  leaf_blade_cup: 0.08
+  # Diaheliotropic: the whole imparipinnate frond presents its plane to the sky
+  # (gentle — the leaflets are small and many).
+  leaf_skyface: 0.45
   foliage_depth: 2
   leaf_sun_shade_k: 0.6
   root_flare_height: 0.3

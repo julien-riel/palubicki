@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from palubicki.geom.compound_leaf import compound_layout
-from palubicki.geom.leaf_blade import build_blade
+from palubicki.geom.leaf_blade import build_blade, palmate_lobe_axes
 from palubicki.geom.leaf_blade3d import build_curved_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.geom.wind import LEAF_STIFFNESS, axis_frames, leaf_phase
@@ -19,21 +19,34 @@ if TYPE_CHECKING:
 _MAX_CLUSTERS_PER_INTERNODE = 8
 
 _DOWN = np.array([0.0, -1.0, 0.0])
+_UP = np.array([0.0, 1.0, 0.0])
+
+# Interior rings inserted into a hero (curved) broadleaf blade so the cup/keel
+# relief has lamina to bend across instead of a cone of flat slivers.
+_BLADE_SUBDIVISIONS = 2
 
 # States that appear in the rendered mesh. SENESCENT leaves are dead-but-attached
 # (autumn foliage / marcescence); ABSCISSED leaves have detached and are gone.
 _RENDERED_LEAF_STATES = (LeafState.ACTIVE, LeafState.SENESCENT)
 
 
-def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0):
+def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0, skyface=0.0):
     """The per-leaf orthogonal-ish frame: (rot_axis_u, leaf_up, rot_axis_w).
 
     rot_axis_u is the lateral (blade-width) axis at phyllotactic ``azimuth``;
     rot_axis_w is the blade normal; leaf_up is the petiole / blade-length axis,
-    tilted off the stem by ``splay_rad``. ``droop_rad`` > 0 rigidly rotates all
-    three axes toward gravity (-Y), so the petiole and blade bend down together
-    while the rot_axis_u<->leaf_up angle (the cos(splay) blade-area shear) is
-    preserved. droop_rad == 0 reproduces the legacy inline math exactly.
+    tilted off the stem by ``splay_rad``.
+
+    ``skyface`` in [0, 1] is the diaheliotropic strength: the frame is rotated
+    ABOUT ``leaf_up`` (the petiole axis, so the petiole↔blade attachment is left
+    intact) to tilt the adaxial normal ``rot_axis_w`` toward world-up (+Y) by that
+    fraction of the full alignment. 0 reproduces the branch-geometry-only frame
+    byte-for-byte; 1 makes the top face as skyward as the petiole axis allows.
+
+    ``droop_rad`` > 0 then rigidly rotates all three axes toward gravity (-Y), so
+    the petiole and blade bend down together while the rot_axis_u<->leaf_up angle
+    (the cos(splay) blade-area shear) is preserved. droop_rad == 0 and skyface == 0
+    reproduce the legacy inline math exactly.
     """
     d = np.asarray(direction, dtype=np.float64)
     d = d / np.linalg.norm(d)
@@ -41,6 +54,27 @@ def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0):
     rot_axis_u = math.cos(azimuth) * right + math.sin(azimuth) * forward
     rot_axis_w = -math.sin(azimuth) * right + math.cos(azimuth) * forward
     leaf_up = math.cos(splay_rad) * d + math.sin(splay_rad) * rot_axis_u
+    if skyface > 0.0:
+        # leaf_up is a unit vector (d ⟂ rot_axis_u, both unit), so it is a valid
+        # Rodrigues axis. up_perp is the sky component orthogonal to the petiole
+        # axis; rot_axis_w already lives in that perpendicular plane, so rotating
+        # the (rot_axis_u, rot_axis_w) pair about leaf_up brings the top face as
+        # close to +Y as the petiole pose allows. The shear with leaf_up is kept.
+        up_perp = _UP - float(np.dot(_UP, leaf_up)) * leaf_up
+        norm = float(np.linalg.norm(up_perp))
+        if norm > 1e-6:
+            target = up_perp / norm
+            cos_a = float(np.clip(np.dot(rot_axis_w, target), -1.0, 1.0))
+            sign = 1.0 if float(np.dot(np.cross(rot_axis_w, target), leaf_up)) >= 0.0 else -1.0
+            ang = skyface * sign * math.acos(cos_a)
+            c, s = math.cos(ang), math.sin(ang)
+            k = leaf_up
+
+            def _rot_sky(v):
+                return v * c + np.cross(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
+
+            rot_axis_u = _rot_sky(rot_axis_u)
+            rot_axis_w = _rot_sky(rot_axis_w)
     if droop_rad != 0.0:
         k = np.cross(leaf_up, _DOWN)
         kn = float(np.linalg.norm(k))
@@ -117,6 +151,8 @@ def build_leaves_primitive(
     autumn_color: tuple[float, float, float] | None = None,
     blade_fold_deg: float = 0.0,
     blade_curl: float = 0.0,
+    blade_cup: float = 0.0,
+    skyface: float = 0.0,
     fascicle_count: int = 1,
     fascicle_spread_deg: float = 0.0,
 ) -> Primitive:
@@ -170,13 +206,24 @@ def build_leaves_primitive(
     leaflets = layout.leaflets
     leaflets_per_leaf = len(leaflets)
 
+    n_planes = 2 if leaf_shape == "linear" else 1
+
+    # Hero blade (P2, geom/leaf_blade3d.py): displace the flat outline into a cupped,
+    # folded, recurved blade with smooth per-vertex normals + tangents. Opt-in
+    # (fold/curl/cup > 0) and broadleaf-only — flat needles (n_planes == 2) keep the
+    # legacy plane, and zero fold/curl/cup returns the byte-identical flat blade. The
+    # hero blade also subdivides the fan so the relief has interior lamina to bend
+    # across. The (u, v) footprint is unchanged, so leaf_area_records (light grid,
+    # which uses the un-subdivided fan) is unaffected either way.
+    hero = (blade_fold_deg > 0.0 or blade_curl != 0.0 or blade_cup > 0.0) and n_planes == 1
+    subdivisions = _BLADE_SUBDIVISIONS if hero else 0
     blade_pos_unit, _, blade_uv, blade_idx = build_blade(
         length=1.0, width=aspect, shape=leaf_shape, margin=leaf_margin,
         margin_depth=leaf_margin_depth, margin_count=leaf_margin_count,
+        subdivisions=subdivisions,
     )
     blade_v_count = blade_pos_unit.shape[0]
     blade_i_count = blade_idx.shape[0]
-    n_planes = 2 if leaf_shape == "linear" else 1
 
     # #7: fascicle members. Needle-only — broadleaves keep fasc_count == 1 (a single
     # no-op member) so their geometry stays byte-identical. Each conifer needle
@@ -184,18 +231,21 @@ def build_leaves_primitive(
     fasc_count = fascicle_count if leaf_shape == "linear" else 1
     members = fascicle_offsets(fasc_count, fascicle_spread_deg)
 
-    # Hero blade (P2, geom/leaf_blade3d.py): displace the flat outline into a folded,
-    # recurved blade with smooth per-vertex normals + tangents. Opt-in (fold/curl > 0)
-    # and broadleaf-only — flat needles (n_planes == 2) keep the legacy plane, and
-    # zero fold/curl returns the byte-identical flat blade. The (u, v) footprint is
-    # unchanged, so leaf_area_records (light grid) is unaffected either way.
     blade_norm_local: np.ndarray | None = None
     blade_tan_local: np.ndarray | None = None
-    if (blade_fold_deg > 0.0 or blade_curl != 0.0) and n_planes == 1:
+    if hero:
+        # Palmate folds along each lobe rib (shared skeleton); other shapes get a
+        # single central keel.
+        lobe_axes = palmate_lobe_axes(1.0, aspect) if leaf_shape == "palmate" else None
         blade_pos_unit, blade_norm_local, blade_tan_local = build_curved_blade(
             blade_pos_unit, blade_uv, blade_idx,
             fold_deg=blade_fold_deg, curl=blade_curl, aspect=aspect,
+            cup=blade_cup, lobe_axes=lobe_axes,
         )
+
+    # Diaheliotropic re-seat (broadleaf-only): present the adaxial face to the sky.
+    # Needles (n_planes == 2) stay at 0 so conifer goldens are byte-identical.
+    skyface_eff = skyface if n_planes == 1 else 0.0
 
     verts_per_leaf = n_planes * blade_v_count * leaflets_per_leaf
     idx_per_leaf = n_planes * blade_i_count * leaflets_per_leaf
@@ -256,7 +306,7 @@ def build_leaves_primitive(
                 indices[i_start : i_start + idx_per_leaf],
                 v_start, droop_rad,
                 tangents[v_start : v_start + verts_per_leaf],
-                blade_norm_local, blade_tan_local,
+                blade_norm_local, blade_tan_local, skyface_eff,
             )
             wind[v_start : v_start + verts_per_leaf] = (phase, LEAF_STIFFNESS, 1.0)
             pivot[v_start : v_start + verts_per_leaf] = bp
@@ -458,7 +508,8 @@ def leaf_area_records(
 def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
                         leaflets, blade_pos_unit, blade_uv, blade_idx,
                         out_pos, out_norm, out_uv, out_idx, base, droop_rad=0.0,
-                        out_tan=None, blade_norm_local=None, blade_tan_local=None):
+                        out_tan=None, blade_norm_local=None, blade_tan_local=None,
+                        skyface=0.0):
     """Lift one (possibly compound) leaf into its leaflet blades at ``center``.
 
     Reconstructs the leaf basis from the render-time stem ``direction`` + the
@@ -472,7 +523,7 @@ def _lift_compound_leaf(center, direction, azimuth, size, splay_rad, n_planes,
     single-blade (or cross, for ``n_planes==2``) geometry byte-for-byte.
     """
     rot_axis_u, leaf_up, rot_axis_w = leaf_basis(
-        direction, azimuth, splay_rad, droop_rad
+        direction, azimuth, splay_rad, droop_rad, skyface
     )
     blade_v_count = blade_pos_unit.shape[0]
     blade_i_count = blade_idx.shape[0]

@@ -61,9 +61,11 @@ def test_hero_blade_changes_leaf_geometry(tmp_path):
     cfg_h = _cfg(tmp_path, leaf_blade_fold_deg=15.0, leaf_blade_curl=0.12)
     hero = build_mesh(simulate(cfg_h), cfg_h)
     fp, hp = _by_name(flat, "leaf"), _by_name(hero, "leaf")
-    assert fp.positions.shape == hp.positions.shape  # same topology
-    assert not np.allclose(fp.positions, hp.positions)  # displaced out of plane
-    # Flat leaves carry one constant normal per blade; the hero blade does not.
+    # The hero blade subdivides the fan (interior rings) so the relief has lamina to
+    # bend across: strictly more vertices than the flat alpha card.
+    assert hp.positions.shape[0] > fp.positions.shape[0]
+    # Flat leaves carry one constant normal per blade; the displaced hero blade does
+    # not (smooth per-vertex normals over a curved surface).
     assert not np.allclose(hp.normals, hp.normals[0], atol=1e-3)
 
 

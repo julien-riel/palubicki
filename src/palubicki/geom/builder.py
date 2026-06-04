@@ -8,7 +8,7 @@ from palubicki.geom import maps
 from palubicki.geom._textures import (
     _PROC_TEXTURES,
     bark_height_for,
-    default_leaf_png,
+    blade_albedo_png,
     leaf_vein_mask,
 )
 from palubicki.geom.bark_blend import BarkBlendStops
@@ -64,7 +64,13 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
     if g.enable_leaves:
         leaf_png = _resolve_texture(g.leaf_texture)
         if leaf_png is None:
-            leaf_png = default_leaf_png()
+            # No explicit texture: derive the albedo from the actual blade outline
+            # (same shape/aspect/margin the mesh renders), so the silhouette + veins
+            # match the geometry and the opaque lamina reaches the petiole tip.
+            leaf_png = blade_albedo_png(
+                shape=g.leaf_shape, aspect=g.leaf_aspect, margin=g.leaf_margin,
+                margin_depth=g.leaf_margin_depth, margin_count=g.leaf_margin_count,
+            )
         leaf_maps = _leaf_maps(g)
         leaf_mat = Material(
             name="leaf",
@@ -121,6 +127,8 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             autumn_color=g.leaf_autumn_color,
             blade_fold_deg=g.leaf_blade_fold_deg,
             blade_curl=g.leaf_blade_curl,
+            blade_cup=g.leaf_blade_cup,
+            skyface=g.leaf_skyface,
             fascicle_count=g.fascicle_count,
             fascicle_spread_deg=g.fascicle_spread_deg,
         )
@@ -156,6 +164,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             sun_shade_k=g.leaf_sun_shade_k,
             splay_deg=g.leaf_splay_deg,
             droop_deg=g.petiole_droop_deg,
+            skyface=g.leaf_skyface,
         )
         if stem_prim.positions.shape[0] > 0:
             primitives.append(stem_prim)
@@ -223,7 +232,7 @@ def _leaf_maps(g: GeomConfig) -> dict:
     opaque to back-light. Empty when ``enable_pbr_maps`` is off."""
     if not g.enable_pbr_maps:
         return {}
-    vein = leaf_vein_mask(shape=g.leaf_shape)  # 1 = lamina, →0 over veins/midrib/base
+    vein = leaf_vein_mask(shape=g.leaf_shape, aspect=g.leaf_aspect)  # 1 = lamina, →0 over veins/midrib/base
     rough = 0.55 + 0.35 * (1.0 - vein)         # veins rougher than the waxy lamina
     occ = 0.70 + 0.30 * vein                   # veins faintly self-occlude
     out: dict = {

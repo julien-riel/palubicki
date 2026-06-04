@@ -32,27 +32,77 @@ import numpy as np
 _EPS = 1e-9
 
 
-def displace_blade(positions2d: np.ndarray, *, fold_deg: float, curl: float, aspect: float) -> np.ndarray:
+def displace_blade(
+    positions2d: np.ndarray,
+    *,
+    fold_deg: float,
+    curl: float,
+    aspect: float,
+    cup: float = 0.0,
+    lobe_axes: tuple[np.ndarray, np.ndarray] | None = None,
+) -> np.ndarray:
     """Return the blade's per-vertex out-of-plane ``z`` (``(N,)`` float64).
 
-    ``positions2d`` is the flat ``(N, 3)`` blade (``z`` ignored). ``fold_deg`` is
-    the midrib crease half-angle (degrees); ``curl`` the longitudinal recurve
-    depth (fraction of blade length). Both 0 → all-zero displacement.
+    ``positions2d`` is the flat ``(N, 3)`` blade (``z`` ignored). All knobs 0/None
+    → all-zero displacement (the legacy flat plane).
+
+    - ``fold_deg`` — midrib crease half-angle (degrees). Without ``lobe_axes`` this
+      is a single central keel at ``u=0`` (``tan(fold)·|u|``); with ``lobe_axes``
+      (palmate) it folds along EACH lobe rib — every vertex lifts by its
+      perpendicular distance to the nearest anchor→tip ray, so all five lobes
+      crease along their own veins instead of one straight central line.
+    - ``cup`` — concave bowl: the lamina edges curl up toward the adaxial (+z) side,
+      quadratic across the half-width.
+    - ``curl`` — longitudinal recurve: the tip arcs ``curl·v²`` below the plane.
+
+    The fold/cup terms are eased to flat at the petiole (``v→0``) and tip (``v→1``)
+    by a ``sqrt(sin(πv))`` arch so the relief lives in the blade body and the ends
+    stay plane (no pinched normals there).
     """
     u = positions2d[:, 0].astype(np.float64)
     v = positions2d[:, 1].astype(np.float64)
     z = np.zeros_like(u)
+    taper = np.sqrt(np.clip(np.sin(np.pi * np.clip(v, 0.0, 1.0)), 0.0, 1.0))
     if fold_deg > 0.0:
-        # Keel: constant cross-slope tan(fold) from the midrib, eased to flat at
-        # the petiole (v→0) and tip (v→1) by a sin arch so the crease stays in the
-        # blade body and the very ends remain plane (no pinched normals there).
         slope = math.tan(math.radians(fold_deg))
-        taper = np.sqrt(np.clip(np.sin(np.pi * np.clip(v, 0.0, 1.0)), 0.0, 1.0))
-        z += slope * np.abs(u) * taper
+        if lobe_axes is not None:
+            z += slope * _rib_distance(u, v, lobe_axes) * taper
+        else:
+            z += slope * np.abs(u) * taper
+    if cup > 0.0:
+        # Edges rise relative to the centre line, eased to flat at both ends.
+        half_w = max(1e-6, 0.5 * aspect)
+        z += cup * (u / half_w) ** 2 * taper
     if curl != 0.0:
         # Recurve: tip (v=1) dips by ``curl`` below the plane, base unmoved.
         z -= curl * v * v
     return z
+
+
+def _rib_distance(
+    u: np.ndarray, v: np.ndarray, lobe_axes: tuple[np.ndarray, np.ndarray]
+) -> np.ndarray:
+    """Per-vertex perpendicular distance to the NEAREST palmate lobe rib.
+
+    Each rib is the ray from the fan ``anchor`` toward a lobe ``tip``; the distance
+    is ``|(p - anchor) × rib_dir|`` (2D cross magnitude), minimised over the ribs.
+    Vertices on a rib get 0 (the crease line); the lamina between ribs lifts most.
+    """
+    anchor, tips = lobe_axes
+    au, av = float(anchor[0]), float(anchor[1])
+    pu = u - au
+    pv = v - av
+    out = np.full_like(u, np.inf)
+    for tip in tips:
+        tu, tv = float(tip[0]) - au, float(tip[1]) - av
+        tn = math.hypot(tu, tv)
+        if tn < 1e-9:
+            continue
+        tu, tv = tu / tn, tv / tn
+        perp = np.abs(pu * tv - pv * tu)
+        out = np.minimum(out, perp)
+    out[~np.isfinite(out)] = 0.0
+    return out
 
 
 def tangent_frame(
@@ -113,11 +163,16 @@ def build_curved_blade(
     fold_deg: float,
     curl: float,
     aspect: float,
+    cup: float = 0.0,
+    lobe_axes: tuple[np.ndarray, np.ndarray] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Unit hero blade: displaced ``(N,3)`` positions + smooth normals + ``VEC4``
     tangents, all in the blade's local ``(u, v, z)`` frame (``+z`` = adaxial face
     normal). Lifted per-leaf by ``geom/leaves.py``."""
-    z = displace_blade(positions2d, fold_deg=fold_deg, curl=curl, aspect=aspect)
+    z = displace_blade(
+        positions2d, fold_deg=fold_deg, curl=curl, aspect=aspect,
+        cup=cup, lobe_axes=lobe_axes,
+    )
     pos3d = positions2d.astype(np.float64, copy=True)
     pos3d[:, 2] = z
     normals, tangents = tangent_frame(pos3d, uvs, indices)

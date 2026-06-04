@@ -348,3 +348,50 @@ def test_build_blade_ovate_lobed_oak_under_64():
         margin_depth=0.35, margin_count=7,
     )
     assert pos.shape[0] <= 64
+
+
+def _tri_area(pos, idx):
+    p = pos[:, :2].astype(float)
+    t = idx.reshape(-1, 3)
+    e1 = p[t[:, 1]] - p[t[:, 0]]
+    e2 = p[t[:, 2]] - p[t[:, 0]]
+    return 0.5 * float(np.abs(e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]).sum())
+
+
+def test_subdivision_adds_vertices_but_preserves_area():
+    """Interior rings give the hero blade lamina to curve across, but triangulate the
+    SAME polygon — so the total area (what leaf_area_records integrates) is
+    bit-identical and the light grid / botanical bounds never drift."""
+    for shape, aspect, margin, md, mc in [
+        ("palmate", 1.0, "entire", 0.0, 0),
+        ("ovate", 0.7, "serrate", 0.08, 12),
+    ]:
+        p0, _, _, i0 = build_blade(length=1.0, width=aspect, shape=shape, margin=margin,
+                                   margin_depth=md, margin_count=mc, subdivisions=0)
+        p2, _, _, i2 = build_blade(length=1.0, width=aspect, shape=shape, margin=margin,
+                                   margin_depth=md, margin_count=mc, subdivisions=2)
+        assert p2.shape[0] > p0.shape[0]
+        assert i2.shape[0] > i0.shape[0]
+        # Same polygon, different triangulation: areas agree to float32 mesh
+        # precision. (leaf_area_records itself always uses subdivisions=0, so the
+        # light-grid integral is byte-identical regardless — this just documents
+        # that the subdivided render covers the same footprint.)
+        assert abs(_tri_area(p0, i0) - _tri_area(p2, i2)) < 1e-6
+
+
+def test_palmate_lobe_axes_match_outline_and_uv():
+    """The shared palmate skeleton returns the petiole anchor + 5 lobe tips that the
+    outline actually radiates to; in tex space they fan up from the base, not the
+    quad centre (the old vein-mask bug)."""
+    from palubicki.geom.leaf_blade import _outline_palmate, palmate_lobe_axes
+    anchor, tips = palmate_lobe_axes(1.0, 1.0)
+    assert tips.shape == (5, 2)
+    assert np.allclose(anchor, [0.0, 0.08])
+    # every tip is an actual vertex of the outline boundary
+    boundary, _ = _outline_palmate(1.0, 1.0)
+    for tip in tips:
+        assert np.min(np.linalg.norm(boundary - tip, axis=1)) < 1e-9
+    # tex_v of the anchor (≈0.08) sits near the base, not mid-card (0.5)
+    assert anchor[1] < 0.15
+    # the central lobe reaches highest toward the tip
+    assert tips[2, 1] == tips[:, 1].max()

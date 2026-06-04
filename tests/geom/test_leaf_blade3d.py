@@ -57,6 +57,38 @@ def test_curved_footprint_preserved():
     assert np.allclose(pos3d[:, :2], pos[:, :2])
 
 
+def test_cup_raises_edges_relative_to_centre():
+    """The cup term curls the lamina edges up toward the adaxial (+z) side, leaving
+    the midrib column near the plane (eased to flat at the petiole/tip)."""
+    pos, uv, idx, aspect = _flat_blade()
+    z = displace_blade(pos, fold_deg=0.0, curl=0.0, aspect=aspect, cup=0.3)
+    u, v = pos[:, 0], pos[:, 1]
+    body = (v > 0.2) & (v < 0.8)
+    near_mid = body & (np.abs(u) < 0.02)
+    edges = body & (np.abs(u) > 0.4 * aspect)
+    assert z[edges].mean() > z[near_mid].mean() + 0.02
+    assert np.all(z >= -1e-9)  # cup only lifts (no negative dip without curl)
+
+
+def test_palmate_per_rib_fold_creases_every_lobe():
+    """With lobe_axes the keel folds along EACH palmate rib, not just u=0: vertices
+    that sit ON a rib stay near the plane while inter-rib lamina lifts — so all five
+    lobes (not only the central one) get relief."""
+    from palubicki.geom.leaf_blade import palmate_lobe_axes
+    pos, _, uv, idx = build_blade(length=1.0, width=1.0, shape="palmate",
+                                  margin="entire", subdivisions=2)
+    lobe = palmate_lobe_axes(1.0, 1.0)
+    z = displace_blade(pos, fold_deg=20.0, curl=0.0, aspect=1.0, lobe_axes=lobe)
+    # A non-central lobe tip lies on its own rib -> small |z|; a single central keel
+    # (no lobe_axes) would leave that off-axis tip lifted high instead.
+    anchor, tips = lobe
+    side_tip = tips[0]  # leftmost lobe apex (|u| large, off the u=0 line)
+    d = np.hypot(pos[:, 0] - side_tip[0], pos[:, 1] - side_tip[1])
+    on_side_rib_z = z[np.argmin(d)]
+    z_central_keel = displace_blade(pos, fold_deg=20.0, curl=0.0, aspect=1.0, lobe_axes=None)
+    assert on_side_rib_z < 0.25 * z_central_keel[np.argmin(d)]
+
+
 def test_curved_tangent_frame_orthonormal():
     pos, uv, idx, aspect = _flat_blade()
     _, normals, tangents = build_curved_blade(pos, uv, idx, fold_deg=20.0, curl=0.15, aspect=aspect)
