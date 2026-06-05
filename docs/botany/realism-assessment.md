@@ -318,6 +318,57 @@ et le levier `apical_control_length`. **Non livré (→ #94)** : la silhouette c
 le backend : `exposure: shadow_propagation`, `envelope.shape: half_ellipsoid` (bornes
 généreuses non-cône), `shadow.measure: skyview`.
 
+### #94 — le cône émergent, livré (longueur latérale pilotée par l'âge)
+
+**[#94](https://github.com/julien-riel/palubicki/issues/94) renverse l'ovoïde en
+un vrai cône** sous `sim.length_banking` (défaut OFF ⇒ **byte-identique**, goldens
+inchangés ; `persist_rate_fraction == 0` collapse structurellement sur le chemin off).
+
+**Constat clé (confirmé par balayage).** Le premier mécanisme essayé — *persistance
+à taux fixe* (une latérale établie continue d'émettre à un taux constant) — **n'a PAS
+marché** : la croissance de **jeunesse-éclairée** domine (les latérales de cime, les
+plus éclairées, poussent le plus long quand elles sont jeunes), et un incrément de
+persistance uniforme ne renverse pas cette base monotone-en-hauteur (`crown_monotonicity`
+resté à +0.24…+0.44). Le mécanisme qui marche : **longueur latérale pilotée par l'ÂGE**.
+
+**Mécanisme.** La longueur d'entre-nœud d'une latérale (`axis_order ≥ 1`) est fixée par
+l'âge de son propre axe — rampe de ~0 (jeune, près de l'apex) au taux de référence
+plein (`persist_rate_fraction × shoot_extension_max`) sur `release_years` —
+**remplaçant** la vigueur éclairée. Donc une latérale de cime jeune reste **courte
+même éclairée** (la jeunesse-éclairée qui inversait la couronne est supprimée à la
+source) et une latérale basse vieille atteint la pleine longueur. La longueur vient du
+**temps d'intégration** (âge ∝ profondeur) → cône. Champs `Bud.axis_birth_time` (estampé
+à la naissance de l'axe, hérité par le terminal qui continue l'axe) et `Bud/Internode.banked_vigor`
+(ratchet du pic de vigueur). BH, élongation **inchangés** — seul le chemin
+longueur/dormance voit le mécanisme.
+
+**Garde d'établissement (shedding).** Une branche **établie** (`banked_vigor ≥
+establish_threshold`) n'est **pas élaguée pour cause d'ombre** — seules les pousses
+jeunes réellement ratées (jamais établies) le sont. Clé sur le high-water-mark banké,
+**pas la position** (aucune forme prescrite) et **sans** monter `quality_threshold`.
+C'était la pièce manquante pour la base : les latérales basses (les plus ombragées)
+étaient élaguées avant de vieillir en longueur, d'où une base trop étroite ; avec la
+garde, la bande 0 s'élargit et la dérive tombe 0.171 → 0.154.
+
+**Leviers** : `persist_rate_fraction` (largeur de base), `release_years` (raideur du
+fuselage — plus grand ⇒ cime étroite plus longtemps), `young_length_floor` (émoussage
+de la pointe). **Résultat calibré** (sapin, `exposure: shadow_propagation`, bornes
+`half_ellipsoid` non-cône, `pr=0.45` / `release_years=6` / `geom.pipe_exponent=3.6`,
+graines {0,1,2}) : `crown_monotonicity` **−0.77 à −0.92** (cône ; était +0.31 ovoïde),
+`silhouette_drift` **~0.166** vs sapin-BHse-cône (était 0.37), `tree_height` ~7.8 m,
+`crown_radius` ~1.8 m et `trunk_base_diameter` ~0.16 m **tous en bande**, leader
+parfait (continuation 1.0, déviation 0°).
+
+**Résidus assumés.** (1) `silhouette_drift` plancher ~0.15–0.17 : c'est la différence de
+forme **intrinsèque** entre un cône-âge émergent (pointe acérée, base culminant un peu
+au-dessus du sol) et le cône-enveloppe de référence (sommet émoussé, plus large à la
+base même) — deux **artefacts d'enveloppe** ; fermer le dernier 0.01 reviendrait à
+imiter l'artefact. (2) le bois persisté épaissit le fût via le pipe-model ;
+`geom.pipe_exponent` 2.80 → 3.6 ramène `trunk_base_diameter` en bande (0.31 → 0.16)
+sans changer le cône (mono −0.92, crown 1.83). Les presets conifères
+**restent sur `bhse`** (golden gelé) ; l'émergence est prouvée par le test e2e
+`tests/integration/test_emergent_cone.py` avec les paramètres calibrés.
+
 ### Contrat de calibration — mesure `pyramid` (#56)
 
 Si `shadow.measure: pyramid`, le dépôt `Δs = (aire · area_weight) · a · b^(−q)` est

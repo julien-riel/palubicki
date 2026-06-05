@@ -36,6 +36,46 @@ class SympodialConfig:
 
 
 @dataclass(frozen=True)
+class LengthBankingConfig:
+    """Age-driven lateral length + woody persistence (#94): make the emergent
+    conifer crown a real cone. A lateral's per-internode length is driven by its
+    own axis AGE, ramping from ~0 (just born, near the apex) to the full reference
+    rate over ``release_years`` — so a young top lateral stays short even when lit
+    (the lit-youth growth that inverts the crown is suppressed at the source) and
+    an old low lateral reaches full length. Length comes from integration TIME
+    (age ∝ depth), not the height-monotone lit vigor, so it does not re-invert.
+    Established laterals persist through shade so they live long enough to age into
+    length.
+
+    Default OFF ⇒ byte-identical. ``persist_rate_fraction == 0`` collapses to the
+    off path structurally (gated ``enabled and persist_rate_fraction > 0``), so
+    'engaged-but-zero' is identical too.
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    # An axis is ESTABLISHED once its banked_vigor reaches this — i.e. it was once
+    # lit enough to grow (pair with sim.vigor_dormancy). Below it, no persistence.
+    establish_threshold: float = field(
+        default=0.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
+    # Base-width knob: the FULL reference rate (fraction of shoot_extension_max) an
+    # OLD lateral emits at once its axis age reaches `release_years`. A young lateral
+    # emits a small fraction of this via the age ramp, so the top stays short.
+    # Height-independent (no re-inversion). 0.0 ⇒ mechanism off.
+    persist_rate_fraction: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Age ramp (years): a lateral's per-internode length scales from ~0 (just born,
+    # near the apex) to the full reference rate over this span. Larger ⇒ a slower
+    # release ⇒ a sharper spire (the top stays short longer). The taper-steepness
+    # lever, paired with persist_rate_fraction (the base width).
+    release_years: float = field(
+        default=12.0, metadata={"ui": {"min": 1.0, "max": 40.0, "step": 1.0}})
+    # Minimum age fraction a just-born lateral emits at (the age ramp's floor). >0
+    # gives the youngest (apex) laterals a small head start, blunting the spire's
+    # tip toward a fuller cone; too high re-blunts into an ovoid. Apex-shape lever.
+    young_length_floor: float = field(
+        default=0.05, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.05}})
+
+
+@dataclass(frozen=True)
 class SimConfig:
     r_perception: float = field(default=0.6, metadata={"ui": {"min": 0.1, "max": 3.0, "step": 0.05}})
     theta_perception_deg: float = field(default=90.0, metadata={"ui": {"min": 10.0, "max": 180.0, "step": 5.0}})
@@ -88,6 +128,7 @@ class SimConfig:
     shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
     shade_avoidance: ShadeAvoidanceConfig = field(default_factory=lambda: ShadeAvoidanceConfig())
     elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
+    length_banking: LengthBankingConfig = field(default_factory=lambda: LengthBankingConfig())
     bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
     leaf_phenology: LeafPhenologyConfig = field(default_factory=lambda: LeafPhenologyConfig())
 
@@ -699,6 +740,16 @@ class Config:
             raise ConfigError(f"sim.shoot_extension_max must be > 0, got {s.shoot_extension_max}")
         if s.apical_control_length < 0:
             raise ConfigError(f"sim.apical_control_length must be >= 0, got {s.apical_control_length}")
+        lb = s.length_banking
+        if not (0.0 <= lb.persist_rate_fraction <= 1.0):
+            raise ConfigError(
+                f"sim.length_banking.persist_rate_fraction must be in [0, 1], got {lb.persist_rate_fraction}")
+        if lb.establish_threshold < 0:
+            raise ConfigError(
+                f"sim.length_banking.establish_threshold must be >= 0, got {lb.establish_threshold}")
+        if lb.release_years <= 0:
+            raise ConfigError(
+                f"sim.length_banking.release_years must be > 0, got {lb.release_years}")
         if s.vigor_ref <= 0:
             raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
         if s.vigor_dormancy < 0:

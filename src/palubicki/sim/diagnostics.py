@@ -575,6 +575,11 @@ def _silhouette_profile(
       * ``taper_exponent`` — slope of ``log(r_k)`` vs ``log(depth-below-apex)``
         over filled bands; a linear cone ≈ 1, a paraboloid ≈ 0.5. A descriptor,
         not a gated bound.
+      * ``crown_monotonicity`` — Spearman ρ between height-band index and radius
+        over filled bands (#94). A real conifer cone narrows upward (radius falls
+        with height) → ρ ≈ −1; the inverted/ovoid crown (widest near the top) →
+        ρ > 0. The cone gate the axis_order-grouped internode-length metric cannot
+        provide (that one compares trunk-vs-twig, not base-vs-apex).
 
     Degenerate inputs (no nodes, zero height, or a bare vertical stick with no
     horizontal extent) return an all-zero profile and zero scalars, matching the
@@ -585,6 +590,7 @@ def _silhouette_profile(
         "apex_sharpness": 0.0,
         "clear_bole_fraction": 0.0,
         "taper_exponent": 0.0,
+        "crown_monotonicity": 0.0,
     }
     if not nodes or n_bands < 1:
         return empty
@@ -628,11 +634,26 @@ def _silhouette_profile(
         slope, _intercept = np.polyfit(np.asarray(log_depth), np.asarray(log_r), 1)
         taper_exponent = float(slope)
 
+    # Crown monotonicity (#94): Spearman ρ(height-band index, radius) over filled
+    # bands. Spearman = Pearson on ranks; a real cone narrows upward → ρ ≈ −1, the
+    # inverted/ovoid crown → ρ > 0. The cone gate the proximal/distal (axis_order)
+    # internode metric cannot provide.
+    rad_arr = np.asarray([r for r in radii if r > 1e-9], dtype=np.float64)
+    crown_monotonicity = 0.0
+    # Guard on the RAW radii having spread: a constant column has tied radii, and
+    # argsort breaks ties by position (→ a spurious +1), so check ptp, not ranks.
+    if rad_arr.size >= 2 and float(np.ptp(rad_arr)) > 1e-9:
+        idx_arr = np.array([k for k, r in enumerate(radii) if r > 1e-9], dtype=np.float64)
+        rk_idx = np.argsort(np.argsort(idx_arr))
+        rk_rad = np.argsort(np.argsort(rad_arr))
+        crown_monotonicity = float(np.corrcoef(rk_idx, rk_rad)[0, 1])
+
     return {
         "crown_radius_profile": radii,
         "apex_sharpness": float(apex_sharpness),
         "clear_bole_fraction": float(clear_bole_fraction),
         "taper_exponent": taper_exponent,
+        "crown_monotonicity": crown_monotonicity,
     }
 
 
@@ -720,6 +741,7 @@ def compute_metrics(
     out["apex_sharpness"] = sil["apex_sharpness"]
     out["clear_bole_fraction"] = sil["clear_bole_fraction"]
     out["taper_exponent"] = sil["taper_exponent"]
+    out["crown_monotonicity"] = sil["crown_monotonicity"]
     if cfg is not None:
         tla = _total_leaf_area(tree, cfg)
         out["total_leaf_area"] = tla
@@ -778,6 +800,7 @@ _SCALAR_KEYS = (
     "apex_sharpness",
     "clear_bole_fraction",
     "taper_exponent",
+    "crown_monotonicity",
     "total_leaf_area",
     "foliage_area_density",
     "internode_length_proximal_mean",
@@ -1129,7 +1152,7 @@ def silhouette_drift(metrics_a: dict, metrics_b: dict) -> float:
     na, nb = max(pa), max(pb)
     if na <= 1e-9 or nb <= 1e-9:
         return float("nan")
-    return float(sum(abs(a / na - b / nb) for a, b in zip(pa, pb)) / len(pa))
+    return float(sum(abs(a / na - b / nb) for a, b in zip(pa, pb, strict=True)) / len(pa))
 
 
 def _fmt_scalar(v) -> str:
@@ -1172,7 +1195,7 @@ def format_report(
     lines.append("Architecture")
     for k in ("tree_height", "trunk_base_diameter", "crown_radius",
               "main_axis_continuation_rate", "leader_deviation_deg",
-              "apex_sharpness", "clear_bole_fraction", "taper_exponent",
+              "apex_sharpness", "clear_bole_fraction", "taper_exponent", "crown_monotonicity",
               "total_leaf_area", "foliage_area_density",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)

@@ -1,7 +1,7 @@
 # src/palubicki/sim/shedding.py
 from __future__ import annotations
 
-from palubicki.config import SheddingConfig
+from palubicki.config import LengthBankingConfig, SheddingConfig
 from palubicki.sim.bh import compute_v_subtree
 from palubicki.sim.reiteration import activate_reserves_on_shed
 from palubicki.sim.tree import Bud, BudState, Node, Tree
@@ -27,13 +27,17 @@ def record_qualities(
         iod.push_quality(float(v_subtree.get(id(iod.child_node), 0.0)))
 
 
-def shed_low_quality(tree: Tree, *, cfg: SheddingConfig) -> None:
+def shed_low_quality(
+    tree: Tree, *, cfg: SheddingConfig,
+    length_banking: LengthBankingConfig | None = None,
+) -> None:
     if not cfg.enabled:
         return
     dead_bud_ids: set[int] = set()
     dead_iod_ids: set[int] = set()
     activated_buds: list[Bud] = []
-    _walk_and_shed(tree.root, cfg, dead_bud_ids, dead_iod_ids, activated_buds)
+    _walk_and_shed(tree.root, cfg, dead_bud_ids, dead_iod_ids, activated_buds,
+                   length_banking=length_banking)
     if dead_bud_ids:
         tree.active_buds = [b for b in tree.active_buds if id(b) not in dead_bud_ids]
     if dead_iod_ids:
@@ -48,16 +52,27 @@ def _walk_and_shed(
     dead_bud_ids: set[int],
     dead_iod_ids: set[int],
     activated_buds: list[Bud],
+    *,
+    length_banking: LengthBankingConfig | None = None,
 ) -> None:
     """Iterative pre-order walk: shed low-quality subtrees, activate reserves."""
+    lb = length_banking
+    guard = lb is not None and lb.enabled and lb.persist_rate_fraction > 0.0
     stack: list[Node] = [root]
     while stack:
         node = stack.pop()
         for iod in list(node.children_internodes):
-            if (
+            shed = (
                 len(iod.quality_history) >= cfg.window
                 and iod.average_quality() < cfg.quality_threshold
-            ):
+            )
+            # Woody persistence (#94): an ESTABLISHED (banked) branch is not shed
+            # merely for being shaded — only genuinely-failed young (never-banked)
+            # shoots prune. Keyed on the banked high-water-mark, not position, so no
+            # shape is prescribed; quality_threshold is unchanged.
+            if shed and guard and iod.banked_vigor >= lb.establish_threshold:
+                shed = False
+            if shed:
                 _kill_subtree(iod.child_node, dead_bud_ids, dead_iod_ids)
                 node.children_internodes = [
                     i for i in node.children_internodes if i is not iod

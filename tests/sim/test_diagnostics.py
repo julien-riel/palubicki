@@ -1140,3 +1140,40 @@ def _walk_nodes_for(tree: Tree) -> list[Node]:
     silhouette unit tests that call _silhouette_profile directly."""
     from palubicki.sim.diagnostics import _walk_nodes
     return _walk_nodes(tree.root)
+
+
+def _make_inverted_tree(*, height=10.0, base_r=3.0, n=10) -> Tree:
+    """Trunk with one lateral per node whose radius GROWS toward the apex — the
+    inverted/ovoid crown the emergent shadow-prop fir produces (widest near top)."""
+    root = Node(position=np.array([0.0, 0.0, 0.0]))
+    tree = Tree(root=root)
+    prev = root
+    for i in range(1, n + 1):
+        y = height * i / n
+        node = Node(position=np.array([0.0, y, 0.0]))
+        tree.all_internodes.append(_link(prev, node, is_main_axis=True))
+        r = base_r * (i / (n + 1))                 # widens toward the apex
+        lat = Node(position=np.array([r, y, 0.0]))
+        tree.all_internodes.append(_link(node, lat, is_main_axis=False))
+        prev = node
+    return tree
+
+
+def test_crown_monotonicity_cone_vs_inverted():
+    """crown_monotonicity (#94) = Spearman ρ(height-band, radius): a cone narrows
+    upward → strongly negative; the inverted ovoid widens upward → positive."""
+    from palubicki.sim.diagnostics import _silhouette_profile
+
+    cone = _silhouette_profile(_walk_nodes_for(_make_silhouette_tree(taper=True)))
+    inv = _silhouette_profile(_walk_nodes_for(_make_inverted_tree()))
+    column = _silhouette_profile(_walk_nodes_for(_make_silhouette_tree(taper=False)))
+
+    assert cone["crown_monotonicity"] < -0.5      # narrows upward = real cone
+    assert inv["crown_monotonicity"] > 0.5        # widens upward = inverted crown
+    assert cone["crown_monotonicity"] < inv["crown_monotonicity"]
+    # A constant-radius column has no monotone trend → ~0.
+    assert abs(column["crown_monotonicity"]) < 0.5
+    # Surfaces through compute_metrics + multi-seed aggregation.
+    m = compute_metrics([_make_silhouette_tree(taper=True), _make_inverted_tree()])
+    assert m["crown_monotonicity"]["per_seed"][0] < -0.5
+    assert m["crown_monotonicity"]["per_seed"][1] > 0.5
