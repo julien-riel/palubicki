@@ -541,6 +541,7 @@ def _emit_node(
         birth_time=t,
         length_target=target,
         vigor=v_b,
+        banked_vigor=cur.banked_vigor,   # frozen woody record (#94); 0 unless banking on
     )
     cur.parent_node.children_internodes.append(iod)
     new_node.parent_internode = iod
@@ -561,6 +562,8 @@ def _emit_node(
         low_light_steps=cur.low_light_steps,
         axis_node_ordinal=cur.axis_node_ordinal + 1,
         spray_plane_normal=axis_normal,
+        banked_vigor=cur.banked_vigor,   # carry the ratchet down THIS axis (#94);
+                                         # lateral buds below start a new axis → 0
     )
     new_node.terminal_bud = terminal
 

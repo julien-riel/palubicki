@@ -41,6 +41,12 @@ class Bud:
     # dormancy decision (recent_vigor < vigor_dormancy -> DORMANT) so a single
     # starved/lucky iteration cannot flip the bud's state. Updated each iteration.
     recent_vigor: float = 0.0
+    # Monotone high-water-mark of recent_vigor along THIS axis (#94, length
+    # banking). Ratchets up while the axis is lit, never decays, and is threaded
+    # down the axis at emission (a fresh lateral starts at 0 — a new axis). Used
+    # only as the "did this axis ever establish" detector for the persistence
+    # floor; 0.0 and unread when sim.length_banking.enabled is False.
+    banked_vigor: float = 0.0
     # Spray-plane normal for this bud's anatomical axis (#55). Fixed at bud-break:
     # a lateral axis inherits its parent axis's normal (coherent multi-order frond)
     # or, when starting off a normal-less axis (the trunk), derives one from its own
@@ -102,6 +108,10 @@ class Internode:
     # The continuous BH flux v_b that produced this internode. Drives the
     # vigor-seeded tip radius in radii.py and the internode-length diagnostics.
     vigor: float = 0.0
+    # Frozen woody record of the emitting terminal's banked_vigor (#94). A
+    # shedding establishment-guard can read it without touching live buds. 0.0
+    # and unread when length banking is off.
+    banked_vigor: float = 0.0
     quality_history: deque[float] = field(init=False)
 
     def __post_init__(self) -> None:

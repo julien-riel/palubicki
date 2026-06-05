@@ -36,6 +36,32 @@ class SympodialConfig:
 
 
 @dataclass(frozen=True)
+class LengthBankingConfig:
+    """Woody length banking + persistence (#94): make the emergent conifer crown
+    a real cone. An established lateral keeps extending at a near-full reference
+    rate for the rest of the sim (so the OLDEST whorls — the lowest — integrate
+    the most years and end up longest), instead of freezing short the moment it
+    is shaded. The length advantage comes from integration TIME (age ∝ depth),
+    NOT from a height-monotone banked rate, so it does not re-invert.
+
+    Default OFF ⇒ byte-identical. ``persist_rate_fraction == 0`` collapses to the
+    off path structurally (the floor is gated ``enabled and persist_rate_fraction
+    > 0``), so 'engaged-but-zero' is identical too.
+    """
+    enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    # An axis is ESTABLISHED once its banked_vigor reaches this — i.e. it was once
+    # lit enough to grow (pair with sim.vigor_dormancy). Below it, no persistence.
+    establish_threshold: float = field(
+        default=0.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
+    # The PRIMARY cone knob: an established lateral keeps emitting internodes at
+    # this fraction of shoot_extension_max (a fixed, height-INDEPENDENT reference
+    # rate — not a fraction of its banked vigor), regardless of current shade, for
+    # the rest of the sim. 0.0 ⇒ mechanism off (no persistence).
+    persist_rate_fraction: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+
+
+@dataclass(frozen=True)
 class SimConfig:
     r_perception: float = field(default=0.6, metadata={"ui": {"min": 0.1, "max": 3.0, "step": 0.05}})
     theta_perception_deg: float = field(default=90.0, metadata={"ui": {"min": 10.0, "max": 180.0, "step": 5.0}})
@@ -88,6 +114,7 @@ class SimConfig:
     shade_mortality: ShadeMortalityConfig = field(default_factory=lambda: ShadeMortalityConfig())
     shade_avoidance: ShadeAvoidanceConfig = field(default_factory=lambda: ShadeAvoidanceConfig())
     elongation: ElongationConfig = field(default_factory=lambda: ElongationConfig())
+    length_banking: LengthBankingConfig = field(default_factory=lambda: LengthBankingConfig())
     bud_break_bias: BudBreakConfig = field(default_factory=lambda: BudBreakConfig())
     leaf_phenology: LeafPhenologyConfig = field(default_factory=lambda: LeafPhenologyConfig())
 
@@ -699,6 +726,13 @@ class Config:
             raise ConfigError(f"sim.shoot_extension_max must be > 0, got {s.shoot_extension_max}")
         if s.apical_control_length < 0:
             raise ConfigError(f"sim.apical_control_length must be >= 0, got {s.apical_control_length}")
+        lb = s.length_banking
+        if not (0.0 <= lb.persist_rate_fraction <= 1.0):
+            raise ConfigError(
+                f"sim.length_banking.persist_rate_fraction must be in [0, 1], got {lb.persist_rate_fraction}")
+        if lb.establish_threshold < 0:
+            raise ConfigError(
+                f"sim.length_banking.establish_threshold must be >= 0, got {lb.establish_threshold}")
         if s.vigor_ref <= 0:
             raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
         if s.vigor_dormancy < 0:

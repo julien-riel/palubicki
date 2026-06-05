@@ -940,3 +940,38 @@ def test_load_config_reads_exposure_and_shadow(tmp_path):
     assert cfg.shadow.b == 2.5
     assert cfg.shadow.q_max == 6
     assert cfg.shadow.q_dormancy == 0.1
+
+
+# --- Length banking / woody persistence (#94) ---
+
+def test_length_banking_defaults_off(tmp_path):
+    cfg = _make_config(output=tmp_path / "out.glb")
+    lb = cfg.sim.length_banking
+    assert lb.enabled is False
+    assert lb.persist_rate_fraction == 0.0       # mechanism off
+    assert lb.establish_threshold == 0.5
+
+
+def test_length_banking_validation(tmp_path):
+    from palubicki.config import LengthBankingConfig
+    with pytest.raises(ConfigError, match="persist_rate_fraction"):
+        _make_config(
+            sim=SimConfig(length_banking=LengthBankingConfig(persist_rate_fraction=1.5)),
+            output=tmp_path / "out.glb",
+        )
+    with pytest.raises(ConfigError, match="establish_threshold"):
+        _make_config(
+            sim=SimConfig(length_banking=LengthBankingConfig(establish_threshold=-0.1)),
+            output=tmp_path / "out.glb",
+        )
+
+
+def test_load_config_reads_length_banking(tmp_path):
+    yaml_path = tmp_path / "tree.yaml"
+    yaml_path.write_text(
+        "sim: {length_banking: {enabled: true, persist_rate_fraction: 0.6, establish_threshold: 0.4}}\n"
+    )
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.sim.length_banking.enabled is True
+    assert cfg.sim.length_banking.persist_rate_fraction == 0.6
+    assert cfg.sim.length_banking.establish_threshold == 0.4
