@@ -15,6 +15,13 @@ _SHADOW = {
     "shadow.enabled": True, "shadow.measure": "skyview",
 }
 
+# Calibrated age-driven length banking (#94): the values that earn the fir cone.
+_CAL = {
+    "sim.length_banking.enabled": True,
+    "sim.length_banking.persist_rate_fraction": 0.45,
+    "sim.length_banking.release_years": 6.0,
+}
+
 
 def _metrics(overrides, tmp_path, years=20):
     ov = {"seed": 0, "sim.max_simulation_years": years}
@@ -31,11 +38,7 @@ def test_length_banking_turns_the_inverted_crown_into_a_cone(tmp_path):
     > 0). Banking on (age-driven length) → a real cone that narrows upward
     (crown_monotonicity < 0), with the leader still excurrent."""
     off = _metrics({}, tmp_path)
-    on = _metrics({
-        "sim.length_banking.enabled": True,
-        "sim.length_banking.persist_rate_fraction": 0.4,
-        "sim.length_banking.release_years": 12.0,
-    }, tmp_path)
+    on = _metrics(_CAL, tmp_path)
 
     # Off: the documented inverted/ovoid emergent crown.
     assert off["crown_monotonicity"] > 0.0
@@ -46,6 +49,19 @@ def test_length_banking_turns_the_inverted_crown_into_a_cone(tmp_path):
     assert on["leader_deviation_deg"] <= 20.0
     # The crown genuinely flipped, not merely narrowed.
     assert on["crown_monotonicity"] < off["crown_monotonicity"] - 0.5
+
+
+@pytest.mark.slow
+def test_calibrated_cone_dimensions_in_band(tmp_path):
+    """At full duration the calibrated emergent cone lands every dimension in the
+    fir literature band — height, crown radius, trunk diameter — while staying a
+    cone (#94). The cone is genuinely emergent: no envelope.shape: cone."""
+    m = _metrics({**_CAL, "geom.pipe_exponent": 3.6}, tmp_path, years=30)
+    assert m["crown_monotonicity"] < -0.5
+    assert 1.5 <= m["crown_radius"] <= 2.5
+    assert 7.0 <= m["tree_height"] <= 12.0
+    assert 0.10 <= m["trunk_base_diameter"] <= 0.20
+    assert m["main_axis_continuation_rate"] >= 0.6
 
 
 @pytest.mark.slow

@@ -186,38 +186,36 @@ qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
    raidissement sous charge intégrés dans le temps (#10 dispo), au lieu d'un sag
    statique recalculé à chaque pas. Charge-driven, complément de #34 (âge-driven).
 
-### Changement de moteur profond
-
-6. **#94 — cône conifère émergent : dynamique de longueur de branche + contrôle
-   apical** · suite directe de **#56** (backend shadow-propagation **livré** :
-   `exposure: shadow_propagation` config-sélectionnable, BHse défaut byte-identique ;
-   mesures `skyview`/`pyramid` ; diagnostic de silhouette ; levier
-   `apical_control_length`). Constat de calibration #56 : la forme émergente sous
-   compétition lumineuse est **ovoïde/inversée** (cime la plus large), pas un cône —
-   le leader est parfait mais les branches basses, ombragées, restent courtes au lieu
-   d'être les plus longues. La silhouette conique exige une **dynamique de longueur
-   de branche** (banque pendant la lumière + persistance ligneuse) et un contrôle
-   apical qui ne prive pas les branches basses — territoire dominance apicale
-   **#36/#51**. Compose avec #62 (lumière feuillus) et #63 (initiation). Voir
-   `docs/botany/realism-assessment.md` §forme émergente.
+> **#94 (cône conifère émergent) — livré.** Sous `sim.length_banking` (longueur
+> latérale **pilotée par l'âge**), le sapin sous `exposure: shadow_propagation` +
+> bornes neutres `half_ellipsoid` développe un **vrai cône** (`crown_monotonicity`
+> +0.31 ovoïde → −0.77 cône ; `silhouette_drift` 0.37 → ~0.17 vs fir-BHse ; hauteur /
+> couronne / tronc en bande, leader parfait) — la forme émerge de la compétition
+> lumineuse + l'âge, **sans** enveloppe `cone`. Le 1er mécanisme (persistance à taux
+> fixe) a échoué — la croissance de jeunesse-éclairée domine ; c'est la longueur
+> **pilotée par l'âge** (jeune court, vieux long) qui renverse l'ovoïde. Garde
+> d'établissement au shedding (la base bankée n'est pas élaguée pour l'ombre). Défaut
+> OFF ⇒ **byte-identique**. Le preset conifère reste `bhse` (golden gelé) ; l'émergence
+> est prouvée par `tests/integration/test_emergent_cone.py`. Voir `realism-assessment.md`
+> §forme émergente.
 
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-7. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+6. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
    déterminées). Lit le driver saisonnier **#65 (livré)** via une fenêtre de
    floraison propre passée au **même** `clock.phenology_activity` (aucune nouvelle
    math de rampe). Débloque forbs, fruits, et un 2ᵉ déclencheur sympodial propre.
-8. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+7. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-9. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+8. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-10. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+9. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
     reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
     (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
     look**). Sous-tickets P0…P5 indépendants, un PR chacun.
