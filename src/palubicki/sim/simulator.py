@@ -216,8 +216,16 @@ def _apply_shade_mortality(forest: Forest, light_info, cfg: Config) -> list[Bud]
     Runs AFTER perceive_light populates light_factor and BEFORE marker perception
     / allocation so that dead buds do not consume markers or appear in the substep
     loop."""
+    # Under shadow mode protect established (banked) laterals from the kill so only
+    # the never-established interior cloud is culled (#96); the banked threshold is
+    # the same one the persistence floor / shedding guard use.
+    lb = cfg.sim.length_banking
+    protect = (lb.establish_threshold if (cfg.exposure == "shadow_propagation"
+               and cfg.shadow.mortality_enabled and lb.enabled
+               and lb.persist_rate_fraction > 0.0) else None)
     kill_shaded_buds(
-        all_active_buds(forest), light_info.light_factor, cfg.sim.shade_mortality
+        all_active_buds(forest), light_info.light_factor, cfg.sim.shade_mortality,
+        protect_banked=protect,
     )
     for tree in forest.trees:
         tree.active_buds = [
@@ -308,11 +316,15 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
     light_info = _perceive_forest_light(forest, union_buds, cfg, iteration)
     shadow_mode = cfg.exposure == "shadow_propagation"
 
-    # Shade-mortality is OFF under shadow propagation (#56 C3): Q-dormancy is the
-    # reversible bole mechanism, and stacking an irreversible DEAD gate on the same
-    # exposure signal (calibrated for BHse Beer-Lambert light_factor) would over-kill
-    # the lower crown.
-    if light_info is not None and cfg.sim.shade_mortality.enabled and not shadow_mode:
+    # Shade-mortality is OFF under shadow propagation by default (#56 C3): Q-dormancy
+    # is the reversible bole mechanism, and stacking an irreversible DEAD gate on the
+    # same exposure signal (calibrated for BHse Beer-Lambert light_factor) would
+    # over-kill the lower crown. A prolific whorled conifer under neutral bounds is
+    # the exception (#96): it piles up a never-pruned bud cloud, so shadow.mortality_
+    # enabled re-enables the kill — but protecting established (banked) laterals.
+    sm_on = cfg.sim.shade_mortality.enabled and (
+        not shadow_mode or cfg.shadow.mortality_enabled)
+    if light_info is not None and sm_on:
         union_buds = _apply_shade_mortality(forest, light_info, cfg)
 
     if shadow_mode:

@@ -641,6 +641,18 @@ class ShadowConfig:
     #     (no side light) → an inverted crown. Kept for comparison.
     measure: Literal["skyview", "pyramid"] = field(
         default="skyview", metadata={"ui": {"label": "Exposure measure"}})
+    # Shade-mortality under shadow propagation (#96). OFF by default: #56 kept the
+    # exposure signal to the reversible Q-dormancy bole governor only, never an
+    # irreversible kill (a single DEAD gate calibrated for BHse Beer-Lambert would
+    # over-prune the lower crown). But a prolific whorled conifer (pine, k=5) under
+    # neutral bounds piles up a 200k+ never-pruned bud cloud (dormant buds linger in
+    # active_buds forever), making 30 yr runs intractable and over-thickening the
+    # bole via the pipe model. When True, shade_mortality runs under shadow mode too,
+    # keyed on the exposure light_factor (= Q/C) — but ESTABLISHED (banked) laterals
+    # are protected (see sim.length_banking.establish_threshold), so only the
+    # never-established interior shade cloud dies and the emergent cone is preserved.
+    mortality_enabled: bool = field(
+        default=False, metadata={"ui": {"label": "Shade mortality (shadow)"}})
 
 
 @dataclass(frozen=True)

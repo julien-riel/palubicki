@@ -199,6 +199,22 @@ qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
 > est prouvée par `tests/integration/test_emergent_cone.py`. Voir `realism-assessment.md`
 > §forme émergente.
 
+> **#96 (cône émergent du PIN) — livré.** Port de #94 au pin (verticillé k=5). Le
+> *même* mécanisme âge→longueur donne le cône, mais le pin empile un pool de
+> bourgeons **gigantesque** (200–290k internodes, runaway 38 min / 9 Go à 30 ans ;
+> fût 4× la bande) car les dormants ne sont jamais retirés et #56 avait coupé la
+> mortalité d'ombre sous `shadow_propagation`. Ajout : `shadow.mortality_enabled`
+> (**défaut OFF ⇒ byte-identique**) ré-active le kill sous shadow mode **en
+> protégeant les latérales établies (bankées)** — seul le nuage d'intérieur
+> jamais-établi meurt, le cône persiste. + `shadow.q_dormancy` 0.05→0.5 (plafonne
+> l'émission) et `establish_threshold` 0.5→25 (échelle de vigueur pin ~6–7× le
+> sapin). **Calibré** (`pr=0.40` / `release_years=6` / `est=25` / `pipe_exponent=4.0`
+> / `q_dormancy=0.5`, 30 ans graine 0) : `crown_monotonicity` **−0.93**, hauteur
+> **16.1 m**, couronne **3.63 m**, tronc **0.258 m** — **tous en bande pin**, leader
+> parfait. Preset pin reste `bhse` (golden gelé) ; le test e2e tourne à 20 ans
+> (cône+fût établis, pool borné < 120k) pour rester traçable. Voir
+> `realism-assessment.md` §forme émergente.
+
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
 6. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
