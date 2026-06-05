@@ -410,6 +410,20 @@ def _grow_tree(
         # a one-iteration lag, not a kill. Do not "fix" it by seeding recent_vigor
         # = v_b — that removes the lag the hysteresis is meant to provide.
         bud.recent_vigor = (1.0 - s) * bud.recent_vigor + s * v_b
+        lb = cfg.sim.length_banking
+        if lb.enabled:
+            # Ratchet the per-axis vigor high-water-mark (#94 P1); never decays,
+            # survives DORMANT spans, threaded down the axis at emission.
+            bud.banked_vigor = max(bud.banked_vigor, bud.recent_vigor)
+        # An ESTABLISHED lateral (a non-trunk axis that was once lit enough)
+        # persists through later shade (#94 P2). Keyed on axis_order >= 1 so the
+        # trunk/leader is never floored, and on the banked high-water-mark (not the
+        # current, height-monotone vigor) so it does not re-invert.
+        established = (
+            lb.enabled and lb.persist_rate_fraction > 0.0
+            and bud.axis_order >= 1
+            and bud.banked_vigor >= lb.establish_threshold
+        )
         v_perc = res.direction[bud]
         v_perc_norm = float(np.linalg.norm(v_perc))
         if shadow_mode:
@@ -423,6 +437,11 @@ def _grow_tree(
             dormant = bud.recent_vigor < cfg.sim.vigor_dormancy or q_exp < cfg.shadow.q_dormancy
         else:
             dormant = bud.recent_vigor < cfg.sim.vigor_dormancy or v_perc_norm < 1e-12
+        if established and dormant:
+            # Persistence: an established lateral keeps clearing the gate and emitting
+            # at the floored rate (below), banking real geometry over the years
+            # instead of freezing short the moment it is overtopped (#94 P2).
+            dormant = False
         if dormant:
             bud.state = BudState.DORMANT
             new_active.append(bud)
@@ -458,6 +477,16 @@ def _grow_tree(
             # 0.1 so apex laterals still creep rather than freeze.
             gap = y_apex - float(bud.position[1])
             target *= min(1.0, max(0.1, gap / apical_L))
+        if lb.enabled and lb.persist_rate_fraction > 0.0 and bud.axis_order >= 1:
+            # Age-driven lateral length (#94 P2): the per-internode length ramps
+            # from ~0 (young, near the apex) to the full reference rate over
+            # release_years, REPLACING the lit vigor — so a young top lateral stays
+            # short even when lit (the lit-youth inversion suppressed at the source)
+            # and an old, low lateral reaches full length. The cone emerges from
+            # age ∝ depth. (Established laterals also persist through shade — the
+            # dormancy override above — so they live long enough to age into length.)
+            age_frac = min(1.0, max(0.05, (t - bud.axis_birth_time) / lb.release_years))
+            target = lb.persist_rate_fraction * cfg.sim.shoot_extension_max * activity * age_frac
         new_pos = bud.position + d * target
 
         if forest.obstacles:
@@ -564,6 +593,7 @@ def _emit_node(
         spray_plane_normal=axis_normal,
         banked_vigor=cur.banked_vigor,   # carry the ratchet down THIS axis (#94);
                                          # lateral buds below start a new axis → 0
+        axis_birth_time=cur.axis_birth_time,   # the terminal continues cur's axis
     )
     new_node.terminal_bud = terminal
 
@@ -610,6 +640,7 @@ def _emit_node(
             position=new_pos.copy(), direction=ld,
             axis_order=cur.axis_order + 1, parent_node=new_node,
             spray_plane_normal=_lateral_spray_normal(spray_on, axis_normal, ld),
+            axis_birth_time=t,   # a lateral starts a NEW axis, born now (#94)
         )
         if sa_rng is not None and sa_rng.random() >= p_break:
             lat.state = BudState.RESERVE

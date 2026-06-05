@@ -37,28 +37,37 @@ class SympodialConfig:
 
 @dataclass(frozen=True)
 class LengthBankingConfig:
-    """Woody length banking + persistence (#94): make the emergent conifer crown
-    a real cone. An established lateral keeps extending at a near-full reference
-    rate for the rest of the sim (so the OLDEST whorls — the lowest — integrate
-    the most years and end up longest), instead of freezing short the moment it
-    is shaded. The length advantage comes from integration TIME (age ∝ depth),
-    NOT from a height-monotone banked rate, so it does not re-invert.
+    """Age-driven lateral length + woody persistence (#94): make the emergent
+    conifer crown a real cone. A lateral's per-internode length is driven by its
+    own axis AGE, ramping from ~0 (just born, near the apex) to the full reference
+    rate over ``release_years`` — so a young top lateral stays short even when lit
+    (the lit-youth growth that inverts the crown is suppressed at the source) and
+    an old low lateral reaches full length. Length comes from integration TIME
+    (age ∝ depth), not the height-monotone lit vigor, so it does not re-invert.
+    Established laterals persist through shade so they live long enough to age into
+    length.
 
     Default OFF ⇒ byte-identical. ``persist_rate_fraction == 0`` collapses to the
-    off path structurally (the floor is gated ``enabled and persist_rate_fraction
-    > 0``), so 'engaged-but-zero' is identical too.
+    off path structurally (gated ``enabled and persist_rate_fraction > 0``), so
+    'engaged-but-zero' is identical too.
     """
     enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
     # An axis is ESTABLISHED once its banked_vigor reaches this — i.e. it was once
     # lit enough to grow (pair with sim.vigor_dormancy). Below it, no persistence.
     establish_threshold: float = field(
         default=0.5, metadata={"ui": {"min": 0.0, "max": 5.0, "step": 0.05}})
-    # The PRIMARY cone knob: an established lateral keeps emitting internodes at
-    # this fraction of shoot_extension_max (a fixed, height-INDEPENDENT reference
-    # rate — not a fraction of its banked vigor), regardless of current shade, for
-    # the rest of the sim. 0.0 ⇒ mechanism off (no persistence).
+    # Base-width knob: the FULL reference rate (fraction of shoot_extension_max) an
+    # OLD lateral emits at once its axis age reaches `release_years`. A young lateral
+    # emits a small fraction of this via the age ramp, so the top stays short.
+    # Height-independent (no re-inversion). 0.0 ⇒ mechanism off.
     persist_rate_fraction: float = field(
         default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
+    # Age ramp (years): a lateral's per-internode length scales from ~0 (just born,
+    # near the apex) to the full reference rate over this span. Larger ⇒ a slower
+    # release ⇒ a sharper spire (the top stays short longer). The taper-steepness
+    # lever, paired with persist_rate_fraction (the base width).
+    release_years: float = field(
+        default=12.0, metadata={"ui": {"min": 1.0, "max": 40.0, "step": 1.0}})
 
 
 @dataclass(frozen=True)
@@ -733,6 +742,9 @@ class Config:
         if lb.establish_threshold < 0:
             raise ConfigError(
                 f"sim.length_banking.establish_threshold must be >= 0, got {lb.establish_threshold}")
+        if lb.release_years <= 0:
+            raise ConfigError(
+                f"sim.length_banking.release_years must be > 0, got {lb.release_years}")
         if s.vigor_ref <= 0:
             raise ConfigError(f"sim.vigor_ref must be > 0, got {s.vigor_ref}")
         if s.vigor_dormancy < 0:

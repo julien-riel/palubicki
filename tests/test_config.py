@@ -964,6 +964,11 @@ def test_length_banking_validation(tmp_path):
             sim=SimConfig(length_banking=LengthBankingConfig(establish_threshold=-0.1)),
             output=tmp_path / "out.glb",
         )
+    with pytest.raises(ConfigError, match="release_years"):
+        _make_config(
+            sim=SimConfig(length_banking=LengthBankingConfig(release_years=0.0)),
+            output=tmp_path / "out.glb",
+        )
 
 
 def test_load_config_reads_length_banking(tmp_path):

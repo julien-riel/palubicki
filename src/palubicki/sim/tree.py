@@ -47,6 +47,12 @@ class Bud:
     # only as the "did this axis ever establish" detector for the persistence
     # floor; 0.0 and unread when sim.length_banking.enabled is False.
     banked_vigor: float = 0.0
+    # Clock.t when THIS axis was born (#94, age-driven lateral length). A lateral
+    # bud stamps it at emission; the axis-continuing terminal inherits it; the root
+    # keeps 0. Drives the acropetal length ramp so a young (near-apex) lateral emits
+    # short internodes and an old (low) one reaches full length — the cone from
+    # integration time. Unread when length banking is off.
+    axis_birth_time: float = 0.0
     # Spray-plane normal for this bud's anatomical axis (#55). Fixed at bud-break:
     # a lateral axis inherits its parent axis's normal (coherent multi-order frond)
     # or, when starting off a normal-less axis (the trunk), derives one from its own
