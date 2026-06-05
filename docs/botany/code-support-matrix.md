@@ -46,7 +46,7 @@ Presets d'espèces livrés (`configs/species/`) : **oak, ash, maple, birch**
 | Monopodial (leader persistant) | ✅ | `Internode.is_main_axis` ; continuation du terminal | — |
 | Sympodial (terminal cède au latéral) | ✅ | `sim/sympodial.py::promote_lateral_if_failing` ; `Node.sympodial_fork` | — |
 | Dominance apicale | ✅ | `sim/bh.py` — allocation Borchert-Honda à deux passes, `lambda_apical` ; dominance **émergente** (pas d'hormone explicite — choix de conception) | — |
-| Forme macro de couronne émergente (cône conifère) | ✅ | 2ᵉ backend d'exposition config-sélectionnable : `exposure: shadow_propagation` (`shadow.measure: skyview \| pyramid`) — la forme vient de la compétition lumineuse, **pas de l'enveloppe**. Sous `sim.length_banking` (longueur latérale pilotée par l'âge, #94) le sapin développe un **vrai cône** sous bornes neutres `half_ellipsoid` : `crown_monotonicity` −0.77 (cône ; était +0.31 ovoïde), `silhouette_drift` ~0.17 vs fir-BHse-cône (était 0.38), hauteur/couronne/tronc en bande, leader parfait. Défaut OFF ⇒ byte-identique. Voir realism-assessment §forme émergente | [#56](https://github.com/julien-riel/palubicki/issues/56) (backend + diagnostic) + [#94](https://github.com/julien-riel/palubicki/issues/94) (longueur pilotée par l'âge) livrés ; preset conifère reste `bhse` (golden gelé), émergence prouvée par `tests/integration/test_emergent_cone.py` |
+| Forme macro de couronne émergente (cône conifère) | ✅ | 2ᵉ backend d'exposition config-sélectionnable : `exposure: shadow_propagation` (`shadow.measure: skyview \| pyramid`) — la forme vient de la compétition lumineuse, **pas de l'enveloppe**. Sous `sim.length_banking` (longueur latérale pilotée par l'âge, #94) le sapin (#94) **et le pin** (#96) développent un **vrai cône** sous bornes neutres `half_ellipsoid` : sapin `crown_monotonicity` −0.77 (était +0.31 ovoïde), `silhouette_drift` ~0.17 vs fir-BHse-cône ; pin −0.93, hauteur/couronne/tronc **en bande pin** (16.1 m / 3.63 m / 0.258 m à 30 ans). Le pin (verticillé k=5) exige en plus un **pool de bourgeons borné** — `shadow.mortality_enabled` (kill d'ombre sous shadow mode, latérales bankées protégées) + `q_dormancy` 0.5 — sans quoi il part en vrille (200k+ internodes). Défaut OFF ⇒ byte-identique. Voir realism-assessment §forme émergente | [#56](https://github.com/julien-riel/palubicki/issues/56) (backend) + [#94](https://github.com/julien-riel/palubicki/issues/94) (sapin) + [#96](https://github.com/julien-riel/palubicki/issues/96) (pin + pool borné) livrés ; presets conifères restent `bhse` (golden gelé), émergence prouvée par `tests/integration/test_emergent_cone.py` |
 | Acrotonie / mésotonie / basitonie | ✅ | `sim/bud_break_bias.py::position_weight` + `sim.bud_break_bias` (mode + force) | [#3](https://github.com/julien-riel/palubicki/issues/3) livré |
 | Orthotropie vs plagiotropie | ✅ | `sim/tropisms.py` — `w_orthotropy_*`, `w_plagiotropism_*` (projection sur XY, ou sur le plan de la branche-mère si `spray_plane_enabled`) | — |
 | Plagiotropie par épinastie (arc temporel vers l'horizontale) | ✅ | `sim/tropisms.py` — rampe `1 − exp(−âge/τ)`, `epinasty_tau_years` | [#34](https://github.com/julien-riel/palubicki/issues/34) livré |
@@ -185,7 +185,9 @@ Au-delà de la morphologie, les écarts **physiologiques** relevés par
 
 > **Déjà créé** — [#94](https://github.com/julien-riel/palubicki/issues/94)
 > (forme cône émergente : dynamique de longueur de branche + contrôle apical),
-> issu du constat de calibration de [#56](https://github.com/julien-riel/palubicki/issues/56).
+> issu du constat de calibration de [#56](https://github.com/julien-riel/palubicki/issues/56) ;
+> et [#96](https://github.com/julien-riel/palubicki/issues/96) (port du cône au
+> pin + pool de bourgeons borné) — tous deux **livrés**.
 
 Les autres absences sont des **`SKIP` assumés** : topologie racinaire
 souterraine, anneaux annuels, dimension fractale, loi de flambement,

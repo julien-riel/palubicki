@@ -87,3 +87,32 @@ def test_missing_light_factor_defaults_to_full_sun():
     kill_shaded_buds([bud], {}, cfg)
     assert bud.state is BudState.ACTIVE
     assert bud.low_light_steps == 0
+
+
+def test_protect_banked_makes_established_laterals_immune():
+    # #96: under shadow propagation an ESTABLISHED (banked) lateral is immune to
+    # the shade kill — it never accrues shade steps even in deep shade — so only
+    # the never-established interior cloud is culled and the cone's banked laterals
+    # persist into length.
+    banked = _make_bud()
+    banked.banked_vigor = 30.0
+    banked.low_light_steps = 5
+    young = _make_bud()
+    young.banked_vigor = 2.0
+    cfg = ShadeMortalityConfig(enabled=True, light_threshold=0.5, n_consecutive_steps=1)
+    light = {banked: 0.0, young: 0.0}
+    killed = kill_shaded_buds([banked, young], light, cfg, protect_banked=25.0)
+    assert killed == 1
+    assert banked.state is BudState.ACTIVE      # immune
+    assert banked.low_light_steps == 0          # counter cleared, second chance kept
+    assert young.state is BudState.DEAD          # never established → culled
+
+
+def test_protect_banked_none_is_legacy_behaviour():
+    # protect_banked=None (the BHse default) ignores banked_vigor entirely.
+    banked = _make_bud()
+    banked.banked_vigor = 100.0
+    cfg = ShadeMortalityConfig(enabled=True, light_threshold=0.5, n_consecutive_steps=1)
+    killed = kill_shaded_buds([banked], {banked: 0.0}, cfg, protect_banked=None)
+    assert killed == 1
+    assert banked.state is BudState.DEAD

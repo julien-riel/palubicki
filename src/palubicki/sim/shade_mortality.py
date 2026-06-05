@@ -9,6 +9,7 @@ def kill_shaded_buds(
     buds: list[Bud],
     light_factor: dict[Bud, float],
     cfg: ShadeMortalityConfig,
+    protect_banked: float | None = None,
 ) -> int:
     """Mark living buds DEAD when light_factor stays below threshold for N steps.
 
@@ -23,12 +24,21 @@ def kill_shaded_buds(
 
     A bud missing from ``light_factor`` is treated as receiving full sun (1.0)
     — a conservative default that does not trigger mortality.
+
+    ``protect_banked`` (#96): when set, an ESTABLISHED lateral
+    (``banked_vigor >= protect_banked``) is immune — it never accrues shade steps
+    and never dies. This mirrors the length-banking shedding guard so that under
+    shadow propagation the never-established interior cloud is culled (bounding the
+    pool) while the cone's banked laterals persist into length.
     """
     if not cfg.enabled:
         return 0
     killed = 0
     for bud in buds:
         if bud.state in (BudState.RESERVE, BudState.DEAD):
+            continue
+        if protect_banked is not None and bud.banked_vigor >= protect_banked:
+            bud.low_light_steps = 0
             continue
         lf = light_factor.get(bud, 1.0)
         if lf < cfg.light_threshold:

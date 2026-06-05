@@ -369,6 +369,52 @@ sans changer le cône (mono −0.92, crown 1.83). Les presets conifères
 **restent sur `bhse`** (golden gelé) ; l'émergence est prouvée par le test e2e
 `tests/integration/test_emergent_cone.py` avec les paramètres calibrés.
 
+### #96 — le cône émergent du PIN (port + pool borné)
+
+**[#96](https://github.com/julien-riel/palubicki/issues/96) porte le cône émergent #94
+au pin** — *même* mécanisme de longueur pilotée par l'âge, mais le pin (verticillé
+**k=5**, plus haut et plus large) exige deux ajouts par rapport au sapin.
+
+**Constat clé — le pool de bourgeons explose.** Sous `shadow_propagation` + bornes
+neutres généreuses, le pin émet **200–290k internodes** (≈ 440k bourgeons actifs à 20 ans)
+parce que (1) les verticilles k=5 multiplient les latérales et (2) **un bourgeon dormant
+n'est jamais retiré** du pool sous ce backend — seuls les morts le sont, et #56 avait
+**désactivé la mortalité d'ombre** sous `shadow_propagation` (la Q-dormance, réversible,
+était le seul gouverneur). Résultat : un run 30 ans **part en vrille (38 min / 9 Go)** et
+le pipe-model, sommant 250k sections, épaissit le fût à **~0.8 m** (4× la bande). Le sapin
+(spiralé, 1 latérale/nœud, bornes plus petites) n'avait pas ce problème — d'où l'écart
+« calibration » (#94) vs « il faut d'abord borner le pool » (#96).
+
+**Mécanisme ajouté — `shadow.mortality_enabled` (défaut OFF ⇒ byte-identique).** Quand
+activé, `shade_mortality` tourne aussi sous `shadow_propagation` (clé sur
+`light_factor = Q/C`), **mais une latérale établie (bankée, `banked_vigor ≥
+establish_threshold`) est immunisée** — même garde que la persistance/shedding #94. Donc
+seul le **nuage d'intérieur jamais-établi** meurt (le pool retombe ~5×, ~16k internodes à
+12 ans, runs ramenés à l'échelle de la minute) tandis que les latérales bankées du cône
+**persistent en longueur**. La Q-dormance (`shadow.q_dormancy` 0.05 → **0.5**) **plafonne
+l'émission** (les bourgeons ombragés deviennent dormants → cessent d'émettre) en amont de
+la mortalité. L'**échelle de vigueur du pin** est ~6–7× celle du sapin (q90 de
+`banked_vigor` ~20–40 vs ~0.5), donc `establish_threshold` passe de 0.5 (sapin) à **25**.
+
+**Leviers (pin) et résultat calibré.** `persist_rate_fraction` **0.40** (largeur de base —
+0.50 dépassait la couronne à 4.8 m), `release_years` **6**, `establish_threshold` **25**,
+`geom.pipe_exponent` **4.0** (plafond ; le bois persisté épaissit le fût), `shadow.q_dormancy`
+**0.5**, `shade_mortality.light_threshold` **0.50**, bornes `half_ellipsoid` rx=4.4 ry=20
+rz=4.4 (non-cône), mesure `skyview`. **Résultat à 30 ans** (`exposure: shadow_propagation`,
+**moyenne graines {0,1,2}**) : `crown_monotonicity` **−0.91** (cône ; était l'ovoïde
+inversé), `tree_height` **16.4 m**, `crown_radius` **3.58 m**, `trunk_base_diameter`
+**0.257 m** — **tous en bande pin** (12–18 / 2.5–4.0 / 0.18–0.35), leader parfait
+(continuation 1.0, déviation 0°), variance inter-graines faible (mono −0.88…−0.93,
+hauteur 16.1…16.6 m).
+
+**Tests — coût maîtrisé.** Un run pin 30 ans reste lourd (~33 min mono-graine, même borné).
+Le test e2e (`tests/integration/test_emergent_cone.py::test_pine_emergent_cone_under_bounded_shadow_propagation`,
+slow) tourne donc à **20 ans** — horizon où le cône, le leader excurrent et le **fût en
+bande** sont déjà établis — et **garde le pool borné** (`< 120k` internodes ; le run
+non-borné en émet 280k+, c'est le garde-fou anti-régression de la mortalité). La bande
+hauteur/couronne pleine (atteinte à 30 ans) est documentée ici, pas rejouée en CI. Les
+presets conifères **restent sur `bhse`** (golden gelé).
+
 ### Contrat de calibration — mesure `pyramid` (#56)
 
 Si `shadow.measure: pyramid`, le dépôt `Δs = (aire · area_weight) · a · b^(−q)` est

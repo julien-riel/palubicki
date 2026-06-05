@@ -942,6 +942,20 @@ def test_load_config_reads_exposure_and_shadow(tmp_path):
     assert cfg.shadow.q_dormancy == 0.1
 
 
+def test_shadow_mortality_enabled_defaults_off_and_loads(tmp_path):
+    """shadow.mortality_enabled defaults OFF (#96 — keeps existing shadow-prop runs
+    byte-identical) and reads from YAML when opted in."""
+    from palubicki.config import ShadowConfig
+    assert ShadowConfig().mortality_enabled is False
+    yaml_path = tmp_path / "tree.yaml"
+    yaml_path.write_text(
+        "exposure: shadow_propagation\n"
+        "shadow: {mortality_enabled: true}\n"
+    )
+    cfg = load_config(yaml_path=yaml_path, cli_overrides={}, output=tmp_path / "out.glb")
+    assert cfg.shadow.mortality_enabled is True
+
+
 # --- Length banking / woody persistence (#94) ---
 
 def test_length_banking_defaults_off(tmp_path):
