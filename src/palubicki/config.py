@@ -68,6 +68,11 @@ class LengthBankingConfig:
     # lever, paired with persist_rate_fraction (the base width).
     release_years: float = field(
         default=12.0, metadata={"ui": {"min": 1.0, "max": 40.0, "step": 1.0}})
+    # Minimum age fraction a just-born lateral emits at (the age ramp's floor). >0
+    # gives the youngest (apex) laterals a small head start, blunting the spire's
+    # tip toward a fuller cone; too high re-blunts into an ovoid. Apex-shape lever.
+    young_length_floor: float = field(
+        default=0.05, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.05}})
 
 
 @dataclass(frozen=True)

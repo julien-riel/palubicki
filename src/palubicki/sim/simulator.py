@@ -344,7 +344,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
         forest.markers.kill_near(np.array(new_node_positions), cfg.sim.r_kill)
 
     for tree in forest.trees:
-        shed_low_quality(tree, cfg=cfg.shedding)
+        shed_low_quality(tree, cfg=cfg.shedding, length_banking=cfg.sim.length_banking)
 
     _apply_temporal_dynamics(forest, cfg, t)
 
@@ -485,7 +485,7 @@ def _grow_tree(
             # and an old, low lateral reaches full length. The cone emerges from
             # age ∝ depth. (Established laterals also persist through shade — the
             # dormancy override above — so they live long enough to age into length.)
-            age_frac = min(1.0, max(0.05, (t - bud.axis_birth_time) / lb.release_years))
+            age_frac = min(1.0, max(lb.young_length_floor, (t - bud.axis_birth_time) / lb.release_years))
             target = lb.persist_rate_fraction * cfg.sim.shoot_extension_max * activity * age_frac
         new_pos = bud.position + d * target
 
