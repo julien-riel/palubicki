@@ -199,23 +199,38 @@ qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
 > est prouvée par `tests/integration/test_emergent_cone.py`. Voir `realism-assessment.md`
 > §forme émergente.
 
+### Forme émergente — suite de #94 (sapin livré)
+
+6. **#96 — calibrer le cône émergent du pin** · même mécanisme `sim.length_banking`
+   (longueur latérale pilotée par l'âge) que le sapin, à **re-fitter** pour le pin
+   (plus grand : `persist_rate_fraction` / `release_years` / `geom.pipe_exponent`
+   propres). Mécanique connue — c'est de la **calibration**, surtout coûteuse (le pin
+   est l'espèce lente, 210–820 s/graine → balayage `multiprocessing.Pool`, pas
+   d'agents workflow).
+7. **#97 — forme de couronne émergente des feuillus (arrondie/décurrente, pas un
+   cône)** · **recherche**. `length_banking` produit un **cône** (faux pour un chêne /
+   érable) ; banking off donne l'**ovoïde inversé** (#56). Il n'existe ni mécanisme ni
+   cible émergente pour une couronne **arrondie/décurrente** — l'analogue feuillu de
+   #94. Territoire dominance apicale **#36/#51** (décurrent = faible dominance apicale).
+   Plus gros et ouvert que #96.
+
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
-6. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
+8. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent
    (un apex se **détermine** en fleur ; une inflorescence est un arbre de pousses
    déterminées). Lit le driver saisonnier **#65 (livré)** via une fenêtre de
    floraison propre passée au **même** `clock.phenology_activity` (aucune nouvelle
    math de rampe). Débloque forbs, fruits, et un 2ᵉ déclencheur sympodial propre.
-7. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
+9. **#12 — tallage + méristèmes intercalaires (graminées)** · nouveau mode de
    croissance (zone basale, tallage depuis le collet) ; architecturalement
    orthogonal, aucun code ligneux à toucher.
-8. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
+10. **#44 — vignes / lianas** · obstacle comme **attracteur** (aujourd'hui
    purement répulsif) + thigmotropisme + état cherche/accroché. Réutilise
    `sim/obstacles.py`. Seulement si scènes de paysage avec structures.
 
 ### Piste parallèle — apparence (orthogonale à la forme)
 
-9. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
+11. **#53 — qualité infographique (épopée rendu/export glTF)** · conception & plan
     reséquencés dans [`docs/export-pipeline-design.md`](export-pipeline-design.md)
     (master canonique non compressé + profils cibles ; **la forêt d'abord, pas le
     look**). Sous-tickets P0…P5 indépendants, un PR chacun.
