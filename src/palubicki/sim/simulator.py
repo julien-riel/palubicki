@@ -490,15 +490,35 @@ def _grow_tree(
             gap = y_apex - float(bud.position[1])
             target *= min(1.0, max(0.1, gap / apical_L))
         if lb.enabled and lb.persist_rate_fraction > 0.0 and bud.axis_order >= 1:
-            # Age-driven lateral length (#94 P2): the per-internode length ramps
-            # from ~0 (young, near the apex) to the full reference rate over
-            # release_years, REPLACING the lit vigor — so a young top lateral stays
-            # short even when lit (the lit-youth inversion suppressed at the source)
-            # and an old, low lateral reaches full length. The cone emerges from
-            # age ∝ depth. (Established laterals also persist through shade — the
-            # dormancy override above — so they live long enough to age into length.)
-            age_frac = min(1.0, max(lb.young_length_floor, (t - bud.axis_birth_time) / lb.release_years))
-            target = lb.persist_rate_fraction * cfg.sim.shoot_extension_max * activity * age_frac
+            # Age-driven lateral length (#94 P2): the per-internode length is set by
+            # the lateral's own axis AGE, REPLACING the lit vigor — so a young top
+            # lateral stays short even when lit (the lit-youth inversion suppressed
+            # at the source) and length comes from age ∝ depth, not height-monotone
+            # vigor. (Established laterals also persist through shade — the dormancy
+            # override above — so they live long enough to age into length.)
+            age = t - bud.axis_birth_time
+            if lb.profile == "rounded":
+                # Decurrent broadleaf crown (#97): MULTIPLY the light-driven length by
+                # a unimodal age hump, rather than REPLACE it as the cone does. Keeping
+                # the light term means self-shadowing still suppresses the lower-INTERIOR
+                # branches (so the bole clears and the base narrows — the rounding the
+                # cone's age-replacement erases); the hump then narrows the young apex
+                # (× young_length_floor) and declines on the oldest basal laterals
+                # (× old_length_floor over decline_years), leaving the crown widest in
+                # the MIDDLE (crown_widest_frac ≈ 0.5). persist_rate_fraction stays the
+                # establishment-engagement knob (pool-bounding via mortality), not a
+                # length scale, in this mode.
+                if age <= lb.release_years:
+                    age_frac = lb.young_length_floor + (1.0 - lb.young_length_floor) * (age / lb.release_years)
+                else:
+                    decline = min(1.0, (age - lb.release_years) / lb.decline_years)
+                    age_frac = 1.0 - (1.0 - lb.old_length_floor) * decline
+                target *= age_frac
+            else:
+                # acropetal_ramp (#94 cone): age-driven length REPLACES the lit vigor —
+                # a monotone ramp ~0 → full over release_years. age ∝ depth ⇒ a spire.
+                age_frac = min(1.0, max(lb.young_length_floor, age / lb.release_years))
+                target = lb.persist_rate_fraction * cfg.sim.shoot_extension_max * activity * age_frac
         new_pos = bud.position + d * target
 
         if forest.obstacles:

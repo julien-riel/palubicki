@@ -415,6 +415,83 @@ non-borné en émet 280k+, c'est le garde-fou anti-régression de la mortalité)
 hauteur/couronne pleine (atteinte à 30 ans) est documentée ici, pas rejouée en CI. Les
 presets conifères **restent sur `bhse`** (golden gelé).
 
+### #97 — la couronne feuillue arrondie/décurrente émergente
+
+**[#97](https://github.com/julien-riel/palubicki/issues/97) est le pendant feuillu de
+#94** : sous `exposure: shadow_propagation` + bornes neutres (non-cône), faire émerger la
+couronne **arrondie / étalée / décurrente** du chêne, de l'érable, du frêne et du bouleau —
+*pas* un cône (#94), *pas* l'ovoïde-inversé / plumeau du #56 brut.
+
+**Constat clé (deux découvertes qui réorientent la mécanique).**
+
+1. **La mesure `pyramid`, pas `skyview`, arrondit.** `skyview` garde les branches de
+   bas-de-couronne éclairées par le côté → elles poussent → **base large = cône**.
+   `pyramid` (auto-ombre vers le bas, pas de lumière latérale) **étouffe l'intérieur
+   bas** → le fût se dégage et la base se resserre. C'est l'inverse exact du levier
+   conifère.
+2. **Le banking doit MULTIPLIER, pas REMPLACER.** La longueur pilotée par l'âge du cône
+   (#94) *remplace* la vigueur éclairée → la portée d'une branche est cumulative en âge →
+   re-cône, *quelle que soit* la forme de la rampe (la base la plus vieille porte toujours
+   le plus loin ; un creux de bole ne peut PAS émerger d'un profil de longueur seul, il
+   faut la **mortalité**). Le profil `rounded` **multiplie** la longueur *éclairée* par un
+   **bosson d'âge unimodal** (rampe jusqu'à `release_years`, puis déclin vers
+   `old_length_floor` sur `decline_years`) : l'auto-ombrage `pyramid` continue d'étouffer
+   l'intérieur bas (la base s'arrondit), et le bosson rétrécit l'apex jeune (×
+   `young_length_floor`) → couronne **la plus large au MILIEU** (`crown_widest_frac` ≈
+   0.35–0.65, vs ~0.05 pour le cône, ~0.95 pour le plumeau inversé).
+
+**Nouveau diagnostic.** `crown_widest_frac` (fraction de hauteur de la bande la plus
+large : 0 = base, 1 = cime) sépare les trois formes là où `crown_monotonicity` ne distingue
+que le cône monotone : cône ~0.05, plumeau inversé ~0.95, couronne arrondie ~0.4–0.7.
+
+**Bornage du pool (le vrai goulet).** La forme arrondie *exige* la longueur éclairée (pour
+que l'auto-ombrage dégage la base), ce qui garde un **gros pool de bourgeons**. Borné par
+`shadow.mortality_enabled` + un `establish_threshold` calé sur le **q95 de `banked_vigor`**
+de chaque espèce. L'érable/frêne **décussés** portent ~25× les bourgeons du chêne (paires
+opposées + réserves : ~6300 vs ~250 latéraux à y8), donc seuil **40–45** (vs **2** pour le
+chêne, dont la couronne clairsemée borne tôt). Au-delà de ~y14 le pool **ré-explose en
+super-linéaire** (l'échafaudage établi ramifie récursivement) — limite de traçabilité
+documentée, pas franchie.
+
+**Leviers et résultats calibrés** (`exposure: shadow_propagation`, mesure `pyramid`,
+profil `rounded`, `young_length_floor=0.65` / `old_length_floor=0.40` / `release_years=6` /
+`decline_years=12`, `q_dormancy=0.45`, `shade_mortality.light_threshold=0.55`,
+`pipe_exponent=4.0`, bornes `half_ellipsoid` non-cône ; moyenne graines {0,1,2} à
+l'horizon borné de chaque espèce) :
+
+| espèce | horizon | `establish` | `crown_widest_frac` | `crown_monotonicity` | `apex_sharpness` | `crown_radius` | `trunk_base_diameter` | internodes / s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| chêne  | y16 | 2.0  | 0.38 | −0.66 | 0.17 | **3.92 m** (bande 3–5) | **0.206 m** (bande .15–.30) | 39k / 15s |
+| érable | y12 | 40   | 0.38 | −0.44 | 0.22 | 2.32 m (bande 2.5–4.5, juste sous) | **0.244 m** (bande .12–.25) | 90k / 23s |
+| frêne  | y12 | 45   | 0.38 | −0.59 | 0.15 | 2.38 m (frêne sans bande dim.) | 0.257 m | 115k / 31s |
+| bouleau| y18 | 0.8  | 0.55 | +0.38 | 0.44 | **3.53 m** (bande 2–4.8) | 0.107 m (bande .12–.22, juste sous) | 856 / 0.5s |
+
+Toutes **arrondies** (largeur au milieu/haut, apex rempli) : ni cône (largeur 0.05 / apex
+0.04 / mono −0.95), ni plumeau inversé. Le **bouleau** est l'exception monopodiale-pleureur :
+couronne **ovale resserrée à cime pleine** (largeur haute, `mono > 0`), pas un dôme étalé —
+recette douce (`pipe_exponent=2.3`, seuil bas car il fait peu de bois ; ~856 internodes,
+pionnier clairsemé). Le fût bouleau (0.107) et le rayon érable (2.32) sont **juste sous la
+bande** à l'horizon borné — les bandes littéraires sont des valeurs à **30 ans**, non
+atteignables ici (l'érable/frêne explosent au-delà de y14) : c'est la **limite de
+traçabilité** assumée du chemin arrondi lourd.
+
+**Pourquoi plus dur que le cône.** Le cône est une dégradé âge→profondeur *monotone* qu'une
+simple rampe produit ; la couronne décurrente n'est **pas monotone** et la portée des
+branches est cumulative-monotone en âge → la forme ne peut PAS venir de la seule longueur,
+elle vient de l'**auto-ombrage** (`pyramid`) + **mortalité** qui sculptent l'enveloppe, le
+bosson d'âge ne faisant qu'arrondir l'apex. Plus coûteux car la longueur reste éclairée
+(gros pool) là où le cône borne en émettant des longueurs minuscules tôt.
+
+**Tests — coût maîtrisé.** `tests/integration/test_emergent_broadleaf_crown.py` (slow)
+tourne à l'**horizon borné par espèce** (chêne y16, érable/frêne y12, bouleau y18), garde
+le pool (`< 80k`/`200k`/`250k`/`5k` internodes — garde-fou anti-régression du bornage),
+et assert la forme arrondie (`crown_widest_frac ≥ 0.30`, `apex_sharpness ≥ 0.10`,
+`crown_monotonicity > −0.85`) + un contraste explicite cône-`skyview` vs arrondi-`pyramid`.
+La forme arrondie est *émergente* au même sens que #94 (forme issue du temps d'intégration
++ auto-ombrage, sans `envelope.shape` prescrite). Les presets feuillus **restent sur
+`bhse`** (goldens gelés) ; la recette arrondie est une variante de calibration documentée
+ici, comme le cône conifère.
+
 ### Contrat de calibration — mesure `pyramid` (#56)
 
 Si `shadow.measure: pyramid`, le dépôt `Δs = (aire · area_weight) · a · b^(−q)` est

@@ -215,6 +215,23 @@ qui y réagit », appliqué à la calibration). Reste, au-delà de cette piste :
 > (cône+fût établis, pool borné < 120k) pour rester traçable. Voir
 > `realism-assessment.md` §forme émergente.
 
+> **#97 (couronne feuillue arrondie/décurrente émergente) — livré.** Pendant feuillu
+> de #94 : chêne/érable/frêne/bouleau sous `exposure: shadow_propagation` + bornes
+> neutres développent une couronne **arrondie** (la plus large au milieu), ni cône ni
+> plumeau-inversé. Deux découvertes : (1) la mesure **`pyramid`** (auto-ombre vers le
+> bas, pas de lumière latérale) étouffe l'intérieur bas → la base se dégage, là où
+> `skyview` fait un cône base-large ; (2) le nouveau profil `length_banking.profile =
+> rounded` **MULTIPLIE** la longueur *éclairée* par un **bosson d'âge** (au lieu de la
+> remplacer comme le cône) — la portée des branches étant cumulative en âge, un creux de
+> bole ne peut venir que de l'auto-ombrage + mortalité, pas de la longueur seule. Nouveau
+> diagnostic `crown_widest_frac` (fraction de hauteur de la bande la plus large : cône
+> ~0.05, inversé ~0.95, arrondi ~0.4–0.7). Pool borné par `establish_threshold` ≈ q95 de
+> `banked_vigor` (érable/frêne décussés portent ~25× les bourgeons du chêne → seuil 40–45
+> vs 2 ; ré-explose en super-linéaire au-delà de ~y14, limite de traçabilité documentée).
+> Défaut `profile=acropetal_ramp` ⇒ **byte-identique** (chemin cône inchangé). Presets
+> feuillus restent `bhse` ; prouvé par `tests/integration/test_emergent_broadleaf_crown.py`
+> (horizon borné par espèce + garde-fou internodes). Voir `realism-assessment.md` §#97.
+
 ### Nouveaux modes orthogonaux (gros, n'altèrent pas le pipeline ligneux)
 
 6. **#11 — croissance déterminée + fleurs + inflorescences** · bundle cohérent

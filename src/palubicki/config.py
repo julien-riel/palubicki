@@ -50,8 +50,31 @@ class LengthBankingConfig:
     Default OFF ⇒ byte-identical. ``persist_rate_fraction == 0`` collapses to the
     off path structurally (gated ``enabled and persist_rate_fraction > 0``), so
     'engaged-but-zero' is identical too.
+
+    ``profile`` selects the age→length SHAPE (#97):
+
+      * ``acropetal_ramp`` (default) — the #94 cone: length ramps monotonically
+        from ~0 (young apex) to full over ``release_years``. age ∝ depth ⇒ a
+        monotone base-wide taper ⇒ a spire.
+      * ``rounded`` — the broadleaf decurrent crown (#97): a unimodal age hump
+        MULTIPLIES the light-driven length (it does NOT replace it). Keeping the
+        light term is the point — self-shadowing still suppresses the lower-INTERIOR
+        branches so the bole clears and the base narrows (the rounding the cone's
+        age-replacement erases); the hump then narrows the young apex (×
+        ``young_length_floor``) and declines on the oldest basal laterals (×
+        ``old_length_floor`` over ``decline_years``), leaving the crown widest in
+        the MIDDLE (``crown_widest_frac`` ≈ 0.4–0.7). Pairs with the ``pyramid``
+        exposure measure (downward self-shadow, no side light) and shade mortality.
+        In this mode ``persist_rate_fraction`` is only the establishment-engagement
+        gate (pool-bounding), not a length scale; ``decline_years`` /
+        ``old_length_floor`` are inert under ``acropetal_ramp``.
     """
     enabled: bool = field(default=False, metadata={"ui": {"label": "Enabled"}})
+    # Age→length profile (#97). "acropetal_ramp" = the #94 monotone cone taper.
+    # "rounded" = a unimodal hump (peak at release_years, then decline) for the
+    # decurrent broadleaf crown. acropetal_ramp keeps the cone path byte-identical.
+    profile: Literal["acropetal_ramp", "rounded"] = field(
+        default="acropetal_ramp", metadata={"ui": {"label": "Length profile"}})
     # An axis is ESTABLISHED once its banked_vigor reaches this — i.e. it was once
     # lit enough to grow (pair with sim.vigor_dormancy). Below it, no persistence.
     establish_threshold: float = field(
@@ -73,6 +96,19 @@ class LengthBankingConfig:
     # tip toward a fuller cone; too high re-blunts into an ovoid. Apex-shape lever.
     young_length_floor: float = field(
         default=0.05, metadata={"ui": {"min": 0.0, "max": 0.5, "step": 0.05}})
+    # ROUNDED profile only (#97): once past the release_years peak, a lateral's
+    # length declines from full back toward old_length_floor over this many years.
+    # The lower-crown / bole-clearing lever — larger ⇒ a slower decline ⇒ a fuller,
+    # deeper crown; smaller ⇒ a tighter dome on a clearer bole. Inert under
+    # acropetal_ramp (the cone never declines).
+    decline_years: float = field(
+        default=12.0, metadata={"ui": {"min": 1.0, "max": 40.0, "step": 1.0}})
+    # ROUNDED profile only (#97): the floor an OLD (basal) lateral's length decays
+    # to after the peak, as a fraction of the full reference rate. 1.0 ⇒ no decline
+    # (flat-topped, not rounded); low ⇒ the oldest laterals shorten, clearing a bole
+    # and rounding the crown bottom. The crown-base width lever.
+    old_length_floor: float = field(
+        default=0.35, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05}})
 
 
 @dataclass(frozen=True)

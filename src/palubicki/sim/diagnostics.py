@@ -580,6 +580,13 @@ def _silhouette_profile(
         with height) → ρ ≈ −1; the inverted/ovoid crown (widest near the top) →
         ρ > 0. The cone gate the axis_order-grouped internode-length metric cannot
         provide (that one compares trunk-vs-twig, not base-vs-apex).
+      * ``crown_widest_frac`` — height fraction (0 = base, 1 = apex) of the WIDEST
+        band (#97). The single most discriminating "what crown shape is this"
+        scalar where ``crown_monotonicity`` only flags monotone cones: a cone is
+        widest at the base (~0), the inverted feather-duster widest at the top
+        (~1), a rounded/decurrent broadleaf crown widest in the MIDDLE (~0.4–0.7).
+        Pairs with a near-zero ``crown_monotonicity`` to certify "rounded, not a
+        spire and not inverted".
 
     Degenerate inputs (no nodes, zero height, or a bare vertical stick with no
     horizontal extent) return an all-zero profile and zero scalars, matching the
@@ -591,6 +598,7 @@ def _silhouette_profile(
         "clear_bole_fraction": 0.0,
         "taper_exponent": 0.0,
         "crown_monotonicity": 0.0,
+        "crown_widest_frac": 0.0,
     }
     if not nodes or n_bands < 1:
         return empty
@@ -648,12 +656,19 @@ def _silhouette_profile(
         rk_rad = np.argsort(np.argsort(rad_arr))
         crown_monotonicity = float(np.corrcoef(rk_idx, rk_rad)[0, 1])
 
+    # Widest-band height fraction (#97): band-centre height of the max-radius band,
+    # normalized to [0, 1]. argmax takes the LOWEST band on ties (np convention),
+    # the conservative read for "is the crown widest low" (cone) vs mid (rounded).
+    widest_band = int(np.argmax(radii))
+    crown_widest_frac = (widest_band + 0.5) / n_bands
+
     return {
         "crown_radius_profile": radii,
         "apex_sharpness": float(apex_sharpness),
         "clear_bole_fraction": float(clear_bole_fraction),
         "taper_exponent": taper_exponent,
         "crown_monotonicity": crown_monotonicity,
+        "crown_widest_frac": float(crown_widest_frac),
     }
 
 
@@ -742,6 +757,7 @@ def compute_metrics(
     out["clear_bole_fraction"] = sil["clear_bole_fraction"]
     out["taper_exponent"] = sil["taper_exponent"]
     out["crown_monotonicity"] = sil["crown_monotonicity"]
+    out["crown_widest_frac"] = sil["crown_widest_frac"]
     if cfg is not None:
         tla = _total_leaf_area(tree, cfg)
         out["total_leaf_area"] = tla
@@ -801,6 +817,7 @@ _SCALAR_KEYS = (
     "clear_bole_fraction",
     "taper_exponent",
     "crown_monotonicity",
+    "crown_widest_frac",
     "total_leaf_area",
     "foliage_area_density",
     "internode_length_proximal_mean",
@@ -1196,6 +1213,7 @@ def format_report(
     for k in ("tree_height", "trunk_base_diameter", "crown_radius",
               "main_axis_continuation_rate", "leader_deviation_deg",
               "apex_sharpness", "clear_bole_fraction", "taper_exponent", "crown_monotonicity",
+              "crown_widest_frac",
               "total_leaf_area", "foliage_area_density",
               "internode_length_proximal_mean", "internode_length_distal_mean"):
         val = metrics.get(k)

@@ -1060,6 +1060,37 @@ def test_silhouette_profile_spire_vs_column():
     assert abs(column["taper_exponent"]) < 1e-6
 
 
+def test_crown_widest_frac_discriminates_cone_inverted_rounded():
+    """crown_widest_frac (#97) is the height fraction of the widest band: a cone is
+    widest at the base (~0), an inverted feather-duster widest at the top (~1), a
+    rounded/decurrent crown widest in the middle (~0.5). The scalar that separates
+    the broadleaf dome from the two shadow-prop failure modes."""
+    from palubicki.sim.diagnostics import _silhouette_profile
+
+    def _profile_from_radii(radii):
+        # A vertical trunk with one lateral per band at the given radius.
+        root = Node(position=np.array([0.0, 0.0, 0.0]))
+        tree = Tree(root=root)
+        prev = root
+        n = len(radii)
+        for i, r in enumerate(radii, start=1):
+            y = 10.0 * i / n
+            node = Node(position=np.array([0.0, y, 0.0]))
+            tree.all_internodes.append(_link(prev, node, is_main_axis=True))
+            lat = Node(position=np.array([float(r), y, 0.0]))
+            tree.all_internodes.append(_link(node, lat, is_main_axis=False))
+            prev = node
+        return _silhouette_profile(_walk_nodes_for(tree))
+
+    cone = _profile_from_radii([3.0, 2.6, 2.2, 1.8, 1.4, 1.0, 0.7, 0.4, 0.2, 0.1])
+    inverted = _profile_from_radii([0.1, 0.2, 0.4, 0.7, 1.0, 1.4, 1.8, 2.2, 2.6, 3.0])
+    rounded = _profile_from_radii([0.3, 0.8, 1.6, 2.4, 3.0, 3.0, 2.4, 1.6, 0.8, 0.3])
+
+    assert cone["crown_widest_frac"] < 0.2          # widest at the base
+    assert inverted["crown_widest_frac"] > 0.8       # widest at the top
+    assert 0.35 <= rounded["crown_widest_frac"] <= 0.65   # widest in the middle
+
+
 def test_silhouette_clear_bole_measures_petit_tronc():
     """A crown-to-ground cone has ~no clear bole; lifting the foliage raises
     clear_bole_fraction — the petit-tronc symptom #56 fixes, made measurable."""
