@@ -85,7 +85,7 @@ def test_exposure_self_cancel_clamp_and_monotone():
     cfg = ShadowConfig(a=1.0, full_light_C=1.0)
     cell = (5, 5, 5)
     pos = g.cell_to_world_center(*cell)
-    args = dict(cfg=cfg, r_perception=0.0)
+    args = {"cfg": cfg, "r_perception": 0.0}
     up = np.array([[0.0, 1.0, 0.0]])
 
     g.shadow[cell] = 1.0                          # self-stamp exactly a → Q == C

@@ -551,7 +551,7 @@ class LightGrid:
         a, b, q_max, aw = float(cfg.a), float(cfg.b), int(cfg.q_max), float(cfg.area_weight)
         layer_factor = [a * (b ** (-q)) for q in range(q_max + 1)]
         weights = np.asarray(areas, dtype=np.float64) * aw
-        for p, w in zip(positions, weights):
+        for p, w in zip(positions, weights, strict=True):
             if w <= 0.0:
                 continue
             home = self.world_to_cell(p)

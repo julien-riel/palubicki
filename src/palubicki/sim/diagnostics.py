@@ -1129,7 +1129,7 @@ def silhouette_drift(metrics_a: dict, metrics_b: dict) -> float:
     na, nb = max(pa), max(pb)
     if na <= 1e-9 or nb <= 1e-9:
         return float("nan")
-    return float(sum(abs(a / na - b / nb) for a, b in zip(pa, pb)) / len(pa))
+    return float(sum(abs(a / na - b / nb) for a, b in zip(pa, pb, strict=True)) / len(pa))
 
 
 def _fmt_scalar(v) -> str:
