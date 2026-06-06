@@ -1,0 +1,145 @@
+# Fraxinus americana — EMERGENT FORM preset (#97). ROUNDED decurrent crown. Decussate
+# like maple → high establish_threshold + y12 horizon (pool re-explodes past ~y14, #101).
+#
+# Standalone preset (load with `--species ash_emergent`). Derived from ash.yaml with the
+# calibrated shadow-propagation recipe baked in; the base ash.yaml stays on `bhse`
+# (frozen goldens). Calibrated at the largest tractable horizon for this species
+# (see max_simulation_years); literature size bands are cited at ~30yr.
+envelope:
+  shape: half_ellipsoid
+  rx: 4.5
+  ry: 14.0
+  rz: 4.5
+  marker_count: 22000
+sim:
+  shoot_extension_max: 0.32
+  vigor_ref: 3.0
+  vigor_dormancy: 0.5
+  vigor_smoothing: 0.5
+  vigor_diameter_gain: 0.16
+  lambda_apical: 0.78
+  alpha_basipetal: 2.1
+  max_simulation_years: 12
+  elongation:
+    enabled: true
+    tau_years: 3.0
+  theta_perception_deg: 40.0
+  sympodial:
+    enabled: true
+    q_threshold: 1.6
+    n_consecutive_steps: 5
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.55
+    n_consecutive_steps: 3
+  shade_avoidance:
+    enabled: true
+    strength: 0.4
+  leaf_phenology:
+    enabled: true
+    deciduous: true
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.15
+  length_banking:
+    enabled: true
+    profile: rounded
+    persist_rate_fraction: 0.5
+    young_length_floor: 0.65
+    old_length_floor: 0.4
+    release_years: 6.0
+    decline_years: 12.0
+    establish_threshold: 45.0
+tropism:
+  w_perception: 1.0
+  w_orthotropy_main: 0.34
+  w_orthotropy_lateral: 0.05
+  w_plagiotropism_lateral: 0.3
+  w_phototropism: 0.32
+  w_direction_inertia: 0.5
+  axis_decay: 0.85
+phyllotaxy:
+  mode: decussate
+  divergence_angle_deg: 0.0
+  whorl_count: 2
+  branch_angle_by_order:
+  - 52.0
+  - 38.0
+  - 28.0
+  - 22.0
+  divergence_jitter_deg: 4.0
+  branch_angle_jitter_deg: 4.0
+  dormant_reserve_count: 2
+shedding:
+  quality_threshold: 0.13
+  window: 5
+  enabled: true
+  reactivation_count: 1
+sag:
+  enabled: true
+  k: 0.006
+  max_bend_deg: 4.0
+  rigid_axis_order: 1
+light:
+  enabled: true
+  k_absorption: 0.55
+geom:
+  ring_sides: 10
+  pipe_exponent: 4.0
+  r_tip: 0.007
+  bark_color:
+  - 0.4
+  - 0.36
+  - 0.3
+  bark_texture: proc:oak_bark
+  leaf_kind: pinnate
+  leaflet_count: 5
+  terminal_leaflet: true
+  rachis_length_ratio: 1.8
+  rachis_radius_ratio: 0.03
+  petiole_length_ratio: 0.5
+  leaflet_shape: lanceolate
+  leaflet_margin: serrate
+  leaflet_aspect: 0.55
+  leaf_shape: lanceolate
+  leaf_margin: serrate
+  leaf_margin_depth: 0.12
+  leaf_margin_count: 9
+  leaf_size: 0.11
+  leaf_aspect: 0.55
+  leaf_splay_deg: 18.0
+  leaf_autumn_color:
+  - 0.82
+  - 0.7
+  - 0.28
+  leaf_blade_fold_deg: 13.0
+  leaf_blade_curl: 0.1
+  leaf_blade_cup: 0.08
+  leaf_skyface: 0.45
+  foliage_depth: 2
+  leaf_sun_shade_k: 0.6
+  root_flare_height: 0.3
+  root_flare_factor: 1.6
+  root_flare_falloff: linear
+  root_buttress_count: 3
+  root_buttress_amplitude: 0.1
+  bark_tint_young:
+  - 0.55
+  - 0.54
+  - 0.48
+  bark_tint_mature:
+  - 0.4
+  - 0.36
+  - 0.3
+  bark_tint_senescent:
+  - 0.28
+  - 0.26
+  - 0.24
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07
+exposure: shadow_propagation
+shadow:
+  enabled: true
+  measure: pyramid
+  q_dormancy: 0.45
+  mortality_enabled: true

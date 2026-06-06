@@ -1239,20 +1239,10 @@ def load_config(
     cli_overrides: dict,
     output: Path,
     species: str | None = None,
-    variant: str | None = None,
 ) -> Config:
     data: dict = {}
     if species is not None:
         data = _load_packaged_species(species)
-
-    if variant is not None:
-        # A packaged opt-in overlay (e.g. `emergent`) merged ON TOP of the species
-        # preset (#97): the shipped preset stays untouched, the variant flips the
-        # deltas (exposure / shadow / length_banking / ...). Requires a species —
-        # a variant is meaningless without a base to overlay.
-        if species is None:
-            raise ConfigError(f"--variant {variant!r} requires --species")
-        _deep_merge(data, _load_packaged_variant(species, variant))
 
     if yaml_path is not None:
         with open(yaml_path) as f:
@@ -1306,41 +1296,6 @@ def _load_packaged_species(name: str) -> dict:
     except (FileNotFoundError, ModuleNotFoundError, AttributeError) as e:
         raise ConfigError(f"unknown species preset: {name!r}") from e
     return yaml.safe_load(text) or {}
-
-
-def _load_packaged_variant(species: str, variant: str) -> dict:
-    """Load a packaged config overlay ``configs/variants/{species}_{variant}.yaml``
-    (#97). Raises if the species has no such variant (e.g. a species the emergent
-    recipe was never calibrated for)."""
-    from importlib import resources
-    try:
-        text = (
-            resources.files("palubicki.configs.variants")
-            .joinpath(f"{species}_{variant}.yaml")
-            .read_text()
-        )
-    except (FileNotFoundError, ModuleNotFoundError, AttributeError) as e:
-        raise ConfigError(
-            f"no {variant!r} variant for species {species!r} "
-            f"(expected configs/variants/{species}_{variant}.yaml)"
-        ) from e
-    return yaml.safe_load(text) or {}
-
-
-def _list_variants() -> list[str]:
-    """Variant names available across the packaged overlays (the suffix after
-    ``{species}_``), for the CLI ``--variant`` choices."""
-    from importlib import resources
-    try:
-        files = resources.files("palubicki.configs.variants").iterdir()
-    except (FileNotFoundError, ModuleNotFoundError):
-        return []
-    variants = set()
-    for f in files:
-        n = f.name
-        if n.endswith(".yaml") and "_" in n:
-            variants.add(n[:-5].split("_", 1)[1])
-    return sorted(variants)
 
 
 def _list_species() -> list[str]:

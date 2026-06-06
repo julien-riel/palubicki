@@ -1,0 +1,153 @@
+# Acer saccharum — EMERGENT FORM preset (#97). ROUNDED decurrent crown. Decussate
+# (~25x oak's bud count) → high establish_threshold; the pool re-explodes past ~y14
+# (#101), so this preset runs at max_simulation_years=12 (a young sapling).
+#
+# Standalone preset (load with `--species maple_emergent`). Derived from maple.yaml with the
+# calibrated shadow-propagation recipe baked in; the base maple.yaml stays on `bhse`
+# (frozen goldens). Calibrated at the largest tractable horizon for this species
+# (see max_simulation_years); literature size bands are cited at ~30yr.
+envelope:
+  shape: half_ellipsoid
+  rx: 5.0
+  ry: 13.0
+  rz: 5.0
+  marker_count: 22000
+sim:
+  shoot_extension_max: 0.3
+  vigor_ref: 2.6
+  vigor_dormancy: 0.5
+  vigor_smoothing: 0.5
+  vigor_diameter_gain: 0.18
+  internode_length_jitter: 0.1
+  lambda_apical: 0.8
+  alpha_basipetal: 2.1
+  max_simulation_years: 12
+  elongation:
+    enabled: true
+    tau_years: 3.0
+  theta_perception_deg: 35.0
+  sympodial:
+    enabled: true
+    q_threshold: 1.6
+    n_consecutive_steps: 5
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.55
+    n_consecutive_steps: 4
+  shade_avoidance:
+    enabled: true
+    strength: 0.55
+  leaf_phenology:
+    enabled: true
+    deciduous: true
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.15
+  length_banking:
+    enabled: true
+    profile: rounded
+    persist_rate_fraction: 0.5
+    young_length_floor: 0.65
+    old_length_floor: 0.4
+    release_years: 6.0
+    decline_years: 12.0
+    establish_threshold: 40.0
+tropism:
+  w_perception: 1.0
+  w_orthotropy_main: 0.32
+  w_orthotropy_lateral: 0.04
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.0
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 0.28
+  w_phototropism: 0.3
+  w_direction_inertia: 0.5
+  axis_decay: 0.85
+phyllotaxy:
+  mode: decussate
+  divergence_angle_deg: 0.0
+  whorl_count: 2
+  branch_angle_by_order:
+  - 55.0
+  - 38.0
+  - 28.0
+  - 22.0
+  divergence_jitter_deg: 4.0
+  branch_angle_jitter_deg: 4.0
+  dormant_reserve_count: 2
+shedding:
+  quality_threshold: 0.12
+  window: 5
+  enabled: true
+  reactivation_count: 1
+sag:
+  enabled: true
+  k: 0.006
+  max_bend_deg: 4.0
+  rigid_axis_order: 1
+light:
+  enabled: true
+  k_absorption: 0.55
+geom:
+  ring_sides: 10
+  pipe_exponent: 4.0
+  r_tip: 0.007
+  bark_color:
+  - 0.4
+  - 0.28
+  - 0.18
+  bark_texture: proc:oak_bark
+  leaf_roughness: 0.82
+  leaf_specular: 0.2
+  leaf_normal_strength: 0.45
+  leaf_size: 0.12
+  leaf_aspect: 1.0
+  leaf_shape: palmate
+  leaf_margin: entire
+  leaf_margin_depth: 0.0
+  leaf_margin_count: 0
+  leaf_cluster_count: 2
+  leaf_splay_deg: 30.0
+  foliage_depth: 4
+  leaf_autumn_color:
+  - 0.85
+  - 0.25
+  - 0.1
+  leaf_blade_fold_deg: 16.0
+  leaf_blade_curl: 0.16
+  leaf_blade_cup: 0.12
+  leaf_skyface: 0.7
+  leaf_sun_shade_k: 0.6
+  petiole_length_ratio: 0.4
+  petiole_radius_ratio: 0.03
+  petiole_taper: 0.6
+  petiole_droop_deg: 10.0
+  petiole_color:
+  - 0.33
+  - 0.43
+  - 0.19
+  root_flare_height: 0.3
+  root_flare_factor: 1.6
+  root_flare_falloff: linear
+  root_buttress_count: 3
+  root_buttress_amplitude: 0.1
+  bark_tint_young:
+  - 0.55
+  - 0.52
+  - 0.46
+  bark_tint_mature:
+  - 0.4
+  - 0.28
+  - 0.18
+  bark_tint_senescent:
+  - 0.26
+  - 0.24
+  - 0.22
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07
+exposure: shadow_propagation
+shadow:
+  enabled: true
+  measure: pyramid
+  q_dormancy: 0.45
+  mortality_enabled: true

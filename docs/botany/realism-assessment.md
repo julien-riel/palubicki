@@ -492,17 +492,18 @@ La forme arrondie est *émergente* au même sens que #94 (forme issue du temps d
 `bhse`** (goldens gelés) ; la recette arrondie est une variante de calibration documentée
 ici, comme le cône conifère.
 
-**Variantes opt-in `emergent`.** Les recettes des 6 espèces (cône skyview pour sapin/pin,
-arrondi pyramid pour chêne/érable/frêne/bouleau) sont expédiées comme overlays packagés
-`src/palubicki/configs/variants/{espèce}_emergent.yaml`, sélectionnés par
-`generate --species X --variant emergent` (précédence CLI > YAML > variant > preset). Les
-presets `species/` **restent intouchés sur `bhse`** — zéro casse goldens / #87 / tests.
-Calibrées à `max_simulation_years: 10` (jeune sujet, rapide & borné) : à cet horizon toutes
-les formes sont établies et tractables (érable/frêne explosent au-delà de ~y14, cf. #101),
-mais les arbres sont des saplings — les **bandes littéraires y30 ne s'appliquent pas** à la
-variante. Mesures à y10 (graine 0) : sapin/pin `crown_monotonicity` −0.86/−0.98 (cône) ;
-chêne/érable/frêne/bouleau `crown_widest_frac` 0.45–0.55, `mono` −0.10…−0.60 (arrondi ;
-bouleau +0.57, ovale-haut pleureur). Pool borné partout (≤ ~24k internodes, < 8 s).
+**Presets autonomes `*_emergent`.** Les recettes des 6 espèces (cône skyview pour
+sapin/pin, arrondi pyramid pour chêne/érable/frêne/bouleau) sont expédiées comme **presets
+d'espèce autonomes** `src/palubicki/configs/species/{espèce}_emergent.yaml` (recette
+fusionnée dans une copie complète du preset de base), chargés par `--species X_emergent`.
+Les presets de base **restent intouchés sur `bhse`** — fichiers séparés, zéro casse goldens
+/ #87 / tests. Chaque preset est calé à **l'horizon le plus grand qui reste traçable** pour
+son espèce : sapin/pin **y30** (pleine taille, en bande), chêne/bouleau **y18**,
+érable/frêne **y12** (jeunes sujets — le pool ré-explose au-delà de ~y14, cf. #101 ; les
+bandes littéraires y30 ne s'appliquent qu'aux conifères ici). Mesures (graine 0) : sapin
+`crown_monotonicity` −0.86 / pin −0.98 (cône, pleine taille) ; chêne/érable/frêne/bouleau
+`crown_widest_frac` 0.45–0.55, `mono` −0.10…−0.60 (arrondi ; bouleau +0.57, ovale-haut
+pleureur).
 
 ### Contrat de calibration — mesure `pyramid` (#56)
 
