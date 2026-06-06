@@ -492,6 +492,18 @@ La forme arrondie est *émergente* au même sens que #94 (forme issue du temps d
 `bhse`** (goldens gelés) ; la recette arrondie est une variante de calibration documentée
 ici, comme le cône conifère.
 
+**Variantes opt-in `emergent`.** Les recettes des 6 espèces (cône skyview pour sapin/pin,
+arrondi pyramid pour chêne/érable/frêne/bouleau) sont expédiées comme overlays packagés
+`src/palubicki/configs/variants/{espèce}_emergent.yaml`, sélectionnés par
+`generate --species X --variant emergent` (précédence CLI > YAML > variant > preset). Les
+presets `species/` **restent intouchés sur `bhse`** — zéro casse goldens / #87 / tests.
+Calibrées à `max_simulation_years: 10` (jeune sujet, rapide & borné) : à cet horizon toutes
+les formes sont établies et tractables (érable/frêne explosent au-delà de ~y14, cf. #101),
+mais les arbres sont des saplings — les **bandes littéraires y30 ne s'appliquent pas** à la
+variante. Mesures à y10 (graine 0) : sapin/pin `crown_monotonicity` −0.86/−0.98 (cône) ;
+chêne/érable/frêne/bouleau `crown_widest_frac` 0.45–0.55, `mono` −0.10…−0.60 (arrondi ;
+bouleau +0.57, ovale-haut pleureur). Pool borné partout (≤ ~24k internodes, < 8 s).
+
 ### Contrat de calibration — mesure `pyramid` (#56)
 
 Si `shadow.measure: pyramid`, le dépôt `Δs = (aire · area_weight) · a · b^(−q)` est

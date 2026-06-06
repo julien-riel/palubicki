@@ -1,0 +1,36 @@
+# maple — EMERGENT FORM variant (#97). Overlay on the maple preset: a rounded /
+# decurrent crown emerges from self-shadowing under `exposure: shadow_propagation`.
+#
+# Opt-in: `generate --species maple --variant emergent`. Shipped maple.yaml stays
+# `bhse`. Calibrated at max_simulation_years=10 (young sapling, fast & bounded).
+#
+# maple is DECUSSATE (opposite pairs) → ~25× oak's bud count, so the pool needs a
+# far higher establish_threshold (~q95 of its banked vigor) to cull the interior
+# cloud. Past ~y14 the pool re-explodes super-linearly (see #101), so y10 is the
+# tractable horizon. Form: ROUNDED (widest mid-crown).
+exposure: shadow_propagation
+envelope:
+  shape: half_ellipsoid   # neutral bounds — the rounded crown EMERGES
+  rx: 5.0
+  ry: 13.0
+  rz: 5.0
+shadow:
+  enabled: true
+  measure: pyramid
+  q_dormancy: 0.45
+  mortality_enabled: true
+sim:
+  max_simulation_years: 10
+  shade_mortality:
+    light_threshold: 0.55
+  length_banking:
+    enabled: true
+    profile: rounded
+    persist_rate_fraction: 0.50
+    establish_threshold: 40.0     # ~q95 of maple's banked vigor (decussate, prolific)
+    young_length_floor: 0.65
+    old_length_floor: 0.40
+    release_years: 6.0
+    decline_years: 12.0
+geom:
+  pipe_exponent: 4.0

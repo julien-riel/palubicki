@@ -61,6 +61,26 @@ palubicki generate --species oak --w-gravity 0.5 -o oak_droopy.glb   # override
 palubicki dump-defaults --species pine > my_pine.yaml                # point de départ
 ```
 
+#### Variante `--variant emergent` — la forme émerge de la lumière
+
+Par défaut un preset prescrit sa forme via `envelope.shape` (backend `bhse`). La
+variante **`emergent`** (`src/palubicki/configs/variants/`) superpose une recette
+`exposure: shadow_propagation` calibrée par espèce : la **forme émerge de la
+compétition lumineuse** (auto-ombrage) au lieu d'être imposée — un **cône** pour les
+conifères (sapin/pin, #94/#96), une couronne **arrondie/décurrente** pour les feuillus
+(chêne/érable/frêne/bouleau, #97). Précédence : CLI > YAML > **variant** > preset.
+
+```bash
+palubicki generate --species oak  --variant emergent -o oak_emergent.glb    # couronne arrondie
+palubicki generate --species fir  --variant emergent -o fir_emergent.glb    # cône
+palubicki diagnose --species maple --variant emergent --seed 0,1,2
+```
+
+Calibrée à `max_simulation_years: 10` (jeune sujet) — horizon où la forme est établie
+et le run rapide/borné ; les bandes littéraires y30 ne s'appliquent pas. Les presets
+expédiés restent sur `bhse` (goldens gelés) ; la variante est strictement opt-in. Voir
+[`docs/botany/realism-assessment.md`](docs/botany/realism-assessment.md) §#97.
+
 ### Lumière (BHls)
 
 `--light-enabled` couple la qualité des bourgeons à la lumière reçue

@@ -19,6 +19,7 @@ from palubicki.config import (
     SimConfig,
     TropismConfig,
     _list_species,
+    _list_variants,
     _load_packaged_species,
     load_config,
 )
@@ -85,6 +86,12 @@ def _build_parser() -> argparse.ArgumentParser:
                    choices=species_choices if species_choices else None,
                    default=None,
                    help=f"Load a packaged species preset (choices: {', '.join(species_choices) if species_choices else 'none'})")
+    variant_choices = _list_variants()
+    g.add_argument("--variant",
+                   choices=variant_choices if variant_choices else None,
+                   default=None,
+                   help=f"Overlay a packaged variant on --species (choices: {', '.join(variant_choices) if variant_choices else 'none'}). "
+                        "'emergent' grows the species' form from light competition under shadow_propagation.")
 
     dd = sub.add_parser("dump-defaults", help="Print full default config as YAML")
     dd.add_argument("--species", default=None,
@@ -122,6 +129,10 @@ def _build_parser() -> argparse.ArgumentParser:
     ed.add_argument("--species",
                     choices=species_choices if species_choices else None,
                     default=None)
+    ed.add_argument("--variant",
+                    choices=variant_choices if variant_choices else None,
+                    default=None,
+                    help="Overlay a packaged variant on --species (e.g. 'emergent').")
     ed.add_argument("--seed", type=int, default=None,
                     help="Initial seed (overrides --config / --species).")
     ed.add_argument("--port", type=int, default=8765)
@@ -132,6 +143,10 @@ def _build_parser() -> argparse.ArgumentParser:
     dg.add_argument("--species",
                     choices=species_choices if species_choices else None,
                     default=None)
+    dg.add_argument("--variant",
+                    choices=variant_choices if variant_choices else None,
+                    default=None,
+                    help="Overlay a packaged variant on --species (e.g. 'emergent').")
     dg.add_argument("--seed", type=_parse_seed_list, default=[0],
                     help="Seed N or comma-separated list N,M,...")
     dg.add_argument("--json", action="store_true",
@@ -228,6 +243,7 @@ def _cmd_generate(args) -> int:
             cli_overrides=overrides,
             output=args.output,
             species=args.species,
+            variant=args.variant,
         )
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
@@ -402,6 +418,7 @@ def _cmd_edit(args) -> int:
             cli_overrides=overrides,
             output=Path("tree.glb"),
             species=args.species,
+            variant=args.variant,
         )
     except ConfigError as e:
         print(f"config error: {e}", file=sys.stderr)
@@ -469,6 +486,7 @@ def _cmd_diagnose(args) -> int:
                 cli_overrides={"seed": s},
                 output=Path("tree.glb"),
                 species=args.species,
+                variant=args.variant,
             )
         except ConfigError as e:
             print(f"config error: {e}", file=sys.stderr)
