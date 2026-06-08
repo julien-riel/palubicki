@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from palubicki.config import EnvelopeConfig, GeomConfig, LightConfig, ShadowConfig
+from palubicki.sim._vec3 import cross3, norm3
 from palubicki.sim.radii import compute_radii
 from palubicki.sim.tree import Tree
 
@@ -61,6 +62,65 @@ def _resolution_for(light_cfg: LightConfig, size: np.ndarray) -> tuple[int, int,
     return tuple(
         int(np.clip(np.ceil(size[axis] / light_cfg.voxel_edge_m), 8, 192)) for axis in range(3)
     )
+
+
+def _last_in_grid_step(
+    positions: np.ndarray,      # (N,3) half-step-offset ray starts (step s=0)
+    step_vec: np.ndarray,       # (N,3) per-step displacement (dir*step_len)
+    origin: np.ndarray,         # (3,) grid origin (lo corner)
+    cell_size: np.ndarray,      # (3,)
+    nx: int, ny: int, nz: int,
+    max_steps: int,
+) -> np.ndarray:
+    """Conservative LAST in-grid step index per ray (O2 early-exit bound).
+
+    pos_s = positions + s*step_vec is in-grid iff per axis ``origin_a <= pos_s[a] <
+    origin_a + n_a*cell_size_a`` (the exclusive upper bound matches the
+    ``floor((pos-origin)/cell_size) in [0, n)`` cell test). For a convex AABB the
+    in-grid steps form one contiguous interval. We return an UPPER bound on the last
+    in-grid step (rounding the interval OUTWARD so the bound is never too small —
+    a too-large bound only costs a few extra steps whose per-step in_grid mask is
+    False, i.e. identical result) clamped to ``[-1, max_steps-1]``; ``-1`` marks a
+    ray whose in-grid s-interval is empty (it never accumulates → skipped)."""
+    N = positions.shape[0]
+    if N == 0:
+        return np.zeros(0, dtype=np.intp)
+    hi = origin + np.array([nx, ny, nz], dtype=np.float64) * cell_size
+    lo = origin
+    # Per-axis in-grid s-interval [s_lo_a, s_hi_a]; intersect across axes.
+    s_lo = np.full(N, 0.0)             # steps are >= 0
+    s_hi = np.full(N, float(max_steps))
+    empty = np.zeros(N, dtype=bool)
+    for a in range(3):
+        v = step_vec[:, a]
+        p0 = positions[:, a]
+        nzv = np.abs(v) > 0.0
+        # Zero-velocity axis: in-grid for all s iff lo<=p0<hi, else empty.
+        zero = ~nzv
+        empty |= zero & ~((p0 >= lo[a]) & (p0 < hi[a]))
+        # Non-zero axis: crossings at (lo-p0)/v and (hi-p0)/v; the in-grid range is
+        # between them. Use safe divide (1.0 where v==0; those lanes ignored below).
+        vsafe = np.where(nzv, v, 1.0)
+        t_lo = (lo[a] - p0) / vsafe
+        t_hi = (hi[a] - p0) / vsafe
+        a_lo = np.minimum(t_lo, t_hi)
+        a_hi = np.maximum(t_lo, t_hi)
+        s_lo = np.where(nzv, np.maximum(s_lo, a_lo), s_lo)
+        s_hi = np.where(nzv, np.minimum(s_hi, a_hi), s_hi)
+    # Empty if intersected interval is empty (round outward: floor lo, ceil hi).
+    # Require a 1-step clearance (lo_i > hi_i + 1) before declaring a ray empty so
+    # a glancing FP-drift entry near the boundary is never wrongly skipped.
+    lo_i = np.floor(s_lo)
+    hi_i = np.ceil(s_hi)
+    empty |= lo_i > hi_i + 1.0
+    # Conservative last step: ceil(s_hi) + 2-step margin (outward), clamped. The
+    # margin absorbs FP drift between the analytical pos = start + s*step and the
+    # ITERATIVE march (start + step + step + ...); the per-step in_grid mask still
+    # gates accumulation, so an over-estimate is harmless (extra masked-out steps).
+    s_last = np.minimum(hi_i + 2.0, float(max_steps - 1))
+    s_last = np.where(s_last < 0.0, -1.0, s_last)
+    s_last = np.where(empty, -1.0, s_last)
+    return s_last.astype(np.intp)
 
 
 def _fib_hemisphere(n: int) -> np.ndarray:
@@ -240,14 +300,14 @@ class LightGrid:
         # Per-bud frame and direction sampling — done independently per bud to
         # preserve the canonical-axis choice and the rng-stream-per-bud invariants.
         w = np.asarray(light_direction, dtype=np.float64)
-        w_norm = float(np.linalg.norm(w))
+        w_norm = norm3(w)
         if w_norm < 1e-12:
             return np.ones(B, dtype=np.float64), np.zeros((B, 3), dtype=np.float64)
         w = w / w_norm
         canonical = np.array([1.0, 0.0, 0.0]) if abs(w[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
         u = canonical - np.dot(canonical, w) * w
-        u = u / np.linalg.norm(u)
-        v = np.cross(w, u)
+        u = u / norm3(u)
+        v = cross3(w, u)
 
         all_dirs = np.empty((B, n_rays, 3), dtype=np.float64)
         for bi, s in enumerate(seeds):
@@ -365,21 +425,50 @@ class LightGrid:
         # fails to leave the origin voxel ~43% of the time). Per-ray here since each
         # ray has its own origin. Bit-consistent with the other two march paths.
         origin_cells = np.floor((origins[active] - origin) / cell_size).astype(np.intp)
-        for _ in range(max_steps):
-            local = positions - origin
-            cells = np.floor(local / cell_size).astype(np.intp)
+
+        # Early-exit / compaction (O2): for a convex grid AABB the in-grid steps of
+        # each ray form one contiguous interval; once a ray leaves it never re-enters.
+        # We analytically bound the LAST in-grid step s_exit per ray, sort rays by
+        # s_exit DESCENDING, and at each step process only the still-active prefix.
+        # The per-step in_grid & not_self masks are kept inside that prefix, so leading
+        # not-yet-entered steps and the self-cell are skipped EXACTLY as before — each
+        # ray accumulates the same per-step contributions in the same order. We just
+        # stop iterating a ray after its last in-grid step (where it would add 0).
+        s_last = _last_in_grid_step(
+            positions, step_vec, origin, cell_size, nx, ny, nz, max_steps,
+        )
+        order = np.argsort(s_last, kind="stable")[::-1]      # s_last DESCENDING
+        positions = positions[order]
+        step_vec = step_vec[order]
+        origin_cells = origin_cells[order]
+        s_last_sorted = s_last[order]
+        od_sorted = np.zeros(n_active, dtype=np.float64)
+
+        s_max = int(s_last_sorted[0]) if n_active else -1
+        s_max = min(s_max, max_steps - 1)
+        for s in range(s_max + 1):
+            # Active prefix: rays with s_last >= s. Sorted descending ⇒ a shrinking
+            # prefix; searchsorted on the reversed-monotone array gives its length.
+            n_prefix = int(np.searchsorted(-s_last_sorted, -s, side="right"))
+            if n_prefix == 0:
+                break
+            pos = positions[:n_prefix]
+            cells = np.floor((pos - origin) / cell_size).astype(np.intp)
             in_grid = (
                 (cells[:, 0] >= 0) & (cells[:, 0] < nx) &
                 (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
                 (cells[:, 2] >= 0) & (cells[:, 2] < nz)
             )
-            not_self = np.any(cells != origin_cells, axis=1)
+            not_self = np.any(cells != origin_cells[:n_prefix], axis=1)
             accumulate = in_grid & not_self
             if accumulate.any():
-                vc = cells[accumulate]
+                idx = np.nonzero(accumulate)[0]
+                vc = cells[idx]
                 lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
-                optical_depth[accumulate] += (k * lai_vals) * step_len
-            positions += step_vec
+                od_sorted[idx] += (k * lai_vals) * step_len
+            positions[:n_prefix] += step_vec[:n_prefix]
+
+        optical_depth[order] = od_sorted
 
         out[active] = np.exp(-optical_depth)
         return out
@@ -418,9 +507,28 @@ class LightGrid:
         # fails to leave the origin voxel ~43% of the time). All rays share origin p
         # here. Bit-consistent with the other two march paths.
         origin_cell = np.floor((p.astype(np.float64) - origin) / cell_size).astype(np.intp)
-        for _ in range(max_steps):
-            local = positions - origin
-            cells = np.floor(local / cell_size).astype(np.intp)
+
+        # Early-exit / compaction (O2): see _sample_transmission_batch_origins. Sort
+        # rays by last-in-grid step DESCENDING and process only the active prefix per
+        # step; the per-step in_grid & not_self masks are unchanged inside the prefix,
+        # so each ray accumulates the same per-step contributions in the same order.
+        s_last = _last_in_grid_step(
+            positions, step_vec, origin, cell_size, nx, ny, nz, max_steps,
+        )
+        order = np.argsort(s_last, kind="stable")[::-1]      # s_last DESCENDING
+        positions = positions[order]
+        step_vec = step_vec[order]
+        s_last_sorted = s_last[order]
+        od_sorted = np.zeros(n_active, dtype=np.float64)
+
+        s_max = int(s_last_sorted[0]) if n_active else -1
+        s_max = min(s_max, max_steps - 1)
+        for s in range(s_max + 1):
+            n_prefix = int(np.searchsorted(-s_last_sorted, -s, side="right"))
+            if n_prefix == 0:
+                break
+            pos = positions[:n_prefix]
+            cells = np.floor((pos - origin) / cell_size).astype(np.intp)
             in_grid = (
                 (cells[:, 0] >= 0) & (cells[:, 0] < nx) &
                 (cells[:, 1] >= 0) & (cells[:, 1] < ny) &
@@ -429,10 +537,13 @@ class LightGrid:
             not_self = np.any(cells != origin_cell, axis=1)
             accumulate = in_grid & not_self
             if accumulate.any():
-                vc = cells[accumulate]
+                idx = np.nonzero(accumulate)[0]
+                vc = cells[idx]
                 lai_vals = lai[vc[:, 0], vc[:, 1], vc[:, 2]].astype(np.float64)
-                optical_depth[accumulate] += (k * lai_vals) * step_len
-            positions += step_vec
+                od_sorted[idx] += (k * lai_vals) * step_len
+            positions[:n_prefix] += step_vec[:n_prefix]
+
+        optical_depth[order] = od_sorted
 
         out[active] = np.exp(-optical_depth)
         return out
@@ -551,13 +662,24 @@ class LightGrid:
         a, b, q_max, aw = float(cfg.a), float(cfg.b), int(cfg.q_max), float(cfg.area_weight)
         layer_factor = [a * (b ** (-q)) for q in range(q_max + 1)]
         weights = np.asarray(areas, dtype=np.float64) * aw
-        for p, w in zip(positions, weights, strict=True):
+        # O3: vectorize the per-organ home-cell lookup up front (one floor over all
+        # positions, plus an in-grid mask) instead of a Python ``world_to_cell`` call
+        # per organ. The per-organ / per-layer slab-add loop below is UNCHANGED, so
+        # organ order, layer order and the float-add order are byte-identical.
+        positions = np.asarray(positions, dtype=np.float64)
+        home_cells = np.floor((positions - self.origin) / self.cell_size).astype(int)
+        home_in = (
+            (home_cells[:, 0] >= 0) & (home_cells[:, 0] < nx) &
+            (home_cells[:, 1] >= 0) & (home_cells[:, 1] < ny) &
+            (home_cells[:, 2] >= 0) & (home_cells[:, 2] < nz)
+        )
+        for m in range(positions.shape[0]):
+            w = weights[m]
             if w <= 0.0:
                 continue
-            home = self.world_to_cell(p)
-            if home is None:
+            if not home_in[m]:
                 continue
-            cI, cJ, cK = home
+            cI, cJ, cK = int(home_cells[m, 0]), int(home_cells[m, 1]), int(home_cells[m, 2])
             for q in range(q_max + 1):
                 j = cJ - q
                 if j < 0:
@@ -631,20 +753,20 @@ class LightGrid:
         gradients = np.zeros((B, 3), dtype=np.float64)
         for i in range(B):
             w = directions[i]
-            wn = float(np.linalg.norm(w))
+            wn = norm3(w)
             if wn < 1e-12:
                 continue
             w = w / wn
             ref = np.array([1.0, 0.0, 0.0]) if abs(w[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
             u = ref - np.dot(ref, w) * w
-            u = u / np.linalg.norm(u)
-            v = np.cross(w, u)
+            u = u / norm3(u)
+            v = cross3(w, u)
             world_dirs = canon[:, 0:1] * u + canon[:, 1:2] * v + canon[:, 2:3] * w  # (M,3)
             pts = positions[i] + r_perception * world_dirs
             s_m, in_m = self._shadow_at(pts)
             E = np.where(in_m, np.maximum(0.0, C - s_m), C)   # off-grid = open sky
             weighted = ((E - E.mean())[:, None] * world_dirs).sum(axis=0)
-            gn = float(np.linalg.norm(weighted))
+            gn = norm3(weighted)
             if gn > 1e-12:
                 gradients[i] = weighted / gn
         return Q, gradients
