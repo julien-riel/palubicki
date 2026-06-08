@@ -41,3 +41,17 @@ def norm3(v: np.ndarray) -> float:
     """Euclidean norm of a length-3 vector. Bit-identical to ``float(np.linalg.norm(v))``."""
     v0, v1, v2 = float(v[0]), float(v[1]), float(v[2])
     return math.sqrt(v0 * v0 + v1 * v1 + v2 * v2)
+
+
+def cross3_batch(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Row-wise cross product of two ``(N, 3)`` arrays. Bit-identical to
+    ``np.cross(a, b)`` (each component is one ``x*y - z*w`` term, no reassociation)
+    but without np.cross's per-call ``normalize_axis_tuple`` / ``moveaxis`` dispatch
+    overhead — which dominates when called once per rendered leaf blade."""
+    a0, a1, a2 = a[:, 0], a[:, 1], a[:, 2]
+    b0, b1, b2 = b[:, 0], b[:, 1], b[:, 2]
+    out = np.empty_like(a)
+    out[:, 0] = a1 * b2 - a2 * b1
+    out[:, 1] = a2 * b0 - a0 * b2
+    out[:, 2] = a0 * b1 - a1 * b0
+    return out
