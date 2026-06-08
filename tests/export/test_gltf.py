@@ -117,6 +117,19 @@ def test_write_glb_to_bytes_empty_raises():
         write_glb_to_bytes(mesh, asset_meta={})
 
 
+def test_oversized_mesh_raises_clear_error(monkeypatch):
+    """A mesh whose binary blob exceeds the GLB 4 GiB uint32 cap must raise a clear
+    ExportError (not pygltflib's cryptic struct.error). Verified by shrinking the cap
+    rather than building a 4 GiB mesh."""
+    import palubicki.export.gltf as gltf_mod
+    from palubicki.export.gltf import write_glb_to_bytes
+
+    monkeypatch.setattr(gltf_mod, "_GLB_MAX_BYTES", 64)  # below the cube's blob size
+    mesh = Mesh(primitives=[_cube_primitive()])
+    with pytest.raises(ExportError, match="GLB"):
+        write_glb_to_bytes(mesh, asset_meta={})
+
+
 def test_triangleless_primitive_skipped_no_zero_accessor(tmp_path):
     """A primitive with vertices but no triangles (e.g. a tiny tree's bark = just the
     root-cap point) must be skipped, not emitted as a count-0 accessor (invalid glTF).

@@ -1,6 +1,7 @@
 # src/palubicki/export/gltf.py
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 
 import pygltflib
@@ -21,6 +22,9 @@ from palubicki.export.instancing import write_glb_forest  # noqa: F401  (re-expo
 from palubicki.geom.mesh import Mesh
 
 __all__ = ["ExportError", "write_glb", "write_glb_to_bytes", "write_glb_forest"]
+
+# GLB container cap: chunk lengths + total file length are uint32 (glTF 2.0 §4.4).
+_GLB_MAX_BYTES = 2**32 - 1
 
 
 def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
@@ -95,7 +99,33 @@ def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
     gltf.samplers = samplers
     gltf.buffers = [pygltflib.Buffer(byteLength=len(buffer_data))]
     gltf.set_binary_blob(bytes(buffer_data))
-    return b"".join(gltf.save_to_bytes())
+
+    # GLB hard limit: the container stores every chunk length AND the total file
+    # length as a uint32, so a .glb cannot exceed 4 GiB. pygltflib otherwise dies
+    # deep inside save_to_bytes with a cryptic ``struct.error: 'I' format requires
+    # 0 <= number <= 4294967295``. Surface it here with the actual size and the
+    # levers that shrink the mesh (every emergent broadleaf at full age blows past
+    # this — oak ~16 yr is already 1.6 GB).
+    n_tri = sum(p.indices.shape[0] // 3 for p in mesh.primitives)
+    if len(buffer_data) > _GLB_MAX_BYTES:
+        raise ExportError(
+            f"mesh too large for the GLB container: binary blob is "
+            f"{len(buffer_data) / 2**30:.2f} GiB ({n_tri:,} triangles), which exceeds "
+            f"the 4.00 GiB GLB limit (uint32 chunk/file length). Shrink the mesh — lower "
+            f"geom.ring_sides, geom.foliage_depth, or geom.leaf_cluster_count; reduce "
+            f"sim.max_simulation_years — or export to .gltf + external .bin (no 4 GiB cap)."
+        )
+    try:
+        return b"".join(gltf.save_to_bytes())
+    except struct.error as e:
+        # The JSON chunk + headers push the total just over 4 GiB even though the
+        # binary blob alone fit. Same root cause, same guidance.
+        raise ExportError(
+            f"mesh too large for the GLB container ({len(buffer_data) / 2**30:.2f} GiB "
+            f"binary + JSON exceeds the 4 GiB GLB uint32 limit): {e}. Shrink the mesh "
+            f"(geom.ring_sides / foliage_depth / leaf_cluster_count / "
+            f"sim.max_simulation_years) or export to .gltf + external .bin."
+        ) from e
 
 
 def write_glb(mesh: Mesh, output_path: Path, *, asset_meta: dict) -> None:
