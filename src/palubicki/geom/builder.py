@@ -18,7 +18,8 @@ from palubicki.geom.compound_leaf import (
     resolve_leaflet_blade,
 )
 from palubicki.geom.leaves import build_leaves_primitive
-from palubicki.geom.mesh import Material, Mesh
+from palubicki.geom.leaves_instanced import build_leaves_instanced
+from palubicki.geom.mesh import InstancedPrimitive, Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
 from palubicki.sim.tree import Tree
 
@@ -60,6 +61,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
         stops=stops,
     )
     primitives = [bark_prim]
+    instanced: list[InstancedPrimitive] = []
 
     if g.enable_leaves:
         leaf_png = _resolve_texture(g.leaf_texture)
@@ -108,39 +110,48 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
                 "rachis_radius": g.petiole_radius_ratio,
                 "petiole_taper": g.petiole_taper,
             }
-        leaf_prim = build_leaves_primitive(
-            tree,
-            leaf_size=g.leaf_size,
-            material=leaf_mat,
-            aspect=g.leaf_aspect,
-            splay_deg=g.leaf_splay_deg,
-            droop_deg=g.petiole_droop_deg,
-            foliage_depth=g.foliage_depth,
-            needle_cluster_spacing=g.needle_cluster_spacing,
-            sun_shade_k=g.leaf_sun_shade_k,
-            leaf_shape=g.leaf_shape,
-            leaf_margin=g.leaf_margin,
-            leaf_margin_depth=g.leaf_margin_depth,
-            leaf_margin_count=g.leaf_margin_count,
-            leaf_kind=g.leaf_kind,
-            leaflet_specs=leaflet_specs,
-            autumn_color=g.leaf_autumn_color,
-            blade_fold_deg=g.leaf_blade_fold_deg,
-            blade_curl=g.leaf_blade_curl,
-            blade_cup=g.leaf_blade_cup,
-            skyface=g.leaf_skyface,
-            fascicle_count=g.fascicle_count,
-            fascicle_spread_deg=g.fascicle_spread_deg,
-        )
-        if g.leaf_season_variants and g.leaf_autumn_color is not None:
-            # KHR_materials_variants: discrete season swap (summer = the green
-            # base material, autumn = same maps with an autumn base colour). The
-            # primitive's default material stays summer for variant-unaware viewers.
-            autumn_mat = dataclasses.replace(
-                leaf_mat, name="leaf_autumn", base_color=(*g.leaf_autumn_color, 1.0)
-            )
-            leaf_prim.material_variants = [("summer", leaf_mat), ("autumn", autumn_mat)]
-        primitives.append(leaf_prim)
+        # Shared kwargs for both the baked and GPU-instanced leaf builders — they
+        # consume the same per-leaf data, so the instanced canopy is geometrically
+        # equivalent to the baked one (geom/leaves_instanced.py).
+        leaf_kwargs = {
+            "leaf_size": g.leaf_size,
+            "material": leaf_mat,
+            "aspect": g.leaf_aspect,
+            "splay_deg": g.leaf_splay_deg,
+            "droop_deg": g.petiole_droop_deg,
+            "foliage_depth": g.foliage_depth,
+            "needle_cluster_spacing": g.needle_cluster_spacing,
+            "sun_shade_k": g.leaf_sun_shade_k,
+            "leaf_shape": g.leaf_shape,
+            "leaf_margin": g.leaf_margin,
+            "leaf_margin_depth": g.leaf_margin_depth,
+            "leaf_margin_count": g.leaf_margin_count,
+            "leaf_kind": g.leaf_kind,
+            "leaflet_specs": leaflet_specs,
+            "autumn_color": g.leaf_autumn_color,
+            "blade_fold_deg": g.leaf_blade_fold_deg,
+            "blade_curl": g.leaf_blade_curl,
+            "blade_cup": g.leaf_blade_cup,
+            "skyface": g.leaf_skyface,
+            "fascicle_count": g.fascicle_count,
+            "fascicle_spread_deg": g.fascicle_spread_deg,
+        }
+        if g.instance_leaves:
+            # GPU-instanced canopy: one canonical blade per (fascicle-member × tint)
+            # bucket + per-instance (T, R, S). Replaces the giant baked leaf
+            # Primitive entirely; bark/petiole/sheath stay regular primitives below.
+            instanced.extend(build_leaves_instanced(tree, **leaf_kwargs))
+        else:
+            leaf_prim = build_leaves_primitive(tree, **leaf_kwargs)
+            if g.leaf_season_variants and g.leaf_autumn_color is not None:
+                # KHR_materials_variants: discrete season swap (summer = the green
+                # base material, autumn = same maps with an autumn base colour). The
+                # primitive's default material stays summer for variant-unaware viewers.
+                autumn_mat = dataclasses.replace(
+                    leaf_mat, name="leaf_autumn", base_color=(*g.leaf_autumn_color, 1.0)
+                )
+                leaf_prim.material_variants = [("summer", leaf_mat), ("autumn", autumn_mat)]
+            primitives.append(leaf_prim)
 
         stem_mat = Material(
             name=("rachis" if is_compound else "petiole"),
@@ -203,7 +214,7 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             if sheath_prim.positions.shape[0] > 0:
                 primitives.append(sheath_prim)
 
-    return Mesh(primitives=primitives)
+    return Mesh(primitives=primitives, instanced=instanced)
 
 
 def _bark_maps(g: GeomConfig) -> tuple[bytes | None, bytes | None]:

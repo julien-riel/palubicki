@@ -514,6 +514,12 @@ class GeomConfig:
     # material, swapping base colour. Needs leaf_autumn_color; use *instead of*
     # the COLOR_1 phenology tint, not alongside it.
     leaf_season_variants: bool = field(default=False, metadata={"ui": {"label": "Season variants"}})
+    # GPU-instanced leaf canopy (EXT_mesh_gpu_instancing, geom/leaves_instanced.py).
+    # Off (default) => byte-identical to today: the giant baked leaf Primitive is
+    # emitted unchanged. On => the leaf canopy becomes one canonical blade per
+    # (fascicle-member × tint) bucket plus per-instance (T, R, S), collapsing the
+    # data ~50x. Bark / petiole / sheath stay regular primitives either way.
+    instance_leaves: bool = field(default=False, metadata={"ui": {"label": "Instance leaves"}})
     # --- Compound leaves (#6) ---
     leaf_kind: Literal["simple", "pinnate", "palmate", "bipinnate"] = field(
         default="simple", metadata={"ui": {"label": "Leaf kind"}}
