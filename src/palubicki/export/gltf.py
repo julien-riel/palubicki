@@ -128,13 +128,26 @@ def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
     # levers that shrink the mesh (every emergent broadleaf at full age blows past
     # this — oak ~16 yr is already 1.6 GB).
     n_tri = sum(p.indices.shape[0] // 3 for p in mesh.primitives)
+    # The mesh is ~85% leaves, so --instance-leaves (GPU instancing) is the fix that
+    # keeps the calibrated form/look AND collapses the size; the rest are quality/size
+    # trade-offs. Lead with it. (When instancing is already on, the leaf primitive is
+    # gone from mesh.primitives, so the remaining bulk is bark/petioles — fall back to
+    # the density levers.)
+    _instanced_on = bool(mesh.instanced)
+    _fix = (
+        "lower geom.ring_sides, reduce sim.max_simulation_years, or export to "
+        ".gltf + external .bin (no 4 GiB cap)"
+        if _instanced_on else
+        "regenerate with --instance-leaves (GPU-instanced canopy — keeps the form, "
+        "collapses leaf size ~60x); or lower geom.ring_sides / geom.foliage_depth / "
+        "geom.leaf_cluster_count, reduce sim.max_simulation_years, or export to "
+        ".gltf + external .bin (no 4 GiB cap)"
+    )
     if len(buffer_data) > _GLB_MAX_BYTES:
         raise ExportError(
             f"mesh too large for the GLB container: binary blob is "
-            f"{len(buffer_data) / 2**30:.2f} GiB ({n_tri:,} triangles), which exceeds "
-            f"the 4.00 GiB GLB limit (uint32 chunk/file length). Shrink the mesh — lower "
-            f"geom.ring_sides, geom.foliage_depth, or geom.leaf_cluster_count; reduce "
-            f"sim.max_simulation_years — or export to .gltf + external .bin (no 4 GiB cap)."
+            f"{len(buffer_data) / 2**30:.2f} GiB ({n_tri:,} baked triangles), which exceeds "
+            f"the 4.00 GiB GLB limit (uint32 chunk/file length). {_fix}."
         )
     try:
         return b"".join(gltf.save_to_bytes())
@@ -143,9 +156,7 @@ def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
         # binary blob alone fit. Same root cause, same guidance.
         raise ExportError(
             f"mesh too large for the GLB container ({len(buffer_data) / 2**30:.2f} GiB "
-            f"binary + JSON exceeds the 4 GiB GLB uint32 limit): {e}. Shrink the mesh "
-            f"(geom.ring_sides / foliage_depth / leaf_cluster_count / "
-            f"sim.max_simulation_years) or export to .gltf + external .bin."
+            f"binary + JSON exceeds the 4 GiB GLB uint32 limit): {e}. {_fix}."
         ) from e
 
 
