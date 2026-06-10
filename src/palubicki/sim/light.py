@@ -1,7 +1,7 @@
 # src/palubicki/sim/light.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -143,6 +143,12 @@ class LightGrid:
     resolution: tuple[int, int, int]
     lai: np.ndarray               # (nx, ny, nz) float32
     shadow: np.ndarray            # (nx, ny, nz) float32 — shadow-propagation field (#56)
+    # Per-iteration cache of materialized leaf_area_records, keyed by id(tree)
+    # (rank 2). Populated by _inject_tree during the LAI rebuild and reused by
+    # propagate_shadow (pyramid) and canopy_carbon (#L1) so the leaf geometry is
+    # walked ONCE per iteration instead of two/three times. Cleared at the start of
+    # every rebuild so it can never go stale. Same records, same order ⇒ byte-identical.
+    _leaf_records: dict = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, light_cfg: LightConfig, env_cfg: EnvelopeConfig) -> LightGrid:
@@ -183,6 +189,7 @@ class LightGrid:
         light grid's occlusion diameters match the vigor-seeded rendered geometry (#37).
         """
         self.lai.fill(0.0)
+        self._leaf_records.clear()
         cell_volume = float(np.prod(self.cell_size))
         if cell_volume <= 0:
             return
@@ -218,6 +225,7 @@ class LightGrid:
         from palubicki.sim.obstacles import LAI_OPAQUE
 
         self.lai.fill(0.0)
+        self._leaf_records.clear()
         cell_volume = float(np.prod(self.cell_size))
         if cell_volume <= 0:
             if forest.obstacle_voxel_mask is not None:
@@ -236,6 +244,42 @@ class LightGrid:
 
         if forest.obstacle_voxel_mask is not None:
             self.lai[forest.obstacle_voxel_mask] = np.float32(LAI_OPAQUE)
+
+    def canopy_carbon(
+        self, forest, geom: GeomConfig, light_cfg: LightConfig, *, seed: int,
+    ) -> dict[int, float]:
+        """Per-tree LIT leaf area Σ(leaf_area · open_sky_fraction) — the #L1 carbon source.
+
+        Reuses the SAME sky-view hemisphere transmission as the bud exposure measure
+        (``sample_hemisphere_batch`` with ``light.n_rays`` / ``light.k_absorption``),
+        so a leaf buried under the canopy contributes ~0 and a leaf in open sky
+        contributes its full blade area — with NO new optical contract (the #85
+        ``voxel_edge_m`` calibration is untouched). As the canopy self-shades this sum
+        PLATEAUS; funding ``v_total`` with it (``simulator._grow_tree``) is therefore
+        what bounds the bud pool by physics. Reads the rank-2 leaf-records cache
+        (rebuilt upstream this iteration). Only ever called when ``carbon.enabled``, so
+        it never touches the OFF path. Returns ``{id(tree): lit_leaf_area}``.
+        """
+        out: dict[int, float] = {}
+        light_dir = np.asarray(light_cfg.light_direction, dtype=np.float64)
+        for ti, tree in enumerate(forest.trees):
+            records = self._leaf_records.get(id(tree))
+            if records is None:
+                from palubicki.geom.leaves import leaf_area_records
+                records = list(leaf_area_records(tree, geom))
+            if not records:
+                out[id(tree)] = 0.0
+                continue
+            positions = np.asarray([rec[0] for rec in records], dtype=np.float64)
+            areas = np.asarray([rec[1] for rec in records], dtype=np.float64)
+            ss = np.random.SeedSequence([seed, ti])
+            sub_seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(len(records))]
+            lit, _grad = self.sample_hemisphere_batch(
+                positions, n_rays=light_cfg.n_rays, light_direction=light_dir,
+                k=light_cfg.k_absorption, seeds=sub_seeds,
+            )
+            out[id(tree)] = float(np.dot(areas, lit))
+        return out
 
     def sample_transmission(self, p: np.ndarray, direction: np.ndarray, *, k: float) -> float:
         """Ray-march Beer-Lambert from p along direction. Returns T = exp(-Σ k·LAI·step)."""
@@ -572,10 +616,17 @@ class LightGrid:
         """
         is_needle = geom.leaf_shape == "linear"
         foliage_scale = cfg.needle_area_scale if is_needle else cfg.leaf_area_scale
-        if foliage_scale > 0.0:
-            from palubicki.geom.leaves import leaf_area_records
+        # Rank 2: materialize the per-leaf area records ONCE per iteration and cache
+        # them (keyed by id(tree)); propagate_shadow / canopy_carbon reuse the same
+        # list instead of re-walking the leaf geometry. Always materialized (even when
+        # foliage is opted out) so the cache is populated for those consumers; the LAI
+        # deposit below is unchanged ⇒ byte-identical.
+        from palubicki.geom.leaves import leaf_area_records
 
-            for pos, area in leaf_area_records(tree, geom):
+        records = list(leaf_area_records(tree, geom))
+        self._leaf_records[id(tree)] = records
+        if foliage_scale > 0.0:
+            for pos, area in records:
                 cell = self.world_to_cell(pos)
                 if cell is not None:
                     self.lai[cell] += area * foliage_scale / cell_volume
@@ -635,12 +686,18 @@ class LightGrid:
         self.shadow.fill(0.0)
         if int(cfg.q_max) < 0 or cfg.a <= 0 or cfg.area_weight <= 0:
             return
-        from palubicki.geom.leaves import leaf_area_records
 
         positions: list = []
         areas: list = []
         for tree in forest.trees:
-            for pos, area in leaf_area_records(tree, geom):
+            # Rank 2: reuse the records the LAI rebuild already materialized this
+            # iteration (same list, same order ⇒ byte-identical deposit); only
+            # recompute on a cache miss (e.g. a standalone propagate_shadow call).
+            records = self._leaf_records.get(id(tree))
+            if records is None:
+                from palubicki.geom.leaves import leaf_area_records
+                records = list(leaf_area_records(tree, geom))
+            for pos, area in records:
                 positions.append(pos)
                 areas.append(area)
         if positions:

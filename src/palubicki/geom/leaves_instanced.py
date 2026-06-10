@@ -54,17 +54,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from palubicki.geom.compound_leaf import compound_layout
+from palubicki.geom.compound_leaf import _emit_cylinder, compound_layout
 from palubicki.geom.leaf_blade import build_blade, palmate_lobe_axes
 from palubicki.geom.leaf_blade3d import build_curved_blade
 from palubicki.geom.leaves import (
     _BLADE_SUBDIVISIONS,
+    _basis_perpendicular_to,
     compute_effective_leaf_size,
     fascicle_offsets,
     leaf_basis,
     selected_leaves,
 )
 from palubicki.geom.mesh import InstancedPrimitive, Material, Primitive
+from palubicki.sim._vec3 import norm3
 from palubicki.sim.tree import LeafState
 
 if TYPE_CHECKING:
@@ -269,6 +271,127 @@ def build_leaves_instanced(
             translations=translations,
             rotations=rotations,
             scales=scales,
+        ))
+    return out
+
+
+def build_petioles_instanced(
+    tree: Tree,
+    *,
+    material: Material,
+    leaf_size: float,
+    foliage_depth: int,
+    leaf_kind: str,
+    leaflet_specs: dict | None,
+    ring_sides: int = 5,
+    needle_cluster_spacing: float = 0.0,
+    sun_shade_k: float = 0.0,
+    splay_deg: float = 0.0,
+    droop_deg: float = 0.0,
+    skyface: float = 0.0,
+) -> list[InstancedPrimitive]:
+    """GPU-instanced equivalent of :func:`compound_leaf.build_rachis_primitive`.
+
+    Every petiole / rachis is the SAME tube geometry per layout segment, differing
+    only by where it is lifted (the per-leaf frame + render position + sun/shade
+    ``eff`` size). Returns one :class:`InstancedPrimitive` per rachis segment: a
+    canonical Z-aligned frustum plus a per-leaf ``(translation, rotation, scale)``.
+
+    EXACT (unlike the curved-leaf TANGENT limitation). ``build_rachis_primitive``
+    builds each tube with :func:`compound_leaf._emit_cylinder`, whose cross-section
+    rides the orthonormal frame ``G = [right | forward | axis]`` from
+    :func:`_basis_perpendicular_to` (right-handed: ``forward = axis × right`` ⇒
+    ``right × forward = axis`` ⇒ ``det G = +1``). A tube is fully determined by that
+    frame + radii + length, so the canonical frustum along ``+Z`` (``right=eₓ,
+    forward=e_y, axis=e_z``) maps to the world tube under the proper rotation
+    ``R = G``: ``R·eₓ = right``, ``R·e_y = forward``, ``R·e_z = axis`` reproduce the
+    ring, normals and tangents (incl. ``TANGENT.w = +1``) exactly, with ``T = p0``
+    and uniform ``scale = eff``. The canonical length ``Lc = |p1−p0| / eff`` is
+    constant across leaves (it depends only on the segment Δ(u,v) and the fixed
+    splay via ``u·up = sin(splay)``), so all leaves of a segment share one canonical.
+
+    Carries NO per-vertex wind (instance attributes are only T/R/S) — same trade-off
+    as the instanced leaf canopy. Returns ``[]`` when there is no rachis (simple
+    leaf with no petiole) or no leaves.
+    """
+    if leaflet_specs is None:
+        return []
+    layout = compound_layout(
+        leaf_kind,
+        leaflet_count=leaflet_specs["leaflet_count"],
+        leaflet_pair_count=leaflet_specs["leaflet_pair_count"],
+        terminal_leaflet=leaflet_specs["terminal_leaflet"],
+        rachis_length=leaflet_specs["rachis_length"],
+        petiole_length=leaflet_specs["petiole_length"],
+        rachis_radius=leaflet_specs["rachis_radius"],
+        petiole_taper=leaflet_specs.get("petiole_taper", 1.0),
+    )
+    if not layout.rachis_segments:
+        return []
+    records = selected_leaves(
+        tree, foliage_depth=foliage_depth,
+        needle_cluster_spacing=needle_cluster_spacing,
+    )
+    if not records:
+        return []
+
+    splay_rad = math.radians(splay_deg)
+    droop_rad = math.radians(droop_deg)
+
+    n_seg = len(layout.rachis_segments)
+    seg_T: list[list] = [[] for _ in range(n_seg)]
+    seg_R: list[list] = [[] for _ in range(n_seg)]
+    seg_S: list[list] = [[] for _ in range(n_seg)]
+    seg_Lc: list[float | None] = [None] * n_seg
+
+    for leaf, stem_dir, source_iod, render_pos in records:
+        eff = compute_effective_leaf_size(source_iod, leaf_size, sun_shade_k)
+        rot_axis_u, leaf_up, _ = leaf_basis(
+            stem_dir, leaf.azimuth, splay_rad, droop_rad, skyface
+        )
+        u = np.asarray(rot_axis_u, dtype=np.float64)
+        up = np.asarray(leaf_up, dtype=np.float64)
+        center = np.asarray(render_pos, dtype=np.float64)
+        for j, (s_uv, e_uv, _r0, _r1) in enumerate(layout.rachis_segments):
+            p0 = center + eff * (s_uv[0] * u + s_uv[1] * up)
+            p1 = center + eff * (e_uv[0] * u + e_uv[1] * up)
+            axis = p1 - p0
+            length = norm3(axis)
+            if length < 1e-12:  # mirror _emit_cylinder's degenerate skip
+                continue
+            axis = axis / length
+            right, forward = _basis_perpendicular_to(axis)
+            # G = [right | forward | axis] is the exact orthonormal frame
+            # _emit_cylinder builds the world ring in; det +1, so a proper rotation.
+            G = np.column_stack([right, forward, axis])
+            seg_T[j].append(p0.astype(np.float32))
+            seg_R[j].append(_quat_from_matrix(G))
+            seg_S[j].append(np.array([eff, eff, eff], dtype=np.float32))
+            if seg_Lc[j] is None:
+                seg_Lc[j] = length / eff  # constant across leaves (see docstring)
+
+    out: list[InstancedPrimitive] = []
+    for j, (_s_uv, _e_uv, r0, r1) in enumerate(layout.rachis_segments):
+        if not seg_T[j]:
+            continue
+        Lc = seg_Lc[j]
+        # Canonical frustum along +Z, radii (r0, r1), length Lc, built by the SAME
+        # helper as the baked path so the ring/normal/tangent construction is identical
+        # (it computes _basis_perpendicular_to(+Z) = right=eₓ, forward=e_y).
+        pos, nrm, uv, tan, idx = _emit_cylinder(
+            (0.0, 0.0, 0.0), (0.0, 0.0, Lc), r0, r1, ring_sides, 0
+        )
+        if pos.shape[0] == 0:
+            continue
+        canonical = Primitive(
+            positions=pos, normals=nrm, uvs=uv, indices=idx,
+            material=material, tangents=tan,
+        )
+        out.append(InstancedPrimitive(
+            canonical=canonical,
+            translations=np.asarray(seg_T[j], dtype=np.float32),
+            rotations=np.asarray(seg_R[j], dtype=np.float32),
+            scales=np.asarray(seg_S[j], dtype=np.float32),
         ))
     return out
 

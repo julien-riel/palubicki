@@ -20,7 +20,8 @@ from palubicki.sim.obstacles import build_obstacles, filter_markers
 from palubicki.sim.tree import Bud, Node, Tree
 
 _SECTION_FIELDS = {
-    "envelope", "sim", "tropism", "phyllotaxy", "shedding", "geom", "light", "shadow", "sag",
+    "envelope", "sim", "tropism", "phyllotaxy", "shedding", "geom", "light", "shadow",
+    "carbon", "sag",
 }
 
 

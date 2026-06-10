@@ -53,6 +53,16 @@ class Bud:
     # short internodes and an old (low) one reaches full length — the cone from
     # integration time. Unread when length banking is off.
     axis_birth_time: float = 0.0
+    # Per-AXIS carbon reserve (Level 2, #66-minimal). Banks captured carbon
+    # (efficiency·recent_vigor·clip(Q/C)) while this axis is the lit apex, drains a
+    # flat maintenance + length cost while it is overtopped; threaded down the axis
+    # at emission like banked_vigor. The DRAWABLE reserve (not instantaneous v_b)
+    # funds internode length, so a once-lit low branch keeps extending after being
+    # overtopped (long low branches → cone). reserve > 0 ⇒ established (shed-immune);
+    # sustained reserve < 0 ⇒ DEAD (replaces length_banking + establish_threshold +
+    # mortality_enabled with one self-referential carbon balance). 0.0 and untouched
+    # unless carbon.reserve_enabled under shadow_propagation; EXCLUDED from sim_digest.
+    carbon_reserve: float = 0.0
     # Spray-plane normal for this bud's anatomical axis (#55). Fixed at bud-break:
     # a lateral axis inherits its parent axis's normal (coherent multi-order frond)
     # or, when starting off a normal-less axis (the trunk), derives one from its own
@@ -118,6 +128,11 @@ class Internode:
     # shedding establishment-guard can read it without touching live buds. 0.0
     # and unread when length banking is off.
     banked_vigor: float = 0.0
+    # Frozen woody copy of the emitting axis's carbon_reserve (Level 2). The shedding
+    # establishment guard reads ``carbon_reserve > 0`` (an axis that banked net-positive
+    # carbon = established = shed-immune) off standing wood without touching live buds.
+    # 0.0 and unread unless carbon.reserve_enabled; EXCLUDED from sim_digest.
+    carbon_reserve: float = 0.0
     quality_history: deque[float] = field(init=False)
 
     def __post_init__(self) -> None:

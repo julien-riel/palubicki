@@ -515,11 +515,25 @@ class GeomConfig:
     # the COLOR_1 phenology tint, not alongside it.
     leaf_season_variants: bool = field(default=False, metadata={"ui": {"label": "Season variants"}})
     # GPU-instanced leaf canopy (EXT_mesh_gpu_instancing, geom/leaves_instanced.py).
-    # Off (default) => byte-identical to today: the giant baked leaf Primitive is
-    # emitted unchanged. On => the leaf canopy becomes one canonical blade per
-    # (fascicle-member × tint) bucket plus per-instance (T, R, S), collapsing the
-    # data ~50x. Bark / petiole / sheath stay regular primitives either way.
-    instance_leaves: bool = field(default=False, metadata={"ui": {"label": "Instance leaves"}})
+    # Leaf-canopy instancing MODE (volume / 4 GiB-crash fix, rank 1). "auto"
+    # (default) instances only when a tree carries more than
+    # ``instance_leaves_threshold`` leaves — so small trees (unit tests, young
+    # y10 goldens) stay BAKED and byte-identical to the pre-instancing geometry,
+    # while production-age canopies (the 179 MB / 4 GiB regime, ~85% leaves)
+    # become one canonical blade per (fascicle-member × tint) bucket plus
+    # per-instance (T, R, S), collapsing the data ~7.5x. "always" forces
+    # instancing (the old ``--instance-leaves``); "never" forces the baked
+    # Primitive (``--baked-leaves``). Bark / petiole / sheath stay regular
+    # primitives in every mode.
+    instance_leaves: Literal["auto", "always", "never"] = field(
+        default="auto", metadata={"ui": {"label": "Instance leaves"}}
+    )
+    # Leaf-count threshold above which "auto" mode instances the canopy. Below it
+    # the baked path is byte-identical to the pre-instancing geometry, so the
+    # young golden trees (y10) and the unit-test fixtures keep their baked meshes.
+    instance_leaves_threshold: int = field(
+        default=20_000, metadata={"ui": {"min": 0, "step": 1000, "label": "Instance leaves threshold"}}
+    )
     # --- Compound leaves (#6) ---
     leaf_kind: Literal["simple", "pinnate", "palmate", "bipinnate"] = field(
         default="simple", metadata={"ui": {"label": "Leaf kind"}}
@@ -698,6 +712,133 @@ class ShadowConfig:
 
 
 @dataclass(frozen=True)
+class CarbonConfig:
+    """Level-1 carbon-funded vigor magnitude (#66-minimal, gated, rank 4).
+
+    When ``enabled`` (and ``exposure == 'shadow_propagation'``), the Borchert-Honda
+    resource TOTAL ``v_total`` is funded by the LIT leaf area the canopy actually
+    captures — ``efficiency · Σ(leaf_area · open_sky_fraction)`` via the SAME sky-view
+    hemisphere measure as bud exposure (``LightGrid.canopy_carbon``; no new optical
+    contract) — instead of the abstract ``alpha · Σ quality``. Because captured carbon
+    PLATEAUS as the canopy self-shades (a buried leaf contributes ~0), the BH "pie"
+    stops growing with the tree, so newly emitted buds dilute the existing ones below
+    ``sim.vigor_dormancy`` and emission SELF-THROTTLES — the pool is bounded by physics
+    rather than by the per-species ``length_banking.establish_threshold`` magic number.
+    Only the v_total MAGNITUDE changes; the BH distribution (relative shares) and hence
+    the shedding ``v_subtree`` currency are untouched. Default OFF ⇒ byte-identical.
+
+    This is the MINIMAL carbon attach point (one scalar at ``bh.allocate``), NOT the
+    full #66 source→sink economy (basipetal transport / respiration / storage — that
+    "re-founds the engine", NOT_PLANNED). Level 2 adds a per-branch reserve on top so
+    branch length (and thus crown form) emerges from integrated carbon history.
+    """
+    enabled: bool = False
+    # v_total = efficiency · (Σ(leaf_area · lit_fraction) + seedling_carbon). Tune
+    # (fir y8-12) so a mid-canopy bud lands near today's v_b magnitude, keeping
+    # shoot_extension off its saturation rails. A single shared value across species
+    # is the simplicity goal.
+    efficiency: float = field(
+        default=1.0, metadata={"ui": {"min": 0.0, "step": 0.1, "label": "Carbon efficiency"}})
+    # Bootstrap endowment (seed/cotyledon reserve). A LEAFLESS seedling captures 0
+    # carbon, so pure instantaneous funding deadlocks (v_total=0 ⇒ no growth ⇒ no
+    # leaves ⇒ 0 carbon forever — confirmed empirically on fir). This per-tree floor
+    # funds the first shoots until the canopy takes over; once Σ lit_leaf_area >>
+    # seedling_carbon the magnitude is carbon-dominated and self-bounds. It is a
+    # CONSTANT stand-in for the Level-2 per-branch reserve (which is finite and
+    # depletes) — the deadlock is the empirical case FOR Level 2.
+    seedling_carbon: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "step": 0.5, "label": "Seedling carbon"}})
+
+    # ── Level 2 — per-branch carbon reserve (gated; #66-minimal, bank/spend) ──────
+    # Master gate. When True AND exposure=='shadow_propagation', each axis banks a
+    # carbon_reserve while lit and drains it while shaded; the DRAWABLE reserve funds
+    # internode length (not instantaneous v_b), reserve>0 ⇒ established (shed-immune),
+    # sustained reserve<0 ⇒ DEAD. Replaces length_banking + establish_threshold +
+    # mortality_enabled with one self-referential carbon balance. Default OFF ⇒
+    # byte-identical (mirrors length_banking.enabled). SHARED (a mode, not a tune).
+    reserve_enabled: bool = field(
+        default=False, metadata={"ui": {"label": "Carbon reserve (L2)"}})
+    # Reserve debited per metre of internode emitted, AND the divisor turning the
+    # drawable reserve into an affordable length (v_eff = min(v_b, draw/length_cost)).
+    # The efficiency/length_cost RATIO is the primary calibration dial — tune on fir first.
+    length_cost: float = field(
+        default=1.0, metadata={"ui": {"min": 0.0, "step": 0.1, "label": "Carbon length cost"}})
+    # Flat per-step respiration debit charged to EVERY living axis (the drain that kills
+    # a sustained-shaded unfunded axis; replaces mortality_enabled). NOT size-scaled.
+    # Shaded-survival span ≈ reserve_cap / (dt_years · maintenance).
+    maintenance: float = field(
+        default=0.05, metadata={"ui": {"min": 0.0, "step": 0.01, "label": "Carbon maintenance"}})
+    # Upper clamp on carbon_reserve (banked-carbon high-water-mark). Bounds per-axis
+    # memory and max shaded-survival; a real shape lever (low blunts the spire, high
+    # lets old branches over-reach), not just a safety clamp.
+    reserve_cap: float = field(
+        default=8.0, metadata={"ui": {"min": 0.0, "step": 0.5, "label": "Carbon reserve cap"}})
+    # Meristem rate cap on reserve drawn into one step's extension (draw =
+    # clip(reserve, 0, max_draw)) so a fat reserve cannot dump into one giant internode.
+    # Keep ≈ shoot_extension_max · length_cost so a fully-funded axis hits the saturation
+    # rails exactly as v_b would.
+    max_draw: float = field(
+        default=0.3, metadata={"ui": {"min": 0.0, "step": 0.05, "label": "Carbon max draw"}})
+    # Consecutive steps with carbon_reserve < 0 before death (reuses bud.low_light_steps).
+    # Death hysteresis; larger ⇒ slower interior cull (watch the pool bound).
+    deficit_steps: int = field(
+        default=3, metadata={"ui": {"min": 1, "step": 1, "label": "Carbon deficit steps"}})
+    # Age over which a LATERAL's extension capacity (the DRAW it may take from its
+    # reserve) ramps 0→full. This is what makes the crown a CONE: length becomes
+    # integration-time-driven (a young lateral extends little even if carbon-rich; an
+    # old one draws full IF it banked), NOT instantaneous-light-driven (which makes
+    # the most-lit UPPER branches longest → top-heavy ovoid). The reserve still gates
+    # AFFORDABILITY (a never-banked old lateral cannot draw → drains → dies). The
+    # leader (axis_order 0) is exempt (extends as fast as carbon allows). 0.0 ⇒ no
+    # age-gate (pure-carbon draw — the light-weighted, ovoid-prone path). ~6 yr cones
+    # fir (mirrors #94 release_years). Reuses Bud.axis_birth_time.
+    draw_release_years: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "step": 0.5, "label": "Carbon draw release yrs"}})
+    # Age-ramp length FLOOR (unification, #94 within the reserve). For a lateral the
+    # internode length is max(reserve-draw, persist_rate·shoot_extension_max·age_frac),
+    # age_frac = min(1, age/draw_release_years). The floor is AGE-monotone (never
+    # reverts), so the cone HOLDS at maturity (a draining reserve would otherwise let
+    # old shaded lower branches shrink and the crown revert to a top-heavy ovoid). A
+    # young lateral has reserve≈0 ⇒ max = the small young floor ⇒ short; an old one
+    # gets the full floor ⇒ long & persistent. The reserve still gates DEATH (cull the
+    # never-banked interior → pool bound) and only ADDS length where a branch banked
+    # more than the floor. persist_rate=0 ⇒ no floor (pure-carbon draw, ovoid-prone at
+    # maturity). ~0.45 cones fir (mirrors #94 persist_rate_fraction).
+    persist_rate: float = field(
+        default=0.0, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05, "label": "Carbon persist rate"}})
+    # Carbon length SHAPE law (within reserve_mode, for laterals). "ramp" (default) =
+    # the #94 monotone age ramp that REPLACES the draw → conifer CONE (holds at
+    # maturity; the validated fir result). "rounded" = the #97 unimodal age hump that
+    # MULTIPLIES the light-fed reserve-draw length (keeps the light term so pyramid
+    # self-shadowing + the reserve death clear the lower-interior bole) → broadleaf
+    # ROUNDED/decurrent crown (widest in the middle, NOT a cone). Pair "rounded" with
+    # shadow.measure='pyramid'.
+    length_profile: Literal["ramp", "rounded"] = field(
+        default="ramp", metadata={"ui": {"label": "Carbon length profile"}})
+    # "rounded" hump shape: length × age_frac, where age_frac ramps young_length_floor→1
+    # over draw_release_years, then declines 1→old_length_floor over decline_years —
+    # narrowing the young apex and the oldest basal laterals, widest in the middle.
+    young_length_floor: float = field(
+        default=0.65, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05, "label": "Carbon young floor"}})
+    old_length_floor: float = field(
+        default=0.40, metadata={"ui": {"min": 0.0, "max": 1.0, "step": 0.05, "label": "Carbon old floor"}})
+    decline_years: float = field(
+        default=12.0, metadata={"ui": {"min": 0.0, "step": 1.0, "label": "Carbon decline yrs"}})
+
+    def __post_init__(self) -> None:
+        for name in ("efficiency", "seedling_carbon", "length_cost", "maintenance",
+                     "reserve_cap", "max_draw", "draw_release_years", "persist_rate",
+                     "young_length_floor", "old_length_floor", "decline_years"):
+            if getattr(self, name) < 0:
+                raise ConfigError(f"carbon.{name} must be >= 0, got {getattr(self, name)}")
+        if self.deficit_steps < 1:
+            raise ConfigError(f"carbon.deficit_steps must be >= 1, got {self.deficit_steps}")
+        if self.length_profile not in ("ramp", "rounded"):
+            raise ConfigError(
+                f"carbon.length_profile must be 'ramp' or 'rounded', got {self.length_profile!r}")
+
+
+@dataclass(frozen=True)
 class ObstacleAABB:
     kind: Literal["aabb"] = "aabb"
     min: tuple[float, float, float] = (0.0, 0.0, 0.0)
@@ -752,6 +893,7 @@ class Config:
     geom: GeomConfig
     light: LightConfig = field(default_factory=LightConfig)
     shadow: ShadowConfig = field(default_factory=ShadowConfig)
+    carbon: CarbonConfig = field(default_factory=CarbonConfig)
     forest: ForestConfig = field(default_factory=ForestConfig)
     sag: SagConfig = field(default_factory=SagConfig)
     # Bud-exposure backend (#56): "bhse" = space-colonization markers in an
@@ -770,6 +912,11 @@ class Config:
         if self.exposure not in ("bhse", "shadow_propagation"):
             raise ConfigError(
                 f"exposure must be 'bhse' or 'shadow_propagation', got {self.exposure!r}"
+            )
+        if self.geom.instance_leaves not in ("auto", "always", "never"):
+            raise ConfigError(
+                "geom.instance_leaves must be 'auto', 'always' or 'never', "
+                f"got {self.geom.instance_leaves!r}"
             )
 
         env = self.envelope
@@ -1170,6 +1317,7 @@ _SECTION_TYPES = {
     "geom": GeomConfig,
     "light": LightConfig,
     "shadow": ShadowConfig,
+    "carbon": CarbonConfig,
     "sag": SagConfig,
 }
 

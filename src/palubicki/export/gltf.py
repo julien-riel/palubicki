@@ -138,10 +138,11 @@ def write_glb_to_bytes(mesh: Mesh, *, asset_meta: dict) -> bytes:
         "lower geom.ring_sides, reduce sim.max_simulation_years, or export to "
         ".gltf + external .bin (no 4 GiB cap)"
         if _instanced_on else
-        "regenerate with --instance-leaves (GPU-instanced canopy — keeps the form, "
-        "collapses leaf size ~60x); or lower geom.ring_sides / geom.foliage_depth / "
-        "geom.leaf_cluster_count, reduce sim.max_simulation_years, or export to "
-        ".gltf + external .bin (no 4 GiB cap)"
+        "the canopy is BAKED (--baked-leaves or geom.instance_leaves='never'): drop "
+        "it so 'auto'/'always' instancing collapses leaf size ~7.5x — that keeps the "
+        "calibrated form/look and is the primary fix; or lower geom.ring_sides / "
+        "geom.foliage_depth / geom.leaf_cluster_count, reduce sim.max_simulation_years, "
+        "or export to .gltf + external .bin (no 4 GiB cap)"
     )
     if len(buffer_data) > _GLB_MAX_BYTES:
         raise ExportError(

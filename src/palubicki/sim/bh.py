@@ -10,15 +10,25 @@ def allocate(
     alpha: float,
     lambda_apical: float,
     v_subtree: dict[int, float] | None = None,
+    v_total_override: float | None = None,
 ) -> dict[Bud, float]:
     """Borchert-Honda two-pass allocation. Returns the continuous flux v_b per bud.
 
     If ``v_subtree`` is provided (precomputed by ``compute_v_subtree``), the basipetal
     pass is skipped — useful when the caller also feeds shedding from the same dict.
+
+    ``v_total_override`` (#L1 carbon spike): when given, it REPLACES the abstract
+    ``alpha · Σ quality`` resource total — e.g. a carbon magnitude funded by the lit
+    leaf area the canopy actually captures. Only the TOTAL changes; the acropetal
+    distribution still splits by the topological ``quality`` / ``v_subtree`` shares,
+    so the shedding currency (``v_subtree``) is untouched. ``None`` ⇒ legacy total.
     """
     if v_subtree is None:
         v_subtree = compute_v_subtree(tree, quality)
-    v_total = alpha * v_subtree[id(tree.root)]
+    v_total = (
+        v_total_override if v_total_override is not None
+        else alpha * v_subtree[id(tree.root)]
+    )
 
     # Acropetal pass: distribute v_total downward
     v_by_bud: dict[Bud, float] = dict.fromkeys(tree.active_buds, 0.0)

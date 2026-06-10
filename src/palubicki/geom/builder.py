@@ -18,7 +18,10 @@ from palubicki.geom.compound_leaf import (
     resolve_leaflet_blade,
 )
 from palubicki.geom.leaves import build_leaves_primitive
-from palubicki.geom.leaves_instanced import build_leaves_instanced
+from palubicki.geom.leaves_instanced import (
+    build_leaves_instanced,
+    build_petioles_instanced,
+)
 from palubicki.geom.mesh import InstancedPrimitive, Material, Mesh
 from palubicki.geom.tubes import build_bark_primitive
 from palubicki.sim.tree import Tree
@@ -136,7 +139,16 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             "fascicle_count": g.fascicle_count,
             "fascicle_spread_deg": g.fascicle_spread_deg,
         }
-        if g.instance_leaves:
+        # Rank 1: instance the canopy when forced ("always") or when "auto" and the
+        # tree carries enough leaves to matter (production-age trees hit the 179 MB /
+        # 4 GiB regime; young trees stay baked → byte-identical). all_leaves is a cheap
+        # upper bound on the rendered count — fine for a size gate.
+        if g.instance_leaves == "auto":
+            n_leaves = sum(1 for _ in tree.all_leaves())
+            do_instance = n_leaves > g.instance_leaves_threshold
+        else:
+            do_instance = g.instance_leaves == "always"
+        if do_instance:
             # GPU-instanced canopy: one canonical blade per (fascicle-member × tint)
             # bucket + per-instance (T, R, S). Replaces the giant baked leaf
             # Primitive entirely; bark/petiole/sheath stay regular primitives below.
@@ -163,22 +175,45 @@ def build_mesh(tree: Tree, cfg: Config) -> Mesh:
             alpha_cutoff=0.5,
             double_sided=False,
         )
-        stem_prim = build_rachis_primitive(
-            tree,
-            material=stem_mat,
-            leaf_size=g.leaf_size,
-            foliage_depth=g.foliage_depth,
-            leaf_kind=g.leaf_kind,
-            leaflet_specs=leaflet_specs,
-            ring_sides=(max(3, g.ring_sides // 2) if is_compound else max(3, g.petiole_sides)),
-            needle_cluster_spacing=g.needle_cluster_spacing,
-            sun_shade_k=g.leaf_sun_shade_k,
-            splay_deg=g.leaf_splay_deg,
-            droop_deg=g.petiole_droop_deg,
-            skyface=g.leaf_skyface,
+        stem_ring_sides = (
+            max(3, g.ring_sides // 2) if is_compound else max(3, g.petiole_sides)
         )
-        if stem_prim.positions.shape[0] > 0:
-            primitives.append(stem_prim)
+        if do_instance:
+            # Mirror the leaf canopy: the petiole/rachis tubes are also one geometry
+            # per layout segment replicated across leaves, so GPU-instance them too —
+            # otherwise they become the dominant baked mesh once the leaves are
+            # instanced. Exact equivalent of build_rachis_primitive (T/R/S, no wind).
+            instanced.extend(build_petioles_instanced(
+                tree,
+                material=stem_mat,
+                leaf_size=g.leaf_size,
+                foliage_depth=g.foliage_depth,
+                leaf_kind=g.leaf_kind,
+                leaflet_specs=leaflet_specs,
+                ring_sides=stem_ring_sides,
+                needle_cluster_spacing=g.needle_cluster_spacing,
+                sun_shade_k=g.leaf_sun_shade_k,
+                splay_deg=g.leaf_splay_deg,
+                droop_deg=g.petiole_droop_deg,
+                skyface=g.leaf_skyface,
+            ))
+        else:
+            stem_prim = build_rachis_primitive(
+                tree,
+                material=stem_mat,
+                leaf_size=g.leaf_size,
+                foliage_depth=g.foliage_depth,
+                leaf_kind=g.leaf_kind,
+                leaflet_specs=leaflet_specs,
+                ring_sides=stem_ring_sides,
+                needle_cluster_spacing=g.needle_cluster_spacing,
+                sun_shade_k=g.leaf_sun_shade_k,
+                splay_deg=g.leaf_splay_deg,
+                droop_deg=g.petiole_droop_deg,
+                skyface=g.leaf_skyface,
+            )
+            if stem_prim.positions.shape[0] > 0:
+                primitives.append(stem_prim)
 
         # #7: fascicle sheaths — the short brown papery rings wrapping each conifer
         # needle bundle. Needle-only and gated on an actual bundle (fascicle_count > 1)
