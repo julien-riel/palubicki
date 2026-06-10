@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from palubicki.config import TropismConfig
+from palubicki.sim._vec3 import norm3
 
 _UP = np.array([0.0, 1.0, 0.0])
 _DOWN = np.array([0.0, -1.0, 0.0])
@@ -23,12 +24,12 @@ def spray_plane_normal_from_direction(direction: np.ndarray) -> np.ndarray | Non
     plane — e.g. the trunk), in which case callers fall back to legacy behaviour.
     """
     d = np.asarray(direction, dtype=np.float64)
-    dn = float(np.linalg.norm(d))
+    dn = norm3(d)
     if dn < 1e-12:
         return None
     d = d / dn
     n = _UP - float(np.dot(_UP, d)) * d
-    nn = float(np.linalg.norm(n))
+    nn = norm3(n)
     if nn < 1e-6:  # direction ~vertical: world-up has no perpendicular component
         return None
     return n / nn
@@ -63,7 +64,7 @@ def growth_direction(
     w_photo_eff = float(cfg.w_phototropism)
     if light_gradient is not None:
         lg = np.asarray(light_gradient, dtype=np.float64)
-        lg_norm = float(np.linalg.norm(lg))
+        lg_norm = norm3(lg)
         if lg_norm > 1e-12:
             photo = lg / lg_norm
         else:
@@ -75,7 +76,7 @@ def growth_direction(
     else:
         # Light disabled (legacy path): steer toward the configured photo_direction.
         photo = np.asarray(cfg.photo_direction, dtype=np.float64)
-        pn = np.linalg.norm(photo)
+        pn = norm3(photo)
         if pn > 1e-12:
             photo = photo / pn
 
@@ -98,19 +99,19 @@ def growth_direction(
         plagio_decay = decay
     else:
         plane_normal = np.asarray(spray_plane_normal, dtype=np.float64)
-        pnn = float(np.linalg.norm(plane_normal))
+        pnn = norm3(plane_normal)
         plane_normal = plane_normal / pnn if pnn > 1e-12 else _UP
         # In-plane flattening is the whole point of the spray frame; do not let
         # axis_decay weaken it at higher orders (else order-2 climbs out of plane).
         plagio_decay = 1.0
     cd = np.asarray(current_direction, dtype=np.float64)
-    cd_norm = float(np.linalg.norm(cd))
+    cd_norm = norm3(cd)
     if w_plagio > 0.0 and cd_norm > 1e-12:
         cd_unit = cd / cd_norm
         normal_component = float(np.dot(cd_unit, plane_normal))
         if abs(normal_component) < 0.99:
             v_plagio = cd_unit - normal_component * plane_normal
-            n_plagio = float(np.linalg.norm(v_plagio))
+            n_plagio = norm3(v_plagio)
             if n_plagio > 1e-12:
                 v_plagio = v_plagio / n_plagio
             else:
@@ -128,9 +129,9 @@ def growth_direction(
         + (w_photo_eff * decay) * photo
         + cfg.w_direction_inertia * current_direction
     )
-    n = np.linalg.norm(blend)
+    n = norm3(blend)
     if n < 1e-12:
-        cd_n = np.linalg.norm(current_direction)
+        cd_n = norm3(current_direction)
         if cd_n > 1e-12:
             return current_direction / cd_n
         return _UP.copy()

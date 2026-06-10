@@ -31,6 +31,7 @@ import math
 import numpy as np
 
 from palubicki.config import SagConfig
+from palubicki.sim._vec3 import cross3, norm3
 from palubicki.sim.tree import Node, Tree
 
 
@@ -55,7 +56,7 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
         return
 
     g = np.asarray(cfg.direction, dtype=np.float64)
-    g_norm = float(np.linalg.norm(g))
+    g_norm = norm3(g)
     if g_norm < 1e-12:
         return
     g = g / g_norm
@@ -80,14 +81,14 @@ def apply_sag(tree: Tree, cfg: SagConfig) -> None:
 
             child_bent = child.position + child.sag_offset
             old_vec = child_bent - parent_bent
-            seg_len = float(np.linalg.norm(old_vec))
+            seg_len = norm3(old_vec)
             if seg_len < 1e-12:
                 stack.append((child, child_order))
                 continue
             direction = old_vec / seg_len
 
-            cross = np.cross(direction, g)
-            sin_theta = float(np.linalg.norm(cross))
+            cross = cross3(direction, g)
+            sin_theta = norm3(cross)
             if sin_theta < 1e-9:
                 stack.append((child, child_order))
                 continue
@@ -155,14 +156,32 @@ def _rotate_subtree_offsets(
     Bud positions/directions are NOT touched — leaves read node bent positions
     in geom/leaves.py.
     """
+    # Collect the subtree nodes in stack-walk order, stacking their current bent
+    # positions (position + sag_offset) for one vectorized rotation pass.
+    nodes: list[Node] = []
+    bent_rows: list[np.ndarray] = []
     stack: list[Node] = [root]
     while stack:
         node = stack.pop()
-        bent = node.position + node.sag_offset
-        new_bent = R @ (bent - pivot) + pivot
-        node.sag_offset = new_bent - node.position
+        nodes.append(node)
+        bent_rows.append(node.position + node.sag_offset)
         for iod in node.children_internodes:
             stack.append(iod.child_node)
+
+    P = np.asarray(bent_rows, dtype=np.float64)  # (M, 3)
+    d = P - pivot
+    dx = d[:, 0]
+    dy = d[:, 1]
+    dz = d[:, 2]
+    NB = np.empty_like(P)
+    # EXPLICIT-COLUMN form — bit-identical to per-row R @ v. Matmul (P-pivot)@R.T
+    # is NOT bit-identical (BLAS reassociates the sum) and is forbidden.
+    NB[:, 0] = R[0, 0] * dx + R[0, 1] * dy + R[0, 2] * dz + pivot[0]
+    NB[:, 1] = R[1, 0] * dx + R[1, 1] * dy + R[1, 2] * dz + pivot[1]
+    NB[:, 2] = R[2, 0] * dx + R[2, 1] * dy + R[2, 2] * dz + pivot[2]
+
+    for i, node in enumerate(nodes):
+        node.sag_offset = NB[i] - node.position
 
 
 def _rodrigues(axis: np.ndarray, angle: float) -> np.ndarray:

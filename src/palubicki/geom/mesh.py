@@ -1,7 +1,7 @@
 # src/palubicki/geom/mesh.py
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -82,5 +82,32 @@ class Primitive:
 
 
 @dataclass
+class InstancedPrimitive:
+    """One blade geometry replicated by ``EXT_mesh_gpu_instancing`` (geom/
+    leaves_instanced.py). The rendered canopy is ~85% leaves that all share ONE
+    blade differing only by placement + tint, so a single canonical mesh plus a
+    per-instance (T, R, S) collapses the data ~50x on the GPU.
+
+    ``canonical`` is the blade in its own LOCAL ``(u, v, w)`` frame around the
+    origin (positions/normals/uvs/indices/tangents), with this bucket's uniform
+    tint baked into ``canonical.tint`` (broadcast across the verts; ``None`` for
+    the no-tint case). The render reconstructs each instance as
+    ``world = T + R @ (S * canonical_local)``:
+
+    - ``translations`` (N, 3) f32 — ``EXT_mesh_gpu_instancing`` TRANSLATION.
+    - ``rotations``    (N, 4) f32 — ROTATION quaternion ``xyzw`` (proper, det +1).
+    - ``scales``       (N, 3) f32 — SCALE; each row is ``(s, s, s)`` (uniform).
+    """
+    canonical: Primitive
+    translations: np.ndarray
+    rotations: np.ndarray
+    scales: np.ndarray
+
+
+@dataclass
 class Mesh:
     primitives: list[Primitive]
+    # Opt-in GPU-instanced leaf buckets (geom/leaves_instanced.py). Default empty
+    # so every existing build path / golden is byte-identical; the instanced canopy
+    # is only populated when a caller explicitly requests it.
+    instanced: list[InstancedPrimitive] = field(default_factory=list)

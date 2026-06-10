@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from palubicki.geom.mesh import Primitive
+from palubicki.sim._vec3 import norm3
 
 # Leaflet placement in the leaf's local (u, v) frame, in whole-leaf-size units.
 #   origin_uv  : (u, v) petiole-attachment point of the leaflet
@@ -151,7 +152,7 @@ def _emit_cylinder(p0, p1, radius0, radius1, ring_sides, base_index):
     p0 = np.asarray(p0, dtype=np.float64)
     p1 = np.asarray(p1, dtype=np.float64)
     axis = p1 - p0
-    length = float(np.linalg.norm(axis))
+    length = norm3(axis)
     if length < 1e-12:
         z = np.zeros((0, 3), np.float32)
         return (z, z, np.zeros((0, 2), np.float32),

@@ -1,0 +1,126 @@
+# Abies balsamea — EMERGENT FORM preset (#94). Full standalone preset: the
+# conifer CONE emerges from light competition + age-driven branch length under
+# `exposure: shadow_propagation`, instead of being prescribed by `envelope.shape`.
+#
+# Standalone preset (load with `--species fir_emergent`). Derived from fir.yaml with the
+# calibrated shadow-propagation recipe baked in; the base fir.yaml stays on `bhse`
+# (frozen goldens). Calibrated at the largest tractable horizon for this species
+# (see max_simulation_years); literature size bands are cited at ~30yr.
+envelope:
+  shape: half_ellipsoid
+  rx: 3.0
+  ry: 12.0
+  rz: 3.0
+  marker_count: 18000
+sim:
+  shoot_extension_max: 0.26
+  vigor_ref: 3.0
+  vigor_dormancy: 0.5
+  vigor_smoothing: 0.5
+  vigor_diameter_gain: 0.25
+  internode_length_jitter: 0.1
+  lambda_apical: 0.88
+  alpha_basipetal: 2.5
+  max_simulation_years: 30
+  elongation:
+    enabled: true
+    tau_years: 2.5
+  sympodial:
+    enabled: false
+  shade_mortality:
+    enabled: true
+    light_threshold: 0.12
+    n_consecutive_steps: 5
+  shade_avoidance:
+    enabled: true
+    strength: 0.45
+  leaf_phenology:
+    enabled: true
+    deciduous: false
+    leaf_lifespan_years: 40.0
+    senescence_duration_years: 0.2
+  length_banking:
+    enabled: true
+    profile: acropetal_ramp
+    persist_rate_fraction: 0.45
+    release_years: 6.0
+tropism:
+  w_perception: 1.0
+  w_orthotropy_main: 0.5
+  w_orthotropy_lateral: 0.0
+  w_gravitropism_main: 0.0
+  w_gravitropism_lateral: 0.02
+  w_plagiotropism_main: 0.0
+  w_plagiotropism_lateral: 1.2
+  w_phototropism: 0.15
+  w_direction_inertia: 0.8
+  axis_decay: 0.9
+  spray_plane_enabled: true
+phyllotaxy:
+  mode: alternate
+  divergence_angle_deg: 137.5
+  branch_angle_by_order:
+  - 70.0
+  - 55.0
+  - 40.0
+  - 30.0
+  divergence_jitter_deg: 3.0
+  branch_angle_jitter_deg: 3.0
+  dormant_reserve_count: 0
+  distichous_on_plagiotropic: true
+shedding:
+  quality_threshold: 0.2
+  window: 5
+  enabled: true
+  reactivation_count: 1
+light:
+  enabled: true
+  k_absorption: 0.65
+  needle_area_scale: 0.5
+sag:
+  enabled: false
+geom:
+  ring_sides: 8
+  pipe_exponent: 3.6
+  r_tip: 0.007
+  bark_color:
+  - 0.4
+  - 0.28
+  - 0.2
+  bark_texture: proc:pine_bark
+  leaf_texture: proc:pine_needle
+  leaf_size: 0.11
+  leaf_aspect: 0.14
+  leaf_shape: linear
+  leaf_margin: entire
+  leaf_margin_depth: 0.0
+  leaf_margin_count: 0
+  leaf_cluster_count: 3
+  leaf_splay_deg: 20
+  foliage_depth: 7
+  needle_cluster_spacing: 0.05
+  leaf_sun_shade_k: 0.0
+  petiole_length_ratio: 0.0
+  root_flare_height: 0.2
+  root_flare_factor: 1.3
+  root_flare_falloff: linear
+  root_buttress_count: 0
+  bark_tint_young:
+  - 0.58
+  - 0.55
+  - 0.5
+  bark_tint_mature:
+  - 0.4
+  - 0.28
+  - 0.2
+  bark_tint_senescent:
+  - 0.3
+  - 0.28
+  - 0.26
+  bark_blend_diameter_young: 0.015
+  bark_blend_diameter_mature: 0.035
+  bark_blend_diameter_senescent: 0.07
+exposure: shadow_propagation
+shadow:
+  enabled: true
+  measure: skyview

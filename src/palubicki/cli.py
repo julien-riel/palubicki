@@ -66,6 +66,13 @@ def _build_parser() -> argparse.ArgumentParser:
     g.add_argument("--lambda", dest="lambda_apical", type=float, default=None)
     g.add_argument("--leaf-texture", type=Path, default=None)
     g.add_argument("--no-leaves", action="store_true")
+    g.add_argument("--instance-leaves", action="store_true",
+                   help="Force the leaf canopy to EXT_mesh_gpu_instancing instances "
+                        "(one canonical blade + per-instance T/R/S). Default is 'auto' "
+                        "(instance only large/production canopies); this forces it always.")
+    g.add_argument("--baked-leaves", action="store_true",
+                   help="Force a baked leaf mesh (disable auto-instancing). Use for hero "
+                        "close-ups; may hit the 4 GiB GLB limit on production-age trees.")
     g.add_argument("--no-shed", action="store_true")
     g.add_argument("--ring-sides", type=int, default=None)
     g.add_argument("--log-level", choices=["DEBUG", "INFO", "WARN", "WARNING", "ERROR"], default="INFO")
@@ -209,6 +216,10 @@ def _cmd_generate(args) -> int:
         overrides["geom.leaf_texture"] = args.leaf_texture
     if args.no_leaves:
         overrides["geom.enable_leaves"] = False
+    if args.instance_leaves:
+        overrides["geom.instance_leaves"] = "always"
+    elif args.baked_leaves:
+        overrides["geom.instance_leaves"] = "never"
     if args.no_shed:
         overrides["shedding.enabled"] = False
     if args.ring_sides is not None:

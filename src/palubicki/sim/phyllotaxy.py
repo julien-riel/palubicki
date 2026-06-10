@@ -6,6 +6,7 @@ import math
 import numpy as np
 
 from palubicki.config import PhyllotaxyConfig
+from palubicki.sim._vec3 import cross3, norm3
 
 # Salt for SeedSequence to namespace phyllotaxy jitter independently of other
 # RNG consumers (light_perception, internode_length jitter).
@@ -67,7 +68,7 @@ def lateral_bud_directions(
     arbitrary perpendicular frame. ``None`` => legacy arbitrary basis.
     """
     g = np.asarray(growth_direction, dtype=np.float64)
-    g = g / np.linalg.norm(g)
+    g = g / norm3(g)
     right, up = _insertion_frame(g, spray_plane_normal)
 
     # Effective mode: the flag promotes lateral axes (axis_order > 0) to
@@ -178,7 +179,7 @@ def reserve_bud_directions(
     if count <= 0:
         return np.empty((0, 3), dtype=np.float64)
     g = np.asarray(growth_direction, dtype=np.float64)
-    g = g / np.linalg.norm(g)
+    g = g / norm3(g)
     right, up = _insertion_frame(g, spray_plane_normal)
 
     # Mirror the lateral effective-mode promotion so reserves use the same
@@ -221,8 +222,8 @@ def _frame_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Return any (right, up) orthonormal basis perpendicular to unit vector d."""
     canonical = np.array([1.0, 0.0, 0.0]) if abs(d[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     right = canonical - np.dot(canonical, d) * d
-    right = right / np.linalg.norm(right)
-    up = np.cross(d, right)
+    right = right / norm3(right)
+    up = cross3(d, right)
     return right, up
 
 
@@ -240,16 +241,16 @@ def _insertion_frame(
     if spray_plane_normal is None:
         return _frame_perpendicular_to(g)
     n = np.asarray(spray_plane_normal, dtype=np.float64)
-    nn = float(np.linalg.norm(n))
+    nn = norm3(n)
     if nn < 1e-12:
         return _frame_perpendicular_to(g)
     n = n / nn
-    right = np.cross(g, n)
-    rn = float(np.linalg.norm(right))
+    right = cross3(g, n)
+    rn = norm3(right)
     if rn < 1e-6:  # axis parallel to plane normal: no in-plane radial defined
         return _frame_perpendicular_to(g)
     right = right / rn
     up = n - float(np.dot(n, g)) * g
-    un = float(np.linalg.norm(up))
-    up = up / un if un > 1e-12 else np.cross(right, g)
+    un = norm3(up)
+    up = up / un if un > 1e-12 else cross3(right, g)
     return right, up

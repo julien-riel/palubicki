@@ -323,7 +323,8 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
     # the exception (#96): it piles up a never-pruned bud cloud, so shadow.mortality_
     # enabled re-enables the kill — but protecting established (banked) laterals.
     sm_on = cfg.sim.shade_mortality.enabled and (
-        not shadow_mode or cfg.shadow.mortality_enabled)
+        not shadow_mode or cfg.shadow.mortality_enabled) and not (
+        cfg.carbon.reserve_enabled and shadow_mode)
     if light_info is not None and sm_on:
         union_buds = _apply_shade_mortality(forest, light_info, cfg)
 
@@ -340,12 +341,28 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
 
     quality, quality_marker = _compute_quality(forest, union_buds, res, light_info, cfg)
 
+    # #L1 carbon spike: fund the BH resource total by the LIT leaf area the canopy
+    # captures (Σ leaf_area·open_sky_fraction), so emission self-throttles as the
+    # canopy closes. Gated on carbon.enabled AND shadow_propagation ⇒ None (and zero
+    # cost / no RNG) on every other path ⇒ byte-identical. Computed once per iteration
+    # off the freshly-rebuilt grid; reuses the rank-2 leaf-records cache.
+    carbon_by_tree = None
+    if (cfg.carbon.enabled and shadow_mode and forest.light_grid is not None
+            and light_info is not None):
+        carbon_seed = int(
+            np.random.SeedSequence([cfg.seed, iteration, 0xCA4B0]).generate_state(1)[0]
+        )
+        carbon_by_tree = forest.light_grid.canopy_carbon(
+            forest, cfg.geom, cfg.light, seed=carbon_seed,
+        )
+
     new_node_positions: list[np.ndarray] = []
     nodes_created_this_step = 0
     for tree in forest.trees:
         created, positions = _grow_tree(
             tree, forest, cfg, iteration, t, state, res, light_info, quality,
             quality_marker, activity,
+            carbon_total=(carbon_by_tree.get(id(tree)) if carbon_by_tree is not None else None),
         )
         nodes_created_this_step += created
         new_node_positions.extend(positions)
@@ -356,7 +373,8 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
         forest.markers.kill_near(np.array(new_node_positions), cfg.sim.r_kill)
 
     for tree in forest.trees:
-        shed_low_quality(tree, cfg=cfg.shedding, length_banking=cfg.sim.length_banking)
+        shed_low_quality(tree, cfg=cfg.shedding, length_banking=cfg.sim.length_banking,
+                         carbon=cfg.carbon)
 
     _apply_temporal_dynamics(forest, cfg, t)
 
@@ -373,6 +391,7 @@ def _iteration_step(forest: Forest, cfg: Config, iteration: int, t: float, state
 def _grow_tree(
     tree: Tree, forest: Forest, cfg: Config, iteration: int, t: float, state: _SimState,
     res, light_info, quality: dict, quality_marker: dict, activity: float = 1.0,
+    *, carbon_total: float | None = None,
 ) -> tuple[int, list[np.ndarray]]:
     """Grow one tree by one iteration. Returns (nodes_created, new_positions).
 
@@ -393,10 +412,18 @@ def _grow_tree(
         # below stay on the light-weighted ``quality`` by design.
         promote_lateral_if_failing(tree, quality_marker, cfg.sim.sympodial)
     v_subtree = compute_v_subtree(tree, quality)
+    # #L1: when carbon funding is active, the BH resource TOTAL is the captured
+    # carbon (efficiency · lit leaf area); the distribution still splits by the
+    # topological quality shares, so record_qualities/shedding (v_subtree) is
+    # unchanged. None ⇒ legacy alpha·Σquality total ⇒ byte-identical.
+    v_total_override = (
+        cfg.carbon.efficiency * (carbon_total + cfg.carbon.seedling_carbon)
+        if carbon_total is not None else None
+    )
     v_by_bud = allocate(
         tree, quality=quality,
         alpha=cfg.sim.alpha_basipetal, lambda_apical=cfg.sim.lambda_apical,
-        v_subtree=v_subtree,
+        v_subtree=v_subtree, v_total_override=v_total_override,
     )
     record_qualities(tree, v_subtree=v_subtree)
 
@@ -422,6 +449,33 @@ def _grow_tree(
         # a one-iteration lag, not a kill. Do not "fix" it by seeding recent_vigor
         # = v_b — that removes the lag the hysteresis is meant to provide.
         bud.recent_vigor = (1.0 - s) * bud.recent_vigor + s * v_b
+        # Level 2 carbon reserve: bank carbon while lit, drain it while shaded; a
+        # sustained-negative (drained, never-banked) axis dies — one self-referential
+        # balance replacing length_banking + establish_threshold + mortality_enabled.
+        # Gated reserve_enabled + shadow_mode ⇒ carbon_reserve / low_light_steps are
+        # untouched on every other path (the field is excluded from sim_digest), so
+        # OFF is byte-identical. Inflow uses bud.recent_vigor (the per-bud BH-distributed
+        # light flux already computed) ⇒ no new traversal / light query.
+        cb = cfg.carbon
+        reserve_mode = cb.reserve_enabled and shadow_mode
+        if reserve_mode:
+            q_exp_r = (light_info.exposure.get(bud, cfg.shadow.full_light_C)
+                       if light_info is not None else cfg.shadow.full_light_C)
+            lit = min(1.0, max(0.0, q_exp_r / cfg.shadow.full_light_C))
+            inflow = cb.efficiency * bud.recent_vigor * lit
+            bud.carbon_reserve = min(
+                bud.carbon_reserve + cfg.sim.dt_years * activity * (inflow - cb.maintenance),
+                cb.reserve_cap,
+            )
+            # Strict-drain death (<0, not <=0, so a never-funded bud cannot sit at 0
+            # forever and re-explode the pool). axis_order >= 1 protects the leader.
+            if bud.axis_order >= 1 and bud.carbon_reserve < 0.0:
+                bud.low_light_steps += 1
+                if bud.low_light_steps >= cb.deficit_steps:
+                    bud.state = BudState.DEAD
+                    continue
+            else:
+                bud.low_light_steps = 0
         lb = cfg.sim.length_banking
         if lb.enabled:
             # Ratchet the per-axis vigor high-water-mark (#94 P1); never decays,
@@ -482,7 +536,46 @@ def _grow_tree(
             new_active.append(bud)
             continue
 
-        target = _internode_target(bud, v_b, cfg, iteration, t, state, activity)
+        if reserve_mode:
+            # Length is funded from the BANKED reserve, not instantaneous v_b. max_draw
+            # is the meristem rate cap so a fat reserve cannot dump into one internode.
+            draw = min(max(bud.carbon_reserve, 0.0), cb.max_draw)
+            v_eff = min(v_b, draw / cb.length_cost) if cb.length_cost > 0 else v_b
+            target = _internode_target(bud, v_eff, cfg, iteration, t, state, activity)
+            # UNIFICATION (the cone that HOLDS at maturity): a lateral's length is set by
+            # a PURE AGE ramp (persist_rate·max·age_frac) that REPLACES the carbon draw —
+            # exhaustively (10+ sweeps) the cone needs length DECOUPLED from light/carbon
+            # (any formulation where a lit branch expresses extra length → top-heavy
+            # ovoid; the carbon currency inherently rewards the lit upper crown with
+            # length). The age ramp is monotone, so old lower branches keep their length
+            # and the cone PERSISTS. The reserve's job is then ONLY pool-bounding: the
+            # carbon-balance DEATH culls the never-banked interior (replacing
+            # mortality_enabled + the fragile 56× establish_threshold) — so length is a
+            # shared age law and the reserve is the single death/establishment authority.
+            # Leader (axis_order 0) exempt (grows from the carbon draw). persist_rate=0 ⇒
+            # pure-carbon draw (ovoid-prone). draw_release_years = the ramp width.
+            if (cb.persist_rate > 0.0 and cb.draw_release_years > 0.0
+                    and bud.axis_order >= 1):
+                age = t - bud.axis_birth_time
+                if cb.length_profile == "rounded":
+                    # Broadleaf (#97): a unimodal age hump MULTIPLIES the light-fed
+                    # reserve-draw length (NOT replace) — so the light term survives and
+                    # pyramid self-shadow + the reserve death clear the lower-interior
+                    # bole, while the hump narrows the young apex and the oldest basal
+                    # laterals → crown widest in the MIDDLE (rounded, not a cone).
+                    if age <= cb.draw_release_years:
+                        hump = cb.young_length_floor + (1.0 - cb.young_length_floor) * (age / cb.draw_release_years)
+                    else:
+                        decline = min(1.0, (age - cb.draw_release_years) / cb.decline_years) if cb.decline_years > 0 else 1.0
+                        hump = 1.0 - (1.0 - cb.old_length_floor) * decline
+                    target = target * hump
+                else:
+                    # Conifer (#94): monotone age ramp REPLACES the draw → a base-wide cone
+                    # that holds at maturity (length decoupled from the draining reserve).
+                    age_frac = min(1.0, age / cb.draw_release_years)
+                    target = cb.persist_rate * cfg.sim.shoot_extension_max * activity * age_frac
+        else:
+            target = _internode_target(bud, v_b, cfg, iteration, t, state, activity)
         if apical_L > 0.0 and not is_main:
             # Acropetal taper: a lateral near the apex (small gap) emits a short
             # internode; far below (large gap) it reaches full length. Floored at
@@ -603,6 +696,7 @@ def _emit_node(
         length_target=target,
         vigor=v_b,
         banked_vigor=cur.banked_vigor,   # frozen woody record (#94); 0 unless banking on
+        carbon_reserve=cur.carbon_reserve,   # frozen woody record (L2); 0 unless reserve on
     )
     cur.parent_node.children_internodes.append(iod)
     new_node.parent_internode = iod
@@ -626,6 +720,14 @@ def _emit_node(
         banked_vigor=cur.banked_vigor,   # carry the ratchet down THIS axis (#94);
                                          # lateral buds below start a new axis → 0
         axis_birth_time=cur.axis_birth_time,   # the terminal continues cur's axis
+        # L2: the continuing axis carries its reserve, debited for the wood just
+        # emitted (length_cost·target). Gated; 0 and unchanged when reserve is off
+        # (cur.carbon_reserve is 0.0). lateral buds below start a new axis → reserve 0.
+        carbon_reserve=(
+            cur.carbon_reserve - cfg.carbon.length_cost * target
+            if (cfg.carbon.reserve_enabled and cfg.exposure == "shadow_propagation")
+            else cur.carbon_reserve
+        ),
     )
     new_node.terminal_bud = terminal
 

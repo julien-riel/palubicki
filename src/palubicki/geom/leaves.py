@@ -11,6 +11,7 @@ from palubicki.geom.leaf_blade3d import build_curved_blade
 from palubicki.geom.mesh import Material, Primitive
 from palubicki.geom.wind import LEAF_STIFFNESS, axis_frames, leaf_phase
 from palubicki.geom.wind import tier as wind_tier_of
+from palubicki.sim._vec3 import cross3, cross3_batch, norm3
 from palubicki.sim.tree import BudState, Internode, Leaf, LeafState, Node, Tree
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0, skyface=0.0):
     reproduce the legacy inline math exactly.
     """
     d = np.asarray(direction, dtype=np.float64)
-    d = d / np.linalg.norm(d)
+    d = d / norm3(d)
     right, forward = _basis_perpendicular_to(d)
     rot_axis_u = math.cos(azimuth) * right + math.sin(azimuth) * forward
     rot_axis_w = -math.sin(azimuth) * right + math.cos(azimuth) * forward
@@ -61,29 +62,29 @@ def leaf_basis(direction, azimuth, splay_rad, droop_rad=0.0, skyface=0.0):
         # the (rot_axis_u, rot_axis_w) pair about leaf_up brings the top face as
         # close to +Y as the petiole pose allows. The shear with leaf_up is kept.
         up_perp = _UP - float(np.dot(_UP, leaf_up)) * leaf_up
-        norm = float(np.linalg.norm(up_perp))
+        norm = norm3(up_perp)
         if norm > 1e-6:
             target = up_perp / norm
             cos_a = float(np.clip(np.dot(rot_axis_w, target), -1.0, 1.0))
-            sign = 1.0 if float(np.dot(np.cross(rot_axis_w, target), leaf_up)) >= 0.0 else -1.0
+            sign = 1.0 if float(np.dot(cross3(rot_axis_w, target), leaf_up)) >= 0.0 else -1.0
             ang = skyface * sign * math.acos(cos_a)
             c, s = math.cos(ang), math.sin(ang)
             k = leaf_up
 
             def _rot_sky(v):
-                return v * c + np.cross(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
+                return v * c + cross3(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
 
             rot_axis_u = _rot_sky(rot_axis_u)
             rot_axis_w = _rot_sky(rot_axis_w)
     if droop_rad != 0.0:
-        k = np.cross(leaf_up, _DOWN)
-        kn = float(np.linalg.norm(k))
+        k = cross3(leaf_up, _DOWN)
+        kn = norm3(k)
         if kn > 1e-9:
             k = k / kn
             c, s = math.cos(droop_rad), math.sin(droop_rad)
 
             def _rot(v):
-                return v * c + np.cross(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
+                return v * c + cross3(k, v) * s + k * float(np.dot(k, v)) * (1.0 - c)
 
             rot_axis_u = _rot(rot_axis_u)
             leaf_up = _rot(leaf_up)
@@ -364,7 +365,7 @@ def _leaf_bearing_nodes(
                 cur_bent = current.position + current.sag_offset
                 par_bent = parent_node.position + parent_node.sag_offset
                 seg = cur_bent - par_bent
-                seg_norm = float(np.linalg.norm(seg))
+                seg_norm = norm3(seg)
                 direction = seg / seg_norm if seg_norm > 1e-12 else np.array([0.0, 1.0, 0.0])
             else:
                 direction = np.array([0.0, 1.0, 0.0])
@@ -402,7 +403,7 @@ def selected_leaves(
             par = source_iod.parent_node
             par_pos = np.asarray(par.position + par.sag_offset, dtype=np.float64)
             seg = node_pos - par_pos
-            seg_len = float(np.linalg.norm(seg))
+            seg_len = norm3(seg)
             if seg_len < 1e-12:
                 positions = [(node_pos, node_dir)]
             else:
@@ -626,7 +627,7 @@ def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
         # Curved blade: lift the local tangent + its (handedness-signed) bitangent.
         tl = np.asarray(blade_tan_local, dtype=np.float64)
         nl = np.asarray(blade_norm_local, dtype=np.float64)
-        b_local = tl[:, 3:4] * np.cross(nl, tl[:, :3])
+        b_local = tl[:, 3:4] * cross3_batch(nl, tl[:, :3])
         world_t = _lift(tl[:, :3])
         world_n = _lift(nl)
         world_b = _lift(b_local)
@@ -638,7 +639,7 @@ def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
         world_t = world_t - n_hat * np.sum(world_t * n_hat, axis=1, keepdims=True)
         wt = world_t / np.linalg.norm(world_t, axis=1, keepdims=True)
         # Handedness from the orthogonalised world frame and the lifted bitangent.
-        handed = np.sign(np.sum(np.cross(n_hat, wt) * world_b, axis=1))
+        handed = np.sign(np.sum(cross3_batch(n_hat, wt) * world_b, axis=1))
         handed[handed == 0.0] = 1.0
         out_tan[:, :3] = wt.astype(np.float32)
         out_tan[:, 3] = handed.astype(np.float32)
@@ -647,6 +648,6 @@ def _lift_blade(blade_pos_unit, blade_uv, blade_idx,
 def _basis_perpendicular_to(d: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     canonical = np.array([1.0, 0.0, 0.0]) if abs(d[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
     right = canonical - np.dot(canonical, d) * d
-    right = right / np.linalg.norm(right)
-    forward = np.cross(d, right)
+    right = right / norm3(right)
+    forward = cross3(d, right)
     return right, forward
