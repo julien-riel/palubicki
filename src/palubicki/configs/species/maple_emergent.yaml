@@ -1,6 +1,15 @@
 # Acer saccharum — EMERGENT FORM preset (#97). ROUNDED decurrent crown. Decussate
 # (~25x oak's bud count) → high establish_threshold; the pool re-explodes past ~y14
 # (#101), so this preset runs at max_simulation_years=12 (a young sapling).
+# lambda_apical=0.94 (was 0.8): apical dominance is the dominant control on twig
+# density under shadow_propagation (which removed bhse's implicit pool ceiling).
+# At y12: 0.8 grew ~90k internodes (a dense brown "broom" — unrealistic); 0.86 →
+# ~31k (still too dense); 0.94 → ~2.5k = a clearly-branched young sapling (trunk →
+# primary branches → moderate twigs), height ~3.6m, crown radius ~1.2m. Pruning
+# (shedding/shade_mortality) does NOT thin the woody count (the wood persists);
+# dormancy thresholds cap at -30% (vigor is relative); apical dominance acts at the
+# SOURCE (how many lateral buds break). Bounded [0,1] and very sensitive near the
+# top (1.0 = a bare pole), so calibrate in ~0.01 steps.
 #
 # Standalone preset (load with `--species maple_emergent`). Derived from maple.yaml with the
 # calibrated shadow-propagation recipe baked in; the base maple.yaml stays on `bhse`
@@ -19,7 +28,7 @@ sim:
   vigor_smoothing: 0.5
   vigor_diameter_gain: 0.18
   internode_length_jitter: 0.1
-  lambda_apical: 0.8
+  lambda_apical: 0.94
   alpha_basipetal: 2.1
   max_simulation_years: 12
   elongation:

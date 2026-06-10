@@ -17,7 +17,12 @@ sim:
   vigor_dormancy: 0.5
   vigor_smoothing: 0.5
   vigor_diameter_gain: 0.16
-  lambda_apical: 0.78
+  # 0.78→0.94: apical dominance is the dominant twig-density control under
+  # shadow_propagation (which removed bhse's implicit pool ceiling). 0.78 grew
+  # ~113k internodes (a dense "broom"); 0.94 → ~2.5k = a clearly-branched young
+  # sapling. Pruning/dormancy don't thin the woody count; this acts at the source
+  # (how many lateral buds break). See maple_emergent.yaml for the full rationale.
+  lambda_apical: 0.94
   alpha_basipetal: 2.1
   max_simulation_years: 12
   elongation:

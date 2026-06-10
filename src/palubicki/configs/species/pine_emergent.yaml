@@ -19,7 +19,13 @@ sim:
   vigor_smoothing: 0.7
   vigor_diameter_gain: 0.16
   internode_length_jitter: 0.1
-  lambda_apical: 0.82
+  # 0.82→0.94: at y30 (16m) pine grew ~303k internodes — so dense the whorls fused
+  # into a solid "furry" cone (the conifer equivalent of the broadleaf broom). 0.94 →
+  # ~86k = a dense but LEGIBLE cone (distinct whorls + clear leader). NB pine responds
+  # far less to lambda than broadleaves (303k→86k ≈ 3.5x vs ~45x for maple/ash) — it is
+  # a large, high-vigor (vigor_ref 20), whorled tree, so 86k is its realistic needle-
+  # bearing structure, not a bush. fir stays at 0.88 (already a clean 31k cone).
+  lambda_apical: 0.94
   alpha_basipetal: 2.5
   max_simulation_years: 30
   elongation:
